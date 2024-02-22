@@ -1,8 +1,16 @@
+(*
+# S2SCompiler
+A "Simba to Simba compiler" that compiles multiple scripts into a single one.
+This is a very basic script and won't understand things like "IF" compiler directives.
+*)
 {$I SRL-T/osr.simba}
 
 const
-  PATH: String = {$macro CURRENT_DIRECTORY};
-  INCLUDE_DIRECTIVES: TStringArray = ['{$I ', '{$INCLUDE', '{$i ', '$include'];
+  FILE_NAME: String = 'launcher.simba';
+  PATH: String = {$macro CURRENT_DIRECTORY} + 'launcher' + DirectorySeparator;
+  ERASE_DIRECTIVE: String = '{$IFNDEF WS_CORE}{$I core.simba}{$ENDIF}';
+
+const INCLUDE_DIRECTIVES: TStringArray = ['{$I ', '{$INCLUDE', '{$i ', '$include'];
 
 function GetDirectiveIndex(content: String): Int32;
 begin
@@ -18,7 +26,7 @@ var
 begin
   filePath := content.After(INCLUDE_DIRECTIVES[directiveIndex]).Before('}');
   Result := ReadFileContents(PATH + filePath);
-  Result := Result.Replace('{$IFNDEF WS_CORE}{$I core.simba}{$ENDIF}', '');
+  Result := Result.Replace(ERASE_DIRECTIVE, '');
   Result := LineEnding + Result + LineEnding;
 end;
 
@@ -35,7 +43,7 @@ var
   content, sub: String;
   index: Int32;
 begin
-  content := ReadFileContents(PATH + 'launcher.simba');
+  content := ReadFileContents(PATH + FILE_NAME);
 
   index := GetDirectiveIndex(content);
   while index > -1 do
@@ -45,5 +53,8 @@ begin
     index := GetDirectiveIndex(content);
   end;
 
-  WriteFileContents(PATH + 'launcher-compiled.simba', content, False);
+  if PATH = {$macro CURRENT_DIRECTORY} then
+    WriteFileContents(PATH + FILE_NAME.Replace('.simba', '-compiled.simba'), content, False)
+  else
+    WriteFileContents({$macro CURRENT_DIRECTORY} + FILE_NAME, content, False);
 end;
