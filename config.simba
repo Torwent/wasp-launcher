@@ -1,0 +1,83 @@
+(*
+# WaspConfig
+Responsible for loading settings from and saving them in json format.
+*)
+
+{$DEFINE WS_CONFIG_INCLUDED}
+{$IFNDEF WS_CORE}{$I core.simba}{$ENDIF}
+
+type
+  TWaspConfig = record
+    ConfigPath: String;
+    JSON: TJSONObject;
+  end;
+
+function TWaspConfig.GetConfig(): TJSONObject;
+var
+  str: String;
+begin
+  if FileExists(Self.ConfigPath) then
+  begin
+    str := ReadFileContents(Self.ConfigPath);
+    if str <> '' then
+    begin
+      Result.Init(str);
+      Exit;
+    end;
+  end;
+
+  Result.Init();
+end;
+
+procedure TWaspConfig.Setup();
+begin
+  Self.ConfigPath := AppPath + 'Data' + DirectorySeparator + 'WaspLib' + DirectorySeparator + 'configs' + DirectorySeparator;
+  if not ForceDirectories(Self.ConfigPath) then
+    TerminateScript('Can''t create configs directory.');
+
+  Self.ConfigPath += 'launcher.json';
+
+  Self.JSON := Self.GetConfig();
+  AddOnTerminate(@Self.JSON.Free);
+end;
+
+procedure TWaspConfig.SaveConfig();
+begin
+  if Self.JSON = nil then
+    Self.Setup();
+  if not WriteFileContents(Self.ConfigPath, json.toString(), False) then
+    TerminateScript('Failed to save config.');
+end;
+
+procedure TWaspConfig.Put(key, value: String);
+begin
+  if Self.JSON = nil then
+    Self.Setup();
+  Self.JSON.Put(key, value);
+  Self.SaveConfig();
+end;
+
+function TWaspConfig.Get(key: String): String;
+begin
+  if Self.JSON = nil then
+    Self.Setup();
+  if Self.JSON.has(key) then
+    Result := Self.JSON.getString(key);
+end;
+
+procedure TWaspConfig.Remove(key: String);
+begin
+  if Self.JSON = nil then
+    Self.Setup();
+  Self.JSON.remove(key);
+  Self.SaveConfig();
+end;
+
+var
+  WaspConfig: TWaspConfig;
+
+(*
+# HTTPClient
+Responsible for connecting to the internet
+*)
+

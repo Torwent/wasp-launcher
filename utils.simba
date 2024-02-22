@@ -1,0 +1,105 @@
+(*
+Utility methods
+*)
+
+{$DEFINE WS_UTILS_INCLUDED}
+{$IFNDEF WS_CORE}{$I core.simba}{$ENDIF}
+
+{$IFDEF WINDOWS}
+const
+  WINAPI_CC = {$IFDEF CPU386}'stdcall'{$ELSE}'win64'{$ENDIF};
+
+function PerformanceTimer(): Double;
+var
+  frequency,counter: ^UInt64;
+  function QPF(F: ^UInt64): LongBool; static; external 'QueryPerformanceFrequency@Kernel32.dll '+ WINAPI_CC;
+  function QPC(C: ^UInt64): LongBool; static; external 'QueryPerformanceCounter@Kernel32.dll '+ WINAPI_CC;
+begin
+  frequency := GetMem(SizeOf(UInt64)); // at least qword aligned
+  counter   := GetMem(SizeOf(UInt64)); // ...
+
+  if QPF(frequency) and QPC(counter) then
+    Result := counter^ / frequency^ * 1000
+  else
+    Result := GetTickCount();
+
+  FreeMem(frequency);
+  FreeMem(counter);
+end;
+{$ELSE}
+function PerformanceTimer(): Double;
+begin
+  Result := GetTickCount();
+end;
+{$ENDIF}
+procedure TerminateScript(reason: String); overload;
+begin
+  WriteLn('Terminating: ' + reason);
+  TerminateScript();
+end;
+
+function TimeStamp(): String;
+var
+  Time: Int64;
+  Hours, Mins, Secs, Millis: Int32;
+begin
+  Time := GetTimeRunning();
+
+  Hours  := Time div 3600000;
+  Time   := Time mod 3600000;
+  Mins   := Time div 60000;
+  Time   := Time mod 60000;
+  Secs   := Time div 1000;
+  Millis := Time mod 1000;
+
+  Result := Format('[%.2d:%.2d:%.2d:%.3d]', [Hours, Mins, Secs, Millis]);
+end;
+
+function String.IsEmail(): Boolean;
+const
+  REGEX: String = '^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$';
+begin
+  Result := ExecRegExpr(REGEX, System.Trim(Self));
+end;
+
+function String.Contains(subString: String): Boolean;
+begin
+  Result := System.Pos(subString, Self) > 0;
+end;
+
+function String.Before(SubStr: String): String; constref;
+var
+  p: UInt32;
+begin
+  p := System.Pos(SubStr, Self);
+  if (p = 0) then Exit(Self);
+  Result := Copy(Self, 1, p - 1);
+end;
+
+function String.After(SubStr: String): String; constref;
+var
+  p: UInt32;
+begin
+  p := System.Pos(SubStr, Self);
+  if (p = 0) then Exit(Self);
+  Inc(p, Length(SubStr));
+  Result := Copy(Self, p, Length(Self) - p + 1);
+end;
+
+function TJSONArray.High(): Int32;
+begin
+  Result := Self.length()-1;
+end;
+
+procedure DebugLn(name, text: String);
+begin
+  WriteLn(TimeStamp() + ':[' + name + ']: ' + text);
+end;
+
+{$IFDEF WINDOWS}
+function SetWindowAttribute(hwnd: TOSWindow; dwAttribute: DWORD; pvAttribute: Pointer; cbAttribute: DWORD): UInt32;
+external 'DwmSetWindowAttribute@dwmapi.dll ' + WINAPI_CC;
+
+function SetWindowTheme(hwnd: TOSWindow; pszSubAppName: ^WideString; pszSubIdList: ^WideString): UInt32;
+external 'SetWindowTheme@uxtheme.dll ' + WINAPI_CC;
+{$ENDIF}

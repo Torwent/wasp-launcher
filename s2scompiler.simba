@@ -1,0 +1,49 @@
+{$I SRL-T/osr.simba}
+
+const
+  PATH: String = {$macro CURRENT_DIRECTORY};
+  INCLUDE_DIRECTIVES: TStringArray = ['{$I ', '{$INCLUDE', '{$i ', '$include'];
+
+function GetDirectiveIndex(content: String): Int32;
+begin
+  for Result := 0 to High(INCLUDE_DIRECTIVES) do
+    if content.Contains(INCLUDE_DIRECTIVES[Result]) then
+      Exit;
+  Result := -1;
+end;
+
+function GetIncludeContent(content: String; directiveIndex: Int32): String;
+var
+  filePath: String;
+begin
+  filePath := content.After(INCLUDE_DIRECTIVES[directiveIndex]).Before('}');
+  Result := ReadFileContents(PATH + filePath);
+  Result := Result.Replace('{$IFNDEF WS_CORE}{$I core.simba}{$ENDIF}', '');
+  Result := LineEnding + Result + LineEnding;
+end;
+
+function ReplaceIncludeDirective(content, sub: String; directiveIndex: Int32): String;
+var
+  directive: String;
+begin
+  directive := content.After(INCLUDE_DIRECTIVES[directiveIndex]).Before('}');
+  directive := INCLUDE_DIRECTIVES[directiveIndex] + directive + '}';
+  Result := content.Replace(directive, sub);
+end;
+
+var
+  content, sub: String;
+  index: Int32;
+begin
+  content := ReadFileContents(PATH + 'launcher.simba');
+
+  index := GetDirectiveIndex(content);
+  while index > -1 do
+  begin
+    sub := GetIncludeContent(content, index);
+    content := ReplaceIncludeDirective(content, sub, index);
+    index := GetDirectiveIndex(content);
+  end;
+
+  WriteFileContents(PATH + 'launcher-compiled.simba', content, False);
+end;

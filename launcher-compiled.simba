@@ -1,0 +1,2001 @@
+
+{$DEFINE WS_LAUNCHER}
+{$DEFINE DEBUG_TIME}
+
+{$IFNDEF WS_UTILS_INCLUDED}     
+(*
+Utility methods
+*)
+
+{$DEFINE WS_UTILS_INCLUDED}
+
+
+{$IFDEF WINDOWS}
+const
+  WINAPI_CC = {$IFDEF CPU386}'stdcall'{$ELSE}'win64'{$ENDIF};
+
+function PerformanceTimer(): Double;
+var
+  frequency,counter: ^UInt64;
+  function QPF(F: ^UInt64): LongBool; static; external 'QueryPerformanceFrequency@Kernel32.dll '+ WINAPI_CC;
+  function QPC(C: ^UInt64): LongBool; static; external 'QueryPerformanceCounter@Kernel32.dll '+ WINAPI_CC;
+begin
+  frequency := GetMem(SizeOf(UInt64)); // at least qword aligned
+  counter   := GetMem(SizeOf(UInt64)); // ...
+
+  if QPF(frequency) and QPC(counter) then
+    Result := counter^ / frequency^ * 1000
+  else
+    Result := GetTickCount();
+
+  FreeMem(frequency);
+  FreeMem(counter);
+end;
+{$ELSE}
+function PerformanceTimer(): Double;
+begin
+  Result := GetTickCount();
+end;
+{$ENDIF}
+procedure TerminateScript(reason: String); overload;
+begin
+  WriteLn('Terminating: ' + reason);
+  TerminateScript();
+end;
+
+function TimeStamp(): String;
+var
+  Time: Int64;
+  Hours, Mins, Secs, Millis: Int32;
+begin
+  Time := GetTimeRunning();
+
+  Hours  := Time div 3600000;
+  Time   := Time mod 3600000;
+  Mins   := Time div 60000;
+  Time   := Time mod 60000;
+  Secs   := Time div 1000;
+  Millis := Time mod 1000;
+
+  Result := Format('[%.2d:%.2d:%.2d:%.3d]', [Hours, Mins, Secs, Millis]);
+end;
+
+function String.IsEmail(): Boolean;
+const
+  REGEX: String = '^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$';
+begin
+  Result := ExecRegExpr(REGEX, System.Trim(Self));
+end;
+
+function String.Contains(subString: String): Boolean;
+begin
+  Result := System.Pos(subString, Self) > 0;
+end;
+
+function String.Before(SubStr: String): String; constref;
+var
+  p: UInt32;
+begin
+  p := System.Pos(SubStr, Self);
+  if (p = 0) then Exit(Self);
+  Result := Copy(Self, 1, p - 1);
+end;
+
+function String.After(SubStr: String): String; constref;
+var
+  p: UInt32;
+begin
+  p := System.Pos(SubStr, Self);
+  if (p = 0) then Exit(Self);
+  Inc(p, Length(SubStr));
+  Result := Copy(Self, p, Length(Self) - p + 1);
+end;
+
+function TJSONArray.High(): Int32;
+begin
+  Result := Self.length()-1;
+end;
+
+procedure DebugLn(name, text: String);
+begin
+  WriteLn(TimeStamp() + ':[' + name + ']: ' + text);
+end;
+
+{$IFDEF WINDOWS}
+function SetWindowAttribute(hwnd: TOSWindow; dwAttribute: DWORD; pvAttribute: Pointer; cbAttribute: DWORD): UInt32;
+external 'DwmSetWindowAttribute@dwmapi.dll ' + WINAPI_CC;
+
+function SetWindowTheme(hwnd: TOSWindow; pszSubAppName: ^WideString; pszSubIdList: ^WideString): UInt32;
+external 'SetWindowTheme@uxtheme.dll ' + WINAPI_CC;
+{$ENDIF}
+
+
+{$IFNDEF WS_CONFIG_INCLUDED}    
+(*
+# WaspConfig
+Responsible for loading settings from and saving them in json format.
+*)
+
+{$DEFINE WS_CONFIG_INCLUDED}
+
+
+type
+  TWaspConfig = record
+    ConfigPath: String;
+    JSON: TJSONObject;
+  end;
+
+function TWaspConfig.GetConfig(): TJSONObject;
+var
+  str: String;
+begin
+  if FileExists(Self.ConfigPath) then
+  begin
+    str := ReadFileContents(Self.ConfigPath);
+    if str <> '' then
+    begin
+      Result.Init(str);
+      Exit;
+    end;
+  end;
+
+  Result.Init();
+end;
+
+procedure TWaspConfig.Setup();
+begin
+  Self.ConfigPath := AppPath + 'Data' + DirectorySeparator + 'WaspLib' + DirectorySeparator + 'configs' + DirectorySeparator;
+  if not ForceDirectories(Self.ConfigPath) then
+    TerminateScript('Can''t create configs directory.');
+
+  Self.ConfigPath += 'launcher.json';
+
+  Self.JSON := Self.GetConfig();
+  AddOnTerminate(@Self.JSON.Free);
+end;
+
+procedure TWaspConfig.SaveConfig();
+begin
+  if Self.JSON = nil then
+    Self.Setup();
+  if not WriteFileContents(Self.ConfigPath, json.toString(), False) then
+    TerminateScript('Failed to save config.');
+end;
+
+procedure TWaspConfig.Put(key, value: String);
+begin
+  if Self.JSON = nil then
+    Self.Setup();
+  Self.JSON.Put(key, value);
+  Self.SaveConfig();
+end;
+
+function TWaspConfig.Get(key: String): String;
+begin
+  if Self.JSON = nil then
+    Self.Setup();
+  if Self.JSON.has(key) then
+    Result := Self.JSON.getString(key);
+end;
+
+procedure TWaspConfig.Remove(key: String);
+begin
+  if Self.JSON = nil then
+    Self.Setup();
+  Self.JSON.remove(key);
+  Self.SaveConfig();
+end;
+
+var
+  WaspConfig: TWaspConfig;
+
+(*
+# HTTPClient
+Responsible for connecting to the internet
+*)
+
+
+
+{$IFNDEF WS_HTTP_INCLUDED}      
+(*
+# HTTPClients
+Responsible for loading settings from and saving them in json format.
+*)
+
+{$DEFINE WS_HTTP_INCLUDED}
+
+
+type
+  THTTPClient = record
+    Name: String;
+    Client: Int32;
+    Server: String;
+  end;
+
+function THTTPClient.GetHTTPCode(): Int32;
+begin
+  Result := GetHTTPResponseCode(Self.Client);
+end;
+
+procedure THTTPClient.Free();
+begin
+  FreeHTTPClient(Self.Client);
+end;
+
+function THTTPClient.GET(route: String; verbose: Boolean = True): String;
+var
+  time: UInt64;
+begin
+  time := GetTickCount();
+  Result := GetHTTPPage(Self.Client, route);
+  time := GetTickCount() - time;
+  Result := StringReplace(Result, '\u0020', ' ', [rfReplaceAll]);
+  if verbose then
+    DebugLn(Self.Name, 'HTTPCode: ' + ToStr(Self.GetHTTPCode()) + ' - ' + Result + ' - Response took: ' + ToStr(time) + 'ms.');
+end;
+
+function THTTPClient.POST(route: String; verbose: Boolean = True): String;
+var
+  time: UInt64;
+begin
+  time := GetTickCount();
+  ClearPostData(Self.Client);
+  Result := PostHTTPPageEx(Self.Client, route);
+  time := GetTickCount() - time;
+  Result := StringReplace(Result, '\u0020', ' ', [rfReplaceAll]);
+  if verbose then
+    DebugLn(Self.Name, 'HTTPCode: ' + ToStr(Self.GetHTTPCode()) + ' - ' + Result + ' - Response took: ' + ToStr(time) + 'ms.');
+end;
+
+function THTTPClient.POST(route: String; payload: String; verbose: Boolean = True): String; overload;
+var
+  time: UInt64;
+begin
+  time := GetTickCount();
+  Result := PostHTTPPage(Self.Client, route, payload);
+  time := GetTickCount() - time;
+  Result := StringReplace(Result, '\u0020', ' ', [rfReplaceAll]);
+  if verbose then
+    DebugLn(Self.Name, 'HTTPCode: ' + ToStr(Self.GetHTTPCode()) + ' - ' + Result + ' - Response took: ' + ToStr(time) + 'ms.');
+end;
+
+function THTTPClient.POST(route: String; payload: TJSONObject; verbose: Boolean = True): String; overload;
+begin
+  Result := Self.POST(route, payload.toString(), verbose);
+end;
+
+(*
+# GithubClient
+Responsible for connecting to GitHub. Because of the way Simba HTTPClients work,
+it's easier to have different clients for different servers when they use different headers.
+
+Unaunthenticated requests to the GitHub API have a limit of 60 requests per hour per IP.
+This should be more than enough for our use case since running this script should never really
+do more than 3 (checking versions) or 6 (checking versions + downloading packages) requests per run.
+*)
+type
+  TGitHubClient = record(THTTPClient)
+    DownloadPath: String;
+    Packages: record
+      Current: record
+        SRLT: String;
+        WaspLib: String;
+      end;
+      Latest: record
+        SRLT: String;
+        WaspLib: String;
+      end;
+      Release: record
+        SRLT: String;
+        WaspLib: String;
+      end;
+    end;
+  end;
+
+procedure TGitHubClient.RefreshClient(isSetup: Boolean = True);
+begin
+  if isSetup then Self.Free();
+  Self.Client := InitializeHTTPClient(True);
+
+  SetHTTPContentType(Self.Client, 'application/json');
+  SetHTTPHeader(Self.Client, 'Accept', 'application/vnd.github+json');
+end;
+
+function TGitHubClient.GetLatestPackage(pkg: String): TJSONObject;
+const
+  ROUTE: String = 'repos/Torwent/';
+var
+  response: String;
+begin
+  try
+    response := Self.GET(Self.Server + ROUTE + pkg + '/releases/latest', False);
+    if Self.GetHTTPCode() = 200 then
+      Result.Init(response);
+  except
+    TerminateScript(GetExceptionMessage());
+  end;
+end;
+
+function TGitHubClient.GetCurrentPackageVersion(pkg: String): String;
+var
+  path: String;
+begin
+  path := INCLUDEPATH + pkg + DIRECTORYSEPARATOR + 'CHANGELOG.md';
+
+  Result := ReadFileContents(path);
+  Result := Result.After('# [').Before('](https');
+end;
+
+procedure TGitHubClient.Setup();
+var
+  json: TJSONObject;
+begin
+  Self.Name := 'GitHub Client';
+  Self.Server := 'https://api.github.com/';
+  Self.DownloadPath := AppPath + 'Data' + DirectorySeparator + 'WaspLib' + DirectorySeparator + 'downloads' + DirectorySeparator;
+
+  if not ForceDirectories(Self.DownloadPath) then
+    TerminateScript('Can''t create downloads directory.');
+
+  Self.RefreshClient(False);
+  AddOnTerminate(@Self.Free);
+
+  Self.Packages.Current.SRLT := Self.GetCurrentPackageVersion('srl-t');
+  Self.Packages.Current.WaspLib := Self.GetCurrentPackageVersion('wasplib');
+
+  json := Self.GetLatestPackage('SRL-T');
+  if json <> nil then
+  begin
+    Self.Packages.Latest.SRLT := json.getString('name').After('v');
+    Self.Packages.Release.SRLT := json.getString('zipball_url');
+    json.Free();
+  end
+  else
+    Self.Packages.Latest.SRLT := 'Failed!';
+
+  json := Self.GetLatestPackage('WaspLib');
+  if json <> nil then
+  begin
+    Self.Packages.Latest.WaspLib := json.getString('name').After('v');
+    Self.Packages.Release.WaspLib := json.getString('zipball_url');
+    json.Free();
+  end
+  else
+    Self.Packages.Latest.WaspLib := 'Failed!';
+end;
+
+procedure TGitHubClient.Download(pkg: String);
+var
+  url: String;
+begin
+  case LowerCase(pkg) of
+    'srlt', 'srl-t': url := Self.Packages.Release.SRLT;
+    'wl', 'wasplib': url := Self.Packages.Release.WaspLib;
+    else
+      TerminateScript('Unrecognized package to download: ' + pkg);
+  end;
+
+  DebugLn(Self.Name, 'Downloading ' + pkg + ' this might take a while.');
+  GetHTTPPageEx(Self.Client, url, Self.DownloadPath + pkg + '.zip');
+  if Self.GetHTTPCode() <> 200 then
+    TerminateScript('Something went wrong while trying to download: ' + url);
+end;
+
+var
+  GitHubClient: TGitHubClient;
+
+(*
+# WaspClient
+Responsible for connecting to waspscripts.com database.
+Because of the way Simba HTTPClients work, it's easier to have different clients
+for different servers when they use different headers.
+*)
+type
+  TRolesData = record
+    Banned: Boolean;
+    Premium: Boolean;
+    VIP: Boolean;
+    Tester: Boolean;
+    Scripter: Boolean;
+    Moderator: Boolean;
+    Administrator: Boolean;
+  end;
+
+  TScriptData = record
+    ID: String;
+    Name: String;
+    URL: String;
+    Categories: TStringArray;
+  end;
+  TScriptDataArray = array of TScriptData;
+
+  TBundleData = record
+    ID: String;
+    Product: String;
+    Name: String;
+    Owner: String;
+    Scripts: TScriptDataArray;
+  end;
+  TBundleDataArray = array of TBundleData;
+
+  TProductData = record
+    ID: String;
+    Owner: String;
+    Bundle: String;
+    Script: String;
+  end;
+  TProductDataArray = array of TProductData;
+
+  TSubscriptionData = record
+    Product: String;
+    DateStart: String;
+    DateEnd: String;
+  end;
+  TSubscriptionDataArray = array of TSubscriptionData;
+
+  TWaspClient = record(THTTPClient)
+    Schema: String;
+    APIKey: String;
+
+    Cache: record
+      User: record
+        AccessToken: String;
+        RefreshToken: String;
+        ID: String;
+        Username: String;
+
+        UserData: TJSONObject;
+        Roles: TRolesData;
+        Subscriptions: TSubscriptionDataArray;
+        FreeAccess: TSubscriptionDataArray;
+        SubscribbedProducts: TProductDataArray;
+        FreeAccessProducts: TProductDataArray;
+        SubscribbedScripts: TScriptDataArray;
+      end;
+
+      Scripts: TScriptDataArray;
+      FreeScripts: TScriptDataArray;
+      PremiumScripts: TScriptDataArray;
+
+      Bundles: TBundleDataArray;
+      //BundledScripts: array [String] of TScriptDataArray;
+
+      Products: TProductDataArray;
+
+      Free: Boolean;
+    end;
+  end;
+
+function TScriptDataArray.Contains(id: String): Boolean;
+var
+  i: Int32;
+begin
+  for i := 0 to High(Self) do
+    if Self[i].ID = id then
+      Exit(True);
+end;
+
+
+procedure TWaspClient.FreeUserData();
+begin
+  if Self.Cache.Free then
+    Exit;
+
+  Self.Cache.User := [];
+  Self.Cache.User.Roles := [];
+  Self.Cache.User.SubscribbedProducts := [];
+  Self.Cache.User.FreeAccessProducts := [];
+  Self.Cache.User.SubscribbedScripts := [];
+
+  Self.Cache.User.UserData.Free();
+  Self.Cache.User.UserData := nil;
+
+  Self.Cache.Free := True;
+end;
+
+procedure TWaspClient.Free(); override;
+begin
+  FreeHTTPClient(Self.Client);
+  Self.FreeUserData();
+end;
+
+(*
+There's some bug that makes it required to "refresh" the client after logging in.
+Oh Simba... you never stop surprising me.
+*)
+procedure TWaspClient.RefreshClient(isSetup: Boolean = True);
+begin
+  if isSetup then
+    FreeHTTPClient(Self.Client);
+  Self.Client := InitializeHTTPClient(True);
+
+  SetHTTPContentType(Self.Client, 'application/json');
+  SetHTTPHeader(Self.Client, 'apikey', Self.APIKey);
+  if Self.Cache.User.AccessToken <> '' then
+    SetHTTPHeader(Self.Client, 'Authorization', 'Bearer ' + Self.Cache.User.AccessToken);
+end;
+
+procedure TWaspClient.SaveRefreshToken();
+begin
+  if Self.Cache.User.RefreshToken <> '' then
+    WaspConfig.Put('refresh_token', Self.Cache.User.RefreshToken);
+end;
+
+function TWaspClient.Login(grantType: String; payload: TJSONObject): Boolean;
+const
+  ROUTE: String = 'auth/v1/token';
+  QUERY: String = '?grant_type=';
+var
+  response: TJSONObject;
+begin
+  try
+    response.Init(Self.POST(Self.Server + ROUTE + QUERY + grantType, payload, False));
+
+    Result := Self.GetHTTPCode() = 200;
+    if Result then
+    begin
+      Self.Cache.User.AccessToken := response.getString('access_token');
+      Self.Cache.User.RefreshToken := response.getString('refresh_token');
+      Self.Cache.User.ID := response.getJSONObject('user').getString('id');
+      Self.Cache.User.Username := response.getJSONObject('user').getJSONObject('user_metadata').getJSONObject('custom_claims').getString('global_name');
+      Self.RefreshClient();
+      Self.SaveRefreshToken();
+      Self.Cache.Free := False;
+
+      Self.GetSubscribbedScripts();
+    end
+    else if not Result then
+    begin
+      Self.Cache.User := [];
+      WaspConfig.Remove('refresh_token');
+      Self.FreeUserData();
+    end;
+  except
+    TerminateScript(response.ToString() + LineEnding + GetExceptionMessage());
+  finally
+    payload.Free();
+    response.Free();
+  end;
+end;
+
+function TWaspClient.Login(user, password: String): Boolean; overload;
+var
+  payload: TJSONObject;
+begin
+  payload.Init();
+  payload.Put('email', user);
+  payload.Put('password', password);
+  Result := Self.Login('password', payload);
+end;
+
+function TWaspClient.Login(refreshToken: String): Boolean; overload;
+var
+  payload: TJSONObject;
+begin
+  payload.Init();
+  payload.Put('refresh_token', refreshToken);
+  Result := Self.Login('refresh_token', payload);
+end;
+
+function TWaspClient.GetUserData(): TJSONObject;
+const
+  ROUTE: String = 'auth/v1/user';
+var
+  response: String;
+begin
+  if Self.Cache.User.UserData <> nil then
+    Exit(Self.Cache.User.UserData);
+
+  try
+    response := Self.GET(Self.Server + ROUTE, False);
+    if Self.GetHTTPCode() = 200 then
+    begin
+      Result.Init(response);
+      Self.Cache.User.UserData := Result;
+    end;
+  except
+    TerminateScript(GetExceptionMessage());
+  end;
+end;
+
+function TWaspClient.Logout(): Boolean;
+const
+  ROUTE: String = 'auth/v1/logout';
+begin
+  try
+    Self.POST(Self.Server + ROUTE, False);
+    Result := Self.GetHTTPCode() = 204;
+    if Result then
+    begin
+      Self.FreeUserData();
+      WaspConfig.Remove('refresh_token');
+    end;
+  except
+    TerminateScript(GetExceptionMessage());
+  end;
+end;
+
+function TWaspClient.IsLoggedIn(): Boolean;
+begin
+  Result := Self.Cache.User.AccessToken <> '';
+end;
+
+procedure TWaspClient.LoadRefreshToken();
+var
+  token: String;
+begin
+  token := WaspConfig.Get('refresh_token');
+  if (token <> '') and Self.Login(token) then
+    DebugLn(Self.Name, 'Previous session refreshed!');
+end;
+
+
+procedure TWaspClient.SetSchema(schema: String);
+begin
+  if schema = 'public' then
+    schema := ''; //public schema is just not having the header.
+
+  if Self.Schema <> schema then
+    SetHTTPHeader(Self.Client, 'Accept-Profile', schema);
+end;
+
+
+function TWaspClient.GetRoles(): TRolesData;
+const
+  ROUTE: String = 'rest/v1/roles';
+var
+  query: String = '?select=banned,premium,vip,tester,scripter,moderator,administrator';
+  response: String;
+  tmp: TJSONArray;
+begin
+  if Self.Cache.User.Roles <> [] then
+    Exit(Self.Cache.User.Roles);
+
+  Self.SetSchema('profiles');
+  query += '&id=eq.' + Self.Cache.User.ID + '&limit=1';
+  try
+    response := Self.GET(Self.Server + ROUTE + query, False);
+    if Self.GetHTTPCode() = 200 then
+    begin
+      tmp.Init(response);
+      if tmp.length > 0 then
+      begin
+        Result.Banned := tmp.getJSONObject(0).getString('banned') = 'true';
+        Result.Premium := tmp.getJSONObject(0).getString('premium') = 'true';
+        Result.VIP := tmp.getJSONObject(0).getString('vip') = 'true';
+        Result.Tester := tmp.getJSONObject(0).getString('tester') = 'true';
+        Result.Scripter := tmp.getJSONObject(0).getString('scripter') = 'true';
+        Result.Moderator := tmp.getJSONObject(0).getString('moderator') = 'true';
+        Result.Administrator := tmp.getJSONObject(0).getString('administrator') = 'true';
+        Self.Cache.User.Roles := Result;
+      end;
+      tmp.Free();
+    end;
+  except
+    TerminateScript(GetExceptionMessage());
+  end;
+end;
+
+function TWaspClient.Select(schema, table, query: String; filters: TStringArray = []): TJSONArray;
+const
+  ROUTE: String = 'rest/v1/';
+var
+  response: String;
+begin
+  Self.SetSchema(schema);
+
+  if filters <> [] then
+    query += '&' + Implode('&', filters);
+  try
+    response := Self.GET(Self.Server + ROUTE + table + '?select=' + query, False);
+    if Self.GetHTTPCode() = 200 then
+      Result.Init(response);
+  except
+    TerminateScript(GetExceptionMessage());
+  end;
+end;
+
+
+//You can try mess with what's below here but same checks are done on the database policies.
+function TWaspClient.GetSubscriptions(): TSubscriptionDataArray;
+var
+  jsonArray: TJSONArray;
+  i: Int32;
+  sub: TSubscriptionData;
+begin
+  if Self.Cache.User.Subscriptions <> [] then
+    Exit(Self.Cache.User.Subscriptions);
+  jsonArray := Self.Select('profiles', 'subscription', 'product,date_start,date_end', ['id=eq.' + Self.Cache.User.ID]);
+
+  for i := 0 to jsonArray.High() do
+  begin
+    with jsonArray.getJSONObject(i) do
+    begin
+      sub.Product := getString('product');
+      sub.DateStart := getString('date_start');
+      sub.DateEnd := getString('date_end');
+    end;
+
+    Result += sub;
+  end;
+
+  Self.Cache.User.Subscriptions := Result;
+end;
+
+function TWaspClient.GetFreeAccess(): TSubscriptionDataArray;
+var
+  jsonArray: TJSONArray;
+  i: Int32;
+  sub: TSubscriptionData;
+begin
+  if Self.Cache.User.FreeAccess <> [] then
+    Exit(Self.Cache.User.FreeAccess);
+  jsonArray := Self.Select('profiles', 'free_access', 'product,date_start,date_end', ['id=eq.' + Self.Cache.User.ID]);
+
+  for i := 0 to jsonArray.High() do
+  begin
+    with jsonArray.getJSONObject(i) do
+    begin
+      sub.Product := getString('product');
+      sub.DateStart := getString('date_start');
+      sub.DateEnd := getString('date_end');
+    end;
+
+    Result += sub;
+  end;
+
+  Self.Cache.User.FreeAccess := Result;
+end;
+
+
+function TWaspClient.GetScripts(): TScriptDataArray;
+var
+  jsonArray, categories: TJSONArray;
+  i, j: Int32;
+  script: TScriptData;
+begin
+  if Self.Cache.Scripts <> [] then
+    Exit(Self.Cache.Scripts);
+  jsonArray := Self.Select('scripts', 'scripts', 'id,product,title,url,categories');
+
+  for i := 0 to jsonArray.High() do
+  begin
+    categories := jsonArray.getJSONObject(i).getJSONArray('categories');
+    with jsonArray.getJSONObject(i) do
+    begin
+      script.ID := getString('id');
+      script.Name := getString('title');
+      script.URL := 'https://waspscripts.com/scripts/' + getString('url');
+      for j := 0 to categories.High() do
+        script.Categories += categories.getString(j);
+    end;
+
+    Result += script;
+    script := [];
+  end;
+
+  jsonArray.Free();
+
+  Self.Cache.Scripts := Result;
+end;
+
+function TWaspClient.GetFreeScripts(): TScriptDataArray;
+var
+  scripts: TScriptDataArray;
+  i, j: Int32;
+begin
+  if Self.Cache.FreeScripts <> [] then
+    Exit(Self.Cache.FreeScripts);
+
+  scripts := Self.GetScripts();
+  for i := 0 to High(scripts) do
+    for j := 0 to High(scripts[i].Categories) do
+      case scripts[i].Categories[j] of
+        'Free':
+        begin
+          Result += scripts[i];
+          Break;
+        end;
+        'Premium': Break;
+      end;
+
+  Self.Cache.FreeScripts := Result;
+end;
+
+function TWaspClient.GetPremiumScripts(): TScriptDataArray;
+var
+  scripts: TScriptDataArray;
+  i, j: Int32;
+begin
+  if Self.Cache.PremiumScripts <> [] then
+    Exit(Self.Cache.PremiumScripts);
+
+  scripts := Self.GetScripts();
+  for i := 0 to High(scripts) do
+    for j := 0 to High(scripts[i].Categories) do
+      case scripts[i].Categories[j] of
+        'Premium':
+        begin
+          Result += scripts[i];
+          Break;
+        end;
+        'Free': Break;
+      end;
+  Self.Cache.PremiumScripts := Result;
+end;
+
+
+function TWaspClient.GetBundles(): TBundleDataArray;
+var
+  jsonArray, scriptsJSON: TJSONArray;
+  i, j, l: Int32;
+  bundle: TBundleData;
+  scripts: TScriptDataArray;
+begin
+
+  if Self.Cache.Bundles <> [] then
+    Exit(Self.Cache.Bundles);
+  jsonArray := Self.Select('scripts', 'bundles', 'product,id,name,scripts,user_id');
+
+  for i := 0 to jsonArray.High() do
+  begin
+    scripts := Self.GetPremiumScripts();
+
+    with jsonArray.getJSONObject(i) do
+    begin
+      bundle.ID := getString('id');
+      bundle.Product := getString('product');
+      bundle.Name := getString('name');
+      bundle.Owner := getString('user_id');
+
+      scriptsJSON := getJSONArray('scripts');
+      for j := 0 to scriptsJSON.High() do
+        for l := High(scripts) downto 0 do
+          if scripts[l].ID = scriptsJSON.getString(j) then
+          begin
+            bundle.Scripts += scripts[l];
+            Delete(scripts, 1, 1);
+          end;
+
+      Result += bundle;
+      bundle := [];
+    end;
+
+    Result += bundle;
+    bundle := [];
+  end;
+
+  jsonArray.Free();
+
+  Self.Cache.Bundles := Result;
+end;
+
+function TWaspClient.GetBundledScripts(id: String): TScriptDataArray;
+var
+  bundles: TBundleDataArray;
+  i: Int32;
+begin
+  bundles := Self.GetBundles();
+  for i := 0 to High(bundles) do
+  begin
+    if bundles[i].ID <> id then
+      Continue;
+
+    Result := bundles[i].Scripts;
+    Break;
+  end;
+end;
+
+
+function TWaspClient.GetProducts(): TProductDataArray;
+var
+  jsonArray: TJSONArray;
+  product: TProductData;
+  i: Int32;
+begin
+  if Self.Cache.Products <> [] then
+    Exit(Self.Cache.Products);
+  jsonArray := Self.Select('scripts', 'products', 'id,user_id,bundle,script');
+
+  for i := 0 to jsonArray.High() do
+  begin
+    with jsonArray.getJSONObject(i) do
+    begin
+      product.ID := getString('id');
+      product.Owner := getString('user_id');
+      product.Bundle := getString('bundle');
+      product.Script := getString('script');
+    end;
+    Result += product;
+  end;
+  jsonArray.Free();
+
+  Self.Cache.Products := Result;
+end;
+
+
+function TWaspClient.GetSubscribbedProducts(): TProductDataArray;
+var
+  subs: TSubscriptionDataArray;
+  products: TProductDataArray;
+  roles: TRolesData;
+  i, j: Int32;
+begin
+  if Self.Cache.User.SubscribbedProducts <> [] then
+    Exit(Self.Cache.User.SubscribbedProducts);
+
+  subs := Self.GetSubscriptions();
+  products := Self.GetProducts();
+  roles := Self.GetRoles();
+
+  for i := 0 to High(subs) do
+  begin
+    for j := 0 to High(products) do
+    begin
+      if subs[i].Product <> products[j].ID then
+        if products[j].Owner <> Self.Cache.User.ID then
+          if not roles.Tester or not roles.Moderator or not roles.Administrator then
+            Continue;
+      Result += products[j];
+    end;
+  end;
+  Self.Cache.User.SubscribbedProducts := Result;
+end;
+
+function TWaspClient.GetFreeAccessProducts(): TProductDataArray;
+var
+  subs: TSubscriptionDataArray;
+  products: TProductDataArray;
+  i, j: Int32;
+begin
+  if Self.Cache.User.FreeAccessProducts <> [] then
+    Exit(Self.Cache.User.FreeAccessProducts);
+
+  subs := Self.GetFreeAccess();
+  products := Self.GetProducts();
+
+  for i := 0 to High(subs) do
+  begin
+    for j := 0 to High(products) do
+    begin
+      if subs[i].Product <> products[j].ID then
+        Continue;
+      Result += products[j];
+    end;
+  end;
+  Self.Cache.User.FreeAccessProducts := Result;
+end;
+
+
+function TWaspClient.GetSubscribbedScripts(): TScriptDataArray;
+var
+  subs, freeAccess: TProductDataArray;
+  scripts, bundled: TScriptDataArray;
+  i, j: Int32;
+begin
+  if Self.Cache.User.SubscribbedScripts <> [] then
+    Exit(Self.Cache.User.SubscribbedScripts);
+
+  scripts := Self.GetPremiumScripts();
+  subs := Self.GetSubscribbedProducts();
+  freeAccess := Self.GetFreeAccessProducts();
+
+  for i := 0 to High(subs) do
+  begin
+    if subs[i].Script = 'null' then
+    begin
+      bundled := Self.GetBundledScripts(subs[i].Bundle);
+      for j := 0 to High(bundled) do
+        if not Result.Contains(bundled[j].ID) then
+          Result += bundled[j];
+    end;
+
+    for j := 0 to High(scripts) do
+    begin
+      if scripts[j].ID <> subs[i].Script then
+        Continue;
+
+      if not Result.Contains(scripts[j].ID) then
+        Result += scripts[j];
+    end;
+  end;
+
+  for i := 0 to High(freeAccess) do
+  begin
+    if freeAccess[i].Script = 'null' then
+    begin
+      bundled := Self.GetBundledScripts(freeAccess[i].Bundle);
+      for j := 0 to High(bundled) do
+        if not Result.Contains(bundled[j].ID) then
+          Result += bundled[j];
+    end;
+
+    for j := 0 to High(scripts) do
+    begin
+      if scripts[i].ID <> freeAccess[i].Script then
+        Continue;
+      if not Result.Contains(scripts[i].ID) then
+        Result += scripts[i];
+    end;
+  end;
+  Self.Cache.User.SubscribbedScripts := Result;
+end;
+
+
+procedure TWaspClient.Setup();
+begin
+  Self.Name := 'WaspClient';
+  Self.Server := 'https://db.waspscripts.com/';
+  Self.APIKey := 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVucWxwY2hvYm5peWx3cHNqY3FjIiwicm9sZSI6ImFub24iLCJpYXQiOjE2NjM5MzIxMDAsImV4cCI6MTk3OTUwODEwMH0.WUiK6CteSjnOT8A9AcbUHnYyvWwDxlwUwq_ueifPAxY';
+  Self.RefreshClient(False);
+  AddOnTerminate(@Self.Free);
+  Self.LoadRefreshToken();
+
+  Self.GetFreeScripts();
+  Self.GetPremiumScripts();
+  Self.GetBundles();
+end;
+
+
+procedure TWaspClient.RunTests(user, password: String);
+begin
+  if Self.Cache.User.AccessToken = '' then
+    Self.Login(user, password);
+
+  WriteLn('UserData: ', Self.GetUserData().ToString());
+  WriteLn('Roles:', Self.GetRoles());
+  WriteLn('Subscription:', Self.GetSubscriptions());
+  WriteLn('FreeAccess:', Self.GetFreeAccess());
+  WriteLn('Scripts:', Self.GetScripts());
+  WriteLn('Bundles:', Self.GetBundles());
+  WriteLn('Products:', Self.GetProducts());
+  WriteLn('SubbedProducts:', Self.GetSubscribbedProducts());
+  WriteLn('BundledScripts:', Self.GetBundledScripts('86a1dbfc-338d-4c98-87c7-29b875549d9b'));
+  WriteLn('SubbedScripts:', Self.GetSubscribbedScripts());
+end;
+
+var
+  WaspClient: TWaspClient;
+
+
+{$IFNDEF WS_UPDATER_INCLUDED}   
+{$DEFINE WS_UPDATER_INCLUDED}
+
+
+type
+  TWaspUpdater = record
+    Name: String;
+    Paths: TStringArray;
+    Plugins: TStringArray;
+  end;
+
+procedure TWaspUpdater.Setup();
+begin
+  Self.Name := 'WaspUpdater';
+
+  Self.Paths := [
+    IncludePath + 'SRL' + DirectorySeparator + 'plugins' + DirectorySeparator,
+    IncludePath + 'SRL-T' + DirectorySeparator + 'plugins' + DirectorySeparator
+  ];
+
+  Self.Plugins := [
+    'libremoteinput64.so.aarch64',
+    'libremoteinput64.so',
+    'libremoteinput64.dylib',
+    'libremoteinput64.dll',
+    'libremoteinput32.dll'
+  ];
+end;
+
+function TWaspUpdater.BackupFile(filePath: String): Boolean;
+var
+  f: Int32;
+  str: String;
+begin
+  f := OpenFile(filePath, False);
+  if not ReadFileString(f, str, FileSize(f)) then
+    Exit;
+  CloseFile(f);
+  Result := WriteFileContents(filePath + '.bak', str, False);
+end;
+
+function TWaspUpdater.RestoreFile(filePath: String): Boolean;
+var
+  f: Int32;
+  str: String;
+begin
+  f := OpenFile(filePath + '.bak', False);
+  if not ReadFileString(f, str, FileSize(f)) then
+    Exit;
+  CloseFile(f);
+  Result := WriteFileContents(filePath, str, False);
+  DeleteFile(filePath + '.bak');
+end;
+
+function TWaspUpdater.IsFileLocked(filePath: AnsiString): Boolean;
+begin
+  if not Self.BackupFile(filePath) then
+    TerminateScript('Failed to backup file: ' + filePath);
+
+  Result := not DeleteFile(filePath);
+
+  if not Result then
+    if not Self.RestoreFile(filePath) then
+      TerminateScript('Failed to restore file: ' + filePath);
+end;
+
+function TWaspUpdater.FindLockedPlugins(): TStringArray;
+var
+  path, plugin: String;
+begin
+  for path in Self.Paths do
+    for plugin in Self.Plugins do
+      if Self.IsFileLocked(path + plugin) then
+        Result += path + plugin;
+end;
+
+procedure TWaspUpdater.KillClients();
+var
+  window: TOSWindow;
+begin
+  for window in GetWindows().GetByClass('SunAwtCanvas') do
+    window.Kill();
+end;
+
+function TWaspUpdater.UnlockPlugins(): Boolean;
+var
+  locked: TStringArray;
+  plugin: String;
+begin
+  locked := Self.FindLockedPlugins();
+
+  if locked = [] then
+    Exit(True);
+
+  Self.KillClients();
+
+  for plugin in locked do
+    if Self.IsFileLocked(plugin) then
+      Exit;
+
+  Result := True;
+end;
+
+function TWaspUpdater.DeleteDirectory(path: String; deleteRoot: Boolean = True): Boolean;
+var
+  f, tmp: String;
+begin
+  for f in FindFiles(path, True) do
+  begin
+    if not DeleteFile(f) then
+      Exit;
+    tmp := ExtractFilePath(f);
+    if (FindFiles(tmp, True) = []) and (FindDirectories(tmp, True) = []) then
+      if not System.DeleteDirectory(tmp, False) then
+        Exit;
+  end;
+
+  Result := not deleteRoot or System.DeleteDirectory(path, False);
+end;
+
+procedure TWaspUpdater.MoveFiles(pkg: String);
+var
+  paths, files: TStringArray;
+  path, f, fPath, newPath: String;
+begin
+  paths := GetDirectories(GitHubClient.DownloadPath + pkg + DirectorySeparator);
+  if Length(paths) <> 1 then
+    TerminateScript('The ' + pkg + ' download is empty or has unexpected things inside.');
+
+  newPath := IncludePath + pkg + DirectorySeparator;
+  if not Self.DeleteDirectory(newPath) then
+    TerminateScript('Failed to delete old library: ' + newPath);
+  if not ForceDirectories(newPath) then
+    TerminateScript('Failed to create path: ' + newPath);
+
+  path := GitHubClient.DownloadPath + pkg + DirectorySeparator + paths[0] + DirectorySeparator;
+  files := FindFiles(path, True);
+  for f in files do
+  begin
+    fPath := f.After(path);
+    if fPath.Contains('.git') then
+      Continue;
+    if not ForceDirectories(newPath + ExtractFilePath(fPath)) then
+      TerminateScript('Failed to create path: ' + newPath + ExtractFilePath(fPath));
+
+    if not CopyFile(f, newPath + fPath, False) then
+      TerminateScript('Failed to copy file: ' + fPath);
+    DeleteFile(f);
+    if (FindFiles(ExtractFilePath(f), True) = []) and (FindDirectories(ExtractFilePath(f), True) = []) then
+      System.DeleteDirectory(ExtractFilePath(f), False);
+  end;
+
+  Self.DeleteDirectory(GitHubClient.DownloadPath + pkg);
+end;
+
+procedure TWaspUpdater.Update(pkg: String);
+begin
+  GitHubClient.Download(pkg);
+  DebugLn(Self.Name, 'Unzipping ' + pkg + ' this might take a while.');
+
+  try
+    UnZipFile(GitHubClient.DownloadPath + pkg + '.zip', GitHubClient.DownloadPath + pkg);
+    DeleteFile(GitHubClient.DownloadPath + pkg + '.zip');
+  except
+    TerminateScript(GetExceptionMessage());
+  end;
+
+  case LowerCase(pkg) of
+    'srl-t', 'srlt', 'srl':
+    if not Self.UnlockPlugins() then
+      TerminateScript('Failed to unlock Simba plugins. Close all RuneScape clients, any other Jagex software, any other bots and try again.');
+  end;
+
+  Self.MoveFiles(pkg);
+end;
+
+var
+  WaspUpdater: TWaspUpdater;
+
+
+{$IFNDEF WS_FORMUTILS_INCLUDED} 
+{$DEFINE WS_FORMUTILS_INCLUDED}
+
+
+function TControl.GetDPI(): Int32; static;
+var
+  tmp: TFont;
+begin
+  tmp.Init();
+  Result := tmp.GetPixelsPerInch();
+  tmp.Free();
+end;
+
+function TControl.AdjustToDPI(n: Int32): Int32; static;
+begin
+  Result := Round(n * TControl.GetDPI() / 96);
+end;
+
+function TComponent.NameMatch(name: TComponentName): Boolean;
+begin
+  Result := (Self <> nil) and (Self.GetName() = name);
+end;
+
+function TComponent.GetChild(name: TComponentName): TComponent;
+var
+  i, hi: Int32;
+  child: TComponent;
+begin
+  if Self = nil then
+    Exit;
+
+  if Self.NameMatch(name) then
+    Exit(Self);
+
+  hi := Self.getComponentCount();
+
+  if hi >= 0 then
+    for i := 0 to hi - 1 do
+    begin
+      child := Self.GetComponent(i);
+
+      if child.NameMatch(name) then
+        Exit(child);
+
+      Result := child.GetChild(name);
+      if Result <> nil then
+        Exit;
+    end;
+
+  Result := nil;
+end;
+const
+  CHECKBOX_LABEL_SPACING: Int32 = 18;
+
+
+
+{$IFNDEF WS_FORM_INCLUDED}      
+{$DEFINE WS_FORM_INCLUDED}
+
+
+(*
+# WaspForm
+Frontend form for the {ref}`WaspClient`.
+*)
+type
+  TWaspForm = record
+    Form: TForm;
+    Size: TPoint;
+  end;
+
+procedure TPanel.Create(owner: TControl; name: String);
+begin
+  Self.Init(owner);
+  Self.setParent(owner);
+  Self.setName(name + '_panel');
+  Self.setCaption('');
+  Self.setAlign(TAlign.alCustom);
+  Self.setBorderStyle(TFormBorderStyle.bsNone);
+  Self.setBevelWidth(0);
+end;
+
+procedure TLabel.Create(owner: TControl; caption: String; name: String = '');
+begin
+  Self.Init(owner);
+  Self.setParent(owner);
+  Self.setCaption(caption);
+  if name <> '' then
+    Self.SetName(name + '_label');
+end;
+
+procedure TCheckbox.Create(owner: TControl; name: String);
+begin
+  Self.Init(owner);
+  Self.setParent(owner);
+  Self.SetName(name + '_checkbox');
+  Self.setCaption('');
+end;
+
+function TCheckBox.IsChecked(): Boolean;
+begin
+  Result := Self.getState() = cbChecked;
+end;
+
+procedure TCheckBox.Toggle();
+begin
+  case Self.getState() of
+    cbChecked: Self.setState(cbUnchecked);
+    else Self.setState(cbChecked)
+  end;
+end;
+
+
+procedure TEdit.Create(owner: TControl; top: Int32; title: String; text: String = '');
+var
+  caption: TLabel;
+begin
+  caption.Create(owner, title + ':');
+  caption.SetLeft(Self.AdjustToDPI(5));
+  caption.SetTop(Self.AdjustToDPI(top));
+
+  title := LowerCase(title);
+
+  Self.Init(owner);
+  Self.setParent(owner);
+  Self.setName(title + '_edit');
+  Self.SetLeft(Self.AdjustToDPI(5));
+  Self.SetTop(Self.AdjustToDPI(top + 18));
+
+  Self.setWidth(owner.getWidth() - Self.AdjustToDPI(10));
+  Self.SetCaption(text);
+  Self.getFont().setStyle([fsBold]);
+end;
+
+
+procedure TWaspForm.OnClose({$H-}sender: TObject; var closeAction: TCloseAction);{$H+}
+begin
+  TerminateScript();
+end;
+
+procedure TWaspForm.StartScript({$H-}sender: TObject);{$H+}
+begin
+  Self.Form.SetOnClose(nil);
+  Self.Form.Close();
+end;
+
+
+procedure TWaspForm.Validate(edit: TEdit);
+var
+  panel: TPanel;
+  email, password: TEdit;
+  strMail: String;
+begin
+  panel := edit.getOwner();
+
+  case edit.getName() of
+    'email_edit':
+    begin
+      email := edit;
+      password := panel.GetChild('password_edit');
+    end;
+    'password_edit':
+    begin
+      email := panel.GetChild('email_edit');
+      password := edit;
+    end;
+    else
+      TerminateScript('TWaspForm.Validate(), unknown control.');
+  end;
+
+  with email.getFont() do
+  begin
+    setStyle([fsBold]);
+    setColor($F0F0F0);
+  end;
+
+  with password.getFont() do
+  begin
+    setStyle([fsBold]);
+    setColor($F0F0F0);
+  end;
+
+  strMail := email.getText();
+  TButton(panel.GetChild('login_button')).setEnabled(strMail.IsEmail() and (password.GetTextLen() > 4));
+end;
+
+procedure TWaspForm.MailField(sender: TObject; var key: char);
+begin
+  case key of
+    ' ': key := #0;
+    #13:
+    begin
+      Self.Validate(sender);
+      TEdit(sender).PerformTab(True);
+      Exit;
+    end;
+  end;
+  Self.Validate(sender);
+end;
+
+
+procedure TWaspForm.HandleLogin();
+var
+  loginPanel, msPanel: TPanel;
+  scripts: TScriptDataArray;
+  listBox: TListBox;
+  i: Int32;
+begin
+  loginPanel := Self.Form.GetChild('login_panel');
+  msPanel := Self.Form.GetChild('main_panel');
+  TLabel(msPanel.GetChild('user_label')).setCaption('Logged as: ' + WaspClient.Cache.User.Username);
+  TLabel(msPanel.GetChild('id_label')).setCaption('ID: ' + WaspClient.Cache.User.Id);
+  scripts := WaspClient.GetSubscribbedScripts();
+
+  listBox := msPanel.GetChild('scripts_listbox');
+  listBox.Clear();
+  for i := 0 to High(scripts) do
+    listBox.getItems().Add(scripts[i].Name);
+
+  scripts := WaspClient.GetFreeScripts();
+  for i := 0 to High(scripts) do
+    listBox.getItems().Add(scripts[i].Name);
+
+  msPanel.Show();
+  loginPanel.Hide();
+end;
+
+procedure TWaspForm.HandleLogout();
+var
+  loginPanel, msPanel: TPanel;
+begin
+  loginPanel := Self.Form.GetChild('login_panel');
+  msPanel := Self.Form.GetChild('main_panel');
+  loginPanel.Show();
+  msPanel.Hide();
+end;
+
+
+procedure TWaspForm.Login({$H-}sender: TObject);{$H+}
+var
+  loginPanel, msPanel: TPanel;
+  email, password: TEdit;
+  {$IFDEF DEBUG_TIME}
+  t: Double;
+  {$ENDIF}
+begin
+  {$IFDEF DEBUG_TIME}
+  t := PerformanceTimer();
+  {$ENDIF}
+  loginPanel := Self.Form.GetChild('login_panel');
+  msPanel := Self.Form.GetChild('main_panel');
+
+  email := loginPanel.GetChild('email_edit');
+  password := loginPanel.GetChild('password_edit');
+
+  if WaspClient.Login(email.getText(), password.getText()) then
+  begin
+    Self.HandleLogin();
+    {$IFDEF DEBUG_TIME}
+    WriteLn('Full login took: ', Round(PerformanceTimer()-t, 4), 'ms.');
+    {$ENDIF}
+    Exit;
+  end;
+
+  with email.getFont() do
+  begin
+    setColor($0000FF);
+    setStyle([]);
+  end;
+
+  with password.getFont() do
+  begin
+    setColor($0000FF);
+    setStyle([]);
+  end;
+end;
+
+procedure TWaspForm.Logout({$H-}sender: TObject);{$H+}
+var
+  loginPanel, msPanel: TPanel;
+begin
+  loginPanel := Self.Form.GetChild('login_panel');
+  msPanel := Self.Form.GetChild('main_panel');
+
+  if WaspClient.Logout() then
+    Self.HandleLogout();
+end;
+
+
+procedure TWaspForm.PasswordEdit(sender: TObject; var key: char);
+begin
+  case key of
+    ' ': key := #0;
+    #13:
+    begin
+      Self.Validate(sender);
+      if TButton(Self.Form.GetChild('login_button')).IsEnabled() then
+        Self.Login(sender);
+      Exit;
+    end;
+  end;
+  if (key in [' ']) then
+    key := #0;
+  Self.Validate(sender);
+end;
+
+procedure TWaspForm._OnEmailDone(sender: TObject);
+var
+  email: TEdit;
+  str: String;
+begin
+  Self.Validate(sender);
+  email := sender;
+  str := LowerCase(Trim(email.getText()));
+  if str.IsEmail() then
+    WaspConfig.Put('email', LowerCase(Trim(email.getText())));
+end;
+
+procedure TWaspForm._OnPAssDone(sender: TObject);
+begin
+  Self.Validate(sender);
+end;
+
+procedure TWaspForm._OnTogglePass(sender: TObject);
+var
+  name: String;
+  panel: TPanel;
+  edit: TEdit;
+  caption: TLabel;
+  checkbox: TCheckBox;
+begin
+  panel := Self.Form.GetChild('login_panel');
+  edit := panel.GetChild('password_edit');
+
+  name := TControl(sender).GetName();
+  if name.Contains('label') then
+  begin
+    caption := sender;
+    checkbox := panel.GetChild('viewpass_checkbox');
+    checkbox.Toggle();
+    if checkbox.IsChecked() then
+    begin
+      caption.setCaption('Hide password');
+      edit.setPasswordChar(#0);
+    end
+    else
+    begin
+      caption.setCaption('Show password');
+      edit.setPasswordChar('*');
+    end;
+    Exit;
+  end;
+
+  checkbox := sender;
+  caption := panel.GetChild('viewpass_label');
+
+  if checkbox.IsChecked() then
+    begin
+      caption.setCaption('Hide password');
+      edit.setPasswordChar(#0);
+    end
+    else
+    begin
+      caption.setCaption('Show password');
+      edit.setPasswordChar('*');
+    end;
+end;
+
+
+
+
+procedure TWaspForm.SetChildsDarkTheme(sender: TWinControl);
+var
+  i, hi: Int32;
+  child: TControl;
+  theme: WideString;
+  name: String;
+begin
+  hi := sender.getComponentCount();
+
+  if hi > 0 then
+    for i := 0 to hi - 1 do
+    begin
+      child := sender.GetComponent(i);
+      Self.SetChildsDarkTheme(child);
+    end;
+
+  name := sender.getName();
+  if name = '' then Exit;
+
+  if name.Contains('label') then
+    Exit;
+
+  if name.Contains('edit') or name.Contains('button') or name.Contains('listbox') then
+  begin
+    theme := 'DarkMode_CFD';
+    sender.setColor($303030);
+    sender.getFont().setColor($F0F0F0);
+  end
+  else
+    theme := 'DarkMode_Explorer';
+
+  SetWindowTheme(sender.getHandle(), @theme, nil);
+end;
+
+procedure TWaspForm.SetAllChildsDarkTheme();
+var
+  i, hi: Int32;
+  child: TControl;
+  theme: WideString;
+begin
+  hi := Self.Form.getComponentCount();
+
+  if hi > 0 then
+    for i := 0 to hi - 1 do
+    begin
+      child := Self.Form.GetComponent(i);
+      Self.SetChildsDarkTheme(child);
+    end;
+
+  theme := 'DarkMode_Explorer';
+  SetWindowTheme(Self.Form.getHandle(), @theme, nil);
+end;
+
+
+procedure TWaspForm.SetupLoginPanel(form: TForm);
+var
+  panel: TPanel;
+  edit: TEdit;
+  button: TButton;
+  email: String;
+  viewPass: TCheckBox;
+  viewPassLabel: TLabel;
+begin
+  panel.Create(form, 'login');
+
+  panel.setWidth(TControl.AdjustToDPI(300));
+  panel.setHeight(TControl.AdjustToDPI(180));
+  panel.SetLeft(Self.Size.X div 2 - 300 div 2);
+  panel.SetTop(Self.Size.Y div 2 - 150);
+
+  email := WaspConfig.Get('email');
+  if email = '' then
+    email := 'email@mail.com';
+
+  edit.Create(panel, 0, 'Email', email);
+  edit.setOnKeyPress(@Self.MailField);
+  edit.setOnEditingDone(@Self._OnEmailDone);
+
+  edit.Create(panel, 50, 'Password');
+  edit.setPasswordChar('*');
+  edit.setOnKeyPress(@Self.PasswordEdit);
+  edit.setOnEditingDone(@Self._OnPAssDone);
+
+  viewPass.Create(panel, 'viewpass');
+  viewPass.SetLeft(TControl.AdjustToDPI(10));
+  viewPass.SetTop(TControl.AdjustToDPI(100));
+  viewPass.setOnChange(@Self._OnTogglePass);
+
+  viewPassLabel.Create(panel, 'Show password', 'viewpass');
+  viewPassLabel.SetLeft(TControl.AdjustToDPI(10 + CHECKBOX_LABEL_SPACING));
+  viewPassLabel.SetTop(TControl.AdjustToDPI(102));
+  viewPassLabel.setOnClick(@Self._OnTogglePass);
+  viewPassLabel.getFont().setPitch(fpFixed);
+  Self._OnTogglePass(viewPass);
+
+  button.Init(panel);
+  button.setParent(panel);
+  button.setName('login_button');
+  button.SetCaption('Login');
+  button.setOnClick(@Self.Login);
+
+  button.setWidth(TControl.AdjustToDPI(150));
+  button.SetLeft(button.getParent().getWidth() div 2 - TControl.AdjustToDPI(150) div 2);
+  button.SetTop(button.getParent().getHeight() - TControl.AdjustToDPI(40));
+  button.setEnabled(False);
+end;
+
+
+procedure TWaspForm._VersionsTitleLabel(parent: TPanel; name: String; left: Int32);
+var
+  panel: TPanel;
+  textLabel: TLabel;
+begin
+  panel.Create(parent, LowerCase(name) + '_version_title_panel');
+
+  panel.setWidth(TControl.AdjustToDPI(110));
+  panel.setHeight(TControl.AdjustToDPI(50));
+  panel.SetLeft(left);
+  panel.SetTop(0);
+
+  textLabel.Init(panel);
+  textLabel.SetParent(panel);
+  textLabel.setName(LowerCase(name) + '_srl_title_label');
+  textLabel.setCaption(name + ' SRL-T:');
+  textLabel.setLeft(TControl.AdjustToDPI(3));
+  textLabel.SetTop(0);
+
+  with textLabel.getFont() do
+  begin
+    setSize(TControl.AdjustToDPI(10));
+    setQuality(TFontQuality.fqCleartype);
+  end;
+
+  textLabel.Init(panel);
+  textLabel.SetParent(panel);
+  textLabel.setName(LowerCase(name) + '_wl_title_label');
+  textLabel.setCaption(name + ' WaspLib:');
+  textLabel.setLeft(TControl.AdjustToDPI(3));
+  textLabel.SetTop(TControl.AdjustToDPI(25));
+  with textLabel.getFont() do
+  begin
+    setSize(TControl.AdjustToDPI(10));
+    setQuality(TFontQuality.fqCleartype);
+  end;
+end;
+
+procedure TWaspForm._VersionsLabel(parent: TPanel; name, srlt, wl: String; left: Int32);
+var
+  panel: TPanel;
+  textLabel: TLabel;
+begin
+  panel.Create(parent, name + '_version_panel');
+
+  panel.setWidth(TControl.AdjustToDPI(70));
+  panel.setHeight(TControl.AdjustToDPI(50));
+  panel.SetLeft(left);
+  panel.SetTop(0);
+
+  textLabel.Init(panel);
+  textLabel.SetParent(panel);
+  textLabel.setName(name + '_srl_label');
+  textLabel.setCaption('v.' + srlt);
+  textLabel.setLeft(TControl.AdjustToDPI(3));
+  textLabel.SetTop(0);
+
+  with textLabel.getFont() do
+  begin
+    setSize(TControl.AdjustToDPI(10));
+    if GitHubClient.Packages.Current.SRLT <> GitHubClient.Packages.Latest.SRLT then
+      setColor($0000FF)
+    else
+      setColor($00FF00);
+  end;
+
+  textLabel.Init(panel);
+  textLabel.SetParent(panel);
+  textLabel.setName(name + '_wl_label');
+  textLabel.setCaption('v.' + wl);
+  textLabel.setLeft(TControl.AdjustToDPI(3));
+  textLabel.SetTop(TControl.AdjustToDPI(25));
+  with textLabel.getFont() do
+  begin
+    setSize(TControl.AdjustToDPI(10));
+    if GitHubClient.Packages.Current.WaspLib <> GitHubClient.Packages.Latest.WaspLib then
+      setColor($0000FF)
+    else
+      setColor($00FF00);
+  end;
+end;
+
+procedure TWaspForm._VersionsControls(parent: TPanel; left: Int32);
+var
+  panel: TPanel;
+  button: TButton;
+  check: TCheckBox;
+  checkLabel: TLabel;
+begin
+  panel.Create(parent, 'version_buttons_panel');
+  panel.setWidth(TControl.AdjustToDPI(180));
+  panel.setHeight(TControl.AdjustToDPI(50));
+  panel.SetLeft(left);
+  panel.SetTop(0);
+
+  button.Init(panel);
+  button.SetParent(panel);
+  button.setName('update_srl_button');
+  button.setLeft(TControl.AdjustToDPI(3));
+  button.SetTop(0);
+  button.setHeight(TControl.AdjustToDPI(20));
+  if GitHubClient.Packages.Current.SRLT <> GitHubClient.Packages.Latest.SRLT then
+    button.setCaption('Update')
+  else
+    button.setCaption('Re-install');
+
+  button.Init(panel);
+  button.SetParent(panel);
+  button.setName('update_wl_button');
+  button.setLeft(TControl.AdjustToDPI(3));
+  button.SetTop(TControl.AdjustToDPI(25));
+  button.setHeight(TControl.AdjustToDPI(20));
+  if GitHubClient.Packages.Current.WaspLib <> GitHubClient.Packages.Latest.WaspLib then
+    button.setCaption('Update')
+  else
+    button.setCaption('Re-install');
+
+  check.Create(panel, 'update_srl');
+  check.setLeft(TControl.AdjustToDPI(90));
+  check.SetTop(0);
+  checkLabel.Create(panel, 'Auto-update');
+  checkLabel.setLeft(TControl.AdjustToDPI(90 + CHECKBOX_LABEL_SPACING));
+  checkLabel.SetTop(TControl.AdjustToDPI(2));
+
+  check.Create(panel, 'update_wl');
+  check.setLeft(TControl.AdjustToDPI(90));
+  check.SetTop(TControl.AdjustToDPI(25));
+  checkLabel.Create(panel, 'Auto-update');
+  checkLabel.setLeft(TControl.AdjustToDPI(90 + CHECKBOX_LABEL_SPACING));
+  checkLabel.SetTop(TControl.AdjustToDPI(27));
+end;
+
+procedure TWaspForm.SetupVersionsPanel(parent: TPanel);
+var
+  panel: TPanel;
+begin
+  panel.Create(parent, 'version');
+
+  panel.setWidth(TControl.AdjustToDPI(540));
+  panel.setHeight(TControl.AdjustToDPI(50));
+  panel.SetLeft(TControl.AdjustToDPI(10));
+  panel.SetTop(Round(Self.Size.Y/5) * 4);
+
+  Self._VersionsTitleLabel(panel, 'Current', 0);
+  Self._VersionsLabel(panel, 'current', GitHubClient.Packages.Current.SRLT, GitHubClient.Packages.Current.WaspLib, TControl.AdjustToDPI(110));
+  Self._VersionsTitleLabel(panel, 'Latest', TControl.AdjustToDPI(180));
+  Self._VersionsLabel(panel, 'latest', GitHubClient.Packages.Latest.SRLT, GitHubClient.Packages.Latest.WaspLib, TControl.AdjustToDPI(290));
+  Self._VersionsControls(panel, TControl.AdjustToDPI(360));
+end;
+
+
+procedure TWaspForm.SetupMainPanel(form: TForm);
+var
+  panel: TPanel;
+  textLabel: TLabel;
+  button: TButton;
+  scriptsList: TListBox;
+begin
+  panel.Create(form, 'main');
+
+  panel.setWidth(Self.Size.X);
+  panel.setHeight(Self.Size.Y);
+  panel.SetLeft(0);
+  panel.SetTop(0);
+
+  textLabel.Init(panel);
+  textLabel.SetParent(panel);
+  textLabel.setName('user_label');
+  textLabel.setCaption('');
+  textLabel.setLeft(TControl.AdjustToDPI(10));
+  textLabel.SetTop(TControl.AdjustToDPI(10));
+  textLabel.getFont().setSize(15);
+
+  textLabel.Init(panel);
+  textLabel.SetParent(panel);
+  textLabel.setName('id_label');
+  textLabel.setCaption('');
+  textLabel.setLeft(TControl.AdjustToDPI(10));
+  textLabel.SetTop(TControl.AdjustToDPI(50));
+  textLabel.getFont().setSize(15);
+
+  scriptsList.Init(panel);
+  scriptsList.setParent(panel);
+  scriptsList.SetName('scripts_listbox');
+  scriptsList.SetLeft(TControl.AdjustToDPI(10));
+  scriptsList.SetTop(TControl.AdjustToDPI(100));
+  scriptsList.setWidth(TControl.AdjustToDPI(250));
+  scriptsList.setHeight(TControl.AdjustToDPI(350));
+
+  button.Init(panel);
+  button.setParent(panel);
+  button.setName('logout_button');
+  button.SetCaption('Logout');
+  button.setOnClick(@Self.Logout);
+
+  Self.SetupVersionsPanel(panel);
+
+  button.setWidth(TControl.AdjustToDPI(150));
+  with button.getParent() do
+  begin
+    button.SetLeft(getWidth() div 2 - TControl.AdjustToDPI(150) div 2);
+    button.SetTop(getHeight() - TControl.AdjustToDPI(40));
+  end;
+end;
+
+
+procedure TWaspForm.OnShow(sender: TObject);
+const
+  ATTRIBUTE: DWORD = 20;
+  DARK: LongBool = True;
+begin
+  SetWindowAttribute(TForm(sender).getHandle(), ATTRIBUTE, @DARK, SizeOf(DARK));
+  Self.SetAllChildsDarkTheme();
+
+  if WaspClient.IsLoggedIn() then
+    Self.HandleLogin()
+  else
+    Self.HandleLogout();
+end;
+
+procedure TWaspForm.Setup();
+begin
+  Self.Size := [TControl.AdjustToDPI(900), TControl.AdjustToDPI(600)];
+
+  Self.Form.Init(nil);
+  Self.Form.SetName('wasp_form');
+  Self.Form.setCaption('WaspScripts');
+  Self.Form.setWidth(Self.Size.X);
+  Self.Form.setHeight(Self.Size.Y);
+  Self.Form.getConstraints().SetInterfaceConstraints(Self.Size.X, Self.Size.Y, Self.Size.X, Self.Size.Y);
+  Self.Form.setPosition(TPosition.poScreenCenter);
+  Self.Form.setOnClose(@Self.OnClose);
+  Self.Form.setColor($242322);
+  Self.Form.setOnShow(@Self.OnShow);
+
+  with Self.Form.getFont() do
+  begin
+    setQuality(TFontQuality.fqAntialiased);
+    setPitch(TFontPitch.fpFixed);
+    SetColor($F0F0F0);
+  end;
+
+  Self.SetupLoginPanel(Self.Form);
+  Self.SetupMainPanel(Self.Form);
+end;
+
+procedure TWaspForm.Show();
+begin
+  try
+    Self.Form.ShowModal();
+  except
+    Writeln(GetExceptionMessage());
+  finally
+    Self.Form.Free();
+  end;
+end;
+
+procedure TWaspForm.Run();
+begin
+  Self.Setup();
+  Sync(@Self.Show);
+end;
+
+var
+  WaspForm: TWaspForm;
+
+
+
+
+{$ELSE}{$ENDIF}
+{$ELSE}{$ENDIF}
+{$ELSE}{$ENDIF}
+{$ELSE}{$ENDIF}
+{$ELSE}{$ENDIF}
+{$ELSE}{$ENDIF}
+
+
+
+begin
+  WaspClient.Setup();
+  GitHubClient.Setup();
+  WaspForm.Run();
+end;

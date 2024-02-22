@@ -1,0 +1,16 @@
+{$DEFINE WS_LAUNCHER}
+{$DEFINE DEBUG_TIME}
+
+{$IFNDEF WS_UTILS_INCLUDED}     {$I utils.simba}
+{$IFNDEF WS_CONFIG_INCLUDED}    {$I config.simba}
+{$IFNDEF WS_HTTP_INCLUDED}      {$I http.simba}
+{$IFNDEF WS_UPDATER_INCLUDED}   {$I updater.simba}
+{$IFNDEF WS_FORMUTILS_INCLUDED} {$I formutils.simba}
+{$IFNDEF WS_FORM_INCLUDED}      {$I form.simba}
+
+{$ELSE}{$ENDIF}
+{$ELSE}{$ENDIF}
+{$ELSE}{$ENDIF}
+{$ELSE}{$ENDIF}
+{$ELSE}{$ENDIF}
+{$ELSE}{$ENDIF}

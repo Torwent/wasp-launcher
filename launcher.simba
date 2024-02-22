@@ -1,0 +1,7 @@
+{$I core.simba}
+
+begin
+  WaspClient.Setup();
+  GitHubClient.Setup();
+  WaspForm.Run();
+end;

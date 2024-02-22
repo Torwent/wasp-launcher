@@ -1,0 +1,177 @@
+{$DEFINE WS_UPDATER_INCLUDED}
+{$IFNDEF WS_CORE}{$I core.simba}{$ENDIF}
+
+type
+  TWaspUpdater = record
+    Name: String;
+    Paths: TStringArray;
+    Plugins: TStringArray;
+  end;
+
+procedure TWaspUpdater.Setup();
+begin
+  Self.Name := 'WaspUpdater';
+
+  Self.Paths := [
+    IncludePath + 'SRL' + DirectorySeparator + 'plugins' + DirectorySeparator,
+    IncludePath + 'SRL-T' + DirectorySeparator + 'plugins' + DirectorySeparator
+  ];
+
+  Self.Plugins := [
+    'libremoteinput64.so.aarch64',
+    'libremoteinput64.so',
+    'libremoteinput64.dylib',
+    'libremoteinput64.dll',
+    'libremoteinput32.dll'
+  ];
+end;
+
+function TWaspUpdater.BackupFile(filePath: String): Boolean;
+var
+  f: Int32;
+  str: String;
+begin
+  f := OpenFile(filePath, False);
+  if not ReadFileString(f, str, FileSize(f)) then
+    Exit;
+  CloseFile(f);
+  Result := WriteFileContents(filePath + '.bak', str, False);
+end;
+
+function TWaspUpdater.RestoreFile(filePath: String): Boolean;
+var
+  f: Int32;
+  str: String;
+begin
+  f := OpenFile(filePath + '.bak', False);
+  if not ReadFileString(f, str, FileSize(f)) then
+    Exit;
+  CloseFile(f);
+  Result := WriteFileContents(filePath, str, False);
+  DeleteFile(filePath + '.bak');
+end;
+
+function TWaspUpdater.IsFileLocked(filePath: AnsiString): Boolean;
+begin
+  if not Self.BackupFile(filePath) then
+    TerminateScript('Failed to backup file: ' + filePath);
+
+  Result := not DeleteFile(filePath);
+
+  if not Result then
+    if not Self.RestoreFile(filePath) then
+      TerminateScript('Failed to restore file: ' + filePath);
+end;
+
+function TWaspUpdater.FindLockedPlugins(): TStringArray;
+var
+  path, plugin: String;
+begin
+  for path in Self.Paths do
+    for plugin in Self.Plugins do
+      if Self.IsFileLocked(path + plugin) then
+        Result += path + plugin;
+end;
+
+procedure TWaspUpdater.KillClients();
+var
+  window: TOSWindow;
+begin
+  for window in GetWindows().GetByClass('SunAwtCanvas') do
+    window.Kill();
+end;
+
+function TWaspUpdater.UnlockPlugins(): Boolean;
+var
+  locked: TStringArray;
+  plugin: String;
+begin
+  locked := Self.FindLockedPlugins();
+
+  if locked = [] then
+    Exit(True);
+
+  Self.KillClients();
+
+  for plugin in locked do
+    if Self.IsFileLocked(plugin) then
+      Exit;
+
+  Result := True;
+end;
+
+function TWaspUpdater.DeleteDirectory(path: String; deleteRoot: Boolean = True): Boolean;
+var
+  f, tmp: String;
+begin
+  for f in FindFiles(path, True) do
+  begin
+    if not DeleteFile(f) then
+      Exit;
+    tmp := ExtractFilePath(f);
+    if (FindFiles(tmp, True) = []) and (FindDirectories(tmp, True) = []) then
+      if not System.DeleteDirectory(tmp, False) then
+        Exit;
+  end;
+
+  Result := not deleteRoot or System.DeleteDirectory(path, False);
+end;
+
+procedure TWaspUpdater.MoveFiles(pkg: String);
+var
+  paths, files: TStringArray;
+  path, f, fPath, newPath: String;
+begin
+  paths := GetDirectories(GitHubClient.DownloadPath + pkg + DirectorySeparator);
+  if Length(paths) <> 1 then
+    TerminateScript('The ' + pkg + ' download is empty or has unexpected things inside.');
+
+  newPath := IncludePath + pkg + DirectorySeparator;
+  if not Self.DeleteDirectory(newPath) then
+    TerminateScript('Failed to delete old library: ' + newPath);
+  if not ForceDirectories(newPath) then
+    TerminateScript('Failed to create path: ' + newPath);
+
+  path := GitHubClient.DownloadPath + pkg + DirectorySeparator + paths[0] + DirectorySeparator;
+  files := FindFiles(path, True);
+  for f in files do
+  begin
+    fPath := f.After(path);
+    if fPath.Contains('.git') then
+      Continue;
+    if not ForceDirectories(newPath + ExtractFilePath(fPath)) then
+      TerminateScript('Failed to create path: ' + newPath + ExtractFilePath(fPath));
+
+    if not CopyFile(f, newPath + fPath, False) then
+      TerminateScript('Failed to copy file: ' + fPath);
+    DeleteFile(f);
+    if (FindFiles(ExtractFilePath(f), True) = []) and (FindDirectories(ExtractFilePath(f), True) = []) then
+      System.DeleteDirectory(ExtractFilePath(f), False);
+  end;
+
+  Self.DeleteDirectory(GitHubClient.DownloadPath + pkg);
+end;
+
+procedure TWaspUpdater.Update(pkg: String);
+begin
+  GitHubClient.Download(pkg);
+  DebugLn(Self.Name, 'Unzipping ' + pkg + ' this might take a while.');
+
+  try
+    UnZipFile(GitHubClient.DownloadPath + pkg + '.zip', GitHubClient.DownloadPath + pkg);
+    DeleteFile(GitHubClient.DownloadPath + pkg + '.zip');
+  except
+    TerminateScript(GetExceptionMessage());
+  end;
+
+  case LowerCase(pkg) of
+    'srl-t', 'srlt', 'srl':
+    if not Self.UnlockPlugins() then
+      TerminateScript('Failed to unlock Simba plugins. Close all RuneScape clients, any other Jagex software, any other bots and try again.');
+  end;
+
+  Self.MoveFiles(pkg);
+end;
+
+var
+  WaspUpdater: TWaspUpdater;

@@ -1,0 +1,53 @@
+{$DEFINE WS_FORMUTILS_INCLUDED}
+{$IFNDEF WS_CORE}{$I core.simba}{$ENDIF}
+
+function TControl.GetDPI(): Int32; static;
+var
+  tmp: TFont;
+begin
+  tmp.Init();
+  Result := tmp.GetPixelsPerInch();
+  tmp.Free();
+end;
+
+function TControl.AdjustToDPI(n: Int32): Int32; static;
+begin
+  Result := Round(n * TControl.GetDPI() / 96);
+end;
+
+function TComponent.NameMatch(name: TComponentName): Boolean;
+begin
+  Result := (Self <> nil) and (Self.GetName() = name);
+end;
+
+function TComponent.GetChild(name: TComponentName): TComponent;
+var
+  i, hi: Int32;
+  child: TComponent;
+begin
+  if Self = nil then
+    Exit;
+
+  if Self.NameMatch(name) then
+    Exit(Self);
+
+  hi := Self.getComponentCount();
+
+  if hi >= 0 then
+    for i := 0 to hi - 1 do
+    begin
+      child := Self.GetComponent(i);
+
+      if child.NameMatch(name) then
+        Exit(child);
+
+      Result := child.GetChild(name);
+      if Result <> nil then
+        Exit;
+    end;
+
+  Result := nil;
+end;
+const
+  CHECKBOX_LABEL_SPACING: Int32 = 18;
+
