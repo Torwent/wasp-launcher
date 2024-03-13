@@ -1,5 +1,7 @@
 {$DEFINE WS_FORMUTILS_INCLUDED}
-{$IFNDEF WS_CORE}{$I core.simba}{$ENDIF}
+{$IFNDEF WS_LAUNCHER}
+  {$I core.simba}
+{$ENDIF}
 
 function TControl.GetDPI(): Int32; static;
 var
@@ -15,6 +17,193 @@ begin
   Result := Round(n * TControl.GetDPI() / 96);
 end;
 
+
+procedure TPanel.Create(owner: TControl);
+begin
+  Self.Init(owner);
+  Self.SetParent(owner);
+end;
+
+procedure TPageControl.Create(owner: TControl);
+begin
+  Self.Init(owner);
+  Self.SetParent(owner);
+end;
+
+procedure TTabSheet.Create(owner: TControl);
+begin
+  Self.Init(owner);
+  Self.SetParent(owner);
+end;
+
+procedure TImage.Create(owner: TControl);
+begin
+  Self.Init(owner);
+  Self.SetParent(owner);
+end;
+
+procedure TLabel.Create(owner: TControl);
+begin
+  Self.Init(owner);
+  Self.SetParent(owner);
+end;
+
+procedure TEdit.Create(owner: TControl);
+begin
+  Self.Init(owner);
+  Self.SetParent(owner);
+end;
+
+procedure TButton.Create(owner: TControl);
+begin
+  Self.Init(owner);
+  Self.SetParent(owner);
+end;
+
+procedure TCheckBox.Create(owner: TControl);
+begin
+  Self.Init(owner);
+  Self.SetParent(owner);
+end;
+
+procedure TRadioButton.Create(owner: TControl);
+begin
+  Self.Init(owner);
+  Self.SetParent(owner);
+end;
+
+procedure TComboBox.Create(owner: TControl);
+begin
+  Self.Init(owner);
+  Self.SetParent(owner);
+end;
+
+procedure TListBox.Create(owner: TControl);
+begin
+  Self.Init(owner);
+  Self.SetParent(owner);
+end;
+
+procedure TMemo.Create(owner: TControl);
+begin
+  Self.Init(owner);
+  Self.SetParent(owner);
+end;
+
+
+procedure TControl.SetFontColor(color: TColor);
+begin
+  Self.GetFont().setColor(color);
+end;
+
+procedure TControl.SetFontSize(size: Int32);
+begin
+  Self.GetFont().setSize(size);
+end;
+
+procedure TControl.SetFontQuality(quality: TFontQuality);
+begin
+  Self.GetFont().setQuality(quality);
+end;
+
+procedure TControl.SetFontStyle(qualities: TFontStyles);
+begin
+  Self.GetFont().setStyle(qualities);
+end;
+
+
+procedure TControl.SetTop(const value: Integer); constref; override;
+begin
+  inherited(TControl.AdjustToDPI(value));
+end;
+
+procedure TControl.SetLeft(const value: Integer); constref; override;
+begin
+  inherited(TControl.AdjustToDPI(value));
+end;
+
+procedure TControl.SetWidth(const value: Integer); constref; override;
+begin
+  inherited(TControl.AdjustToDPI(value));
+end;
+
+procedure TControl.SetLeft(const value: Integer); constref; override;
+begin
+  inherited(TControl.AdjustToDPI(value));
+end;
+
+
+
+procedure TCheckBox.SetChecked(value: Boolean);
+begin
+  if value then
+    Self.setState(cbChecked)
+  else
+    Self.setState(cbUnchecked);
+end;
+
+function TCheckBox.IsChecked(): Boolean;
+begin
+  Result := Self.getState() = cbChecked;
+end;
+
+procedure TCheckBox.Toggle();
+begin
+  case Self.getState() of
+    cbChecked: Self.setState(cbUnchecked);
+    else Self.setState(cbChecked)
+  end;
+end;
+
+
+function TControl.GetTrueWidth(): Int32;
+var
+  bmp: TBitmap;
+  canvas: TCanvas;
+  font: TFont;
+begin
+  if Self = nil then
+    Exit;
+
+  bmp.Init();
+  try
+    canvas := bmp.getCanvas();
+    font := Self.getFont();
+
+    if font <> nil then
+    begin
+      canvas.setFont(font);
+      Result := canvas.TextWidth(Self.getCaption());
+    end;
+  finally
+    bmp.Free();
+  end;
+end;
+
+function TControl.GetTrueHeight(): Int32;
+var
+  bmp: TBitmap;
+  canvas: TCanvas;
+  font: TFont;
+begin
+  if Self = nil then
+    Exit;
+
+  bmp.Init();
+  try
+    canvas := bmp.getCanvas();
+    font := Self.getFont();
+    if font <> nil then
+    begin
+      canvas.setFont(font);
+      Result := canvas.TextHeight(Self.getCaption());
+    end;
+  finally
+    bmp.Free();
+  end;
+end;
+
+
 function TComponent.NameMatch(name: TComponentName): Boolean;
 begin
   Result := (Self <> nil) and (Self.GetName() = name);
@@ -22,32 +211,577 @@ end;
 
 function TComponent.GetChild(name: TComponentName): TComponent;
 var
-  i, hi: Int32;
+  i: Int32;
   child: TComponent;
 begin
   if Self = nil then
     Exit;
 
-  if Self.NameMatch(name) then
+  if Self.GetName() = name then
     Exit(Self);
 
-  hi := Self.getComponentCount();
-
-  if hi >= 0 then
-    for i := 0 to hi - 1 do
-    begin
-      child := Self.GetComponent(i);
-
-      if child.NameMatch(name) then
-        Exit(child);
-
-      Result := child.GetChild(name);
-      if Result <> nil then
-        Exit;
-    end;
-
-  Result := nil;
+  for i := 0 to Self.getComponentCount() - 1 do
+  begin
+    child := Self.GetComponent(i);
+    Result := child.GetChild(name);
+    if Result <> nil then
+      Exit;
+  end;
 end;
-const
-  CHECKBOX_LABEL_SPACING: Int32 = 18;
+
+type
+  TDarkListBox = record
+    OutterPanel: TPanel;
+    InnerPanel: TPanel;
+    ListBox: TListBox;
+  end;
+
+procedure TDarkListBox.Create(owner: TControl);
+begin
+  Self.OutterPanel.Create(owner);
+  Self.OutterPanel.setBevelWidth(0);
+  Self.OutterPanel.setColor($505050);
+
+  Self.InnerPanel.Create(Self.OutterPanel);
+  Self.InnerPanel.SetTop(2);
+  Self.InnerPanel.SetLeft(2);
+  Self.InnerPanel.setWidth(Self.OutterPanel.getWidth() - 4);
+  Self.InnerPanel.setHeight(Self.OutterPanel.getHeight() - 4);
+  Self.InnerPanel.setBevelWidth(0);
+  Self.InnerPanel.setColor($303030);
+
+  Self.ListBox.Create(Self.InnerPanel);
+  Self.ListBox.setLeft(-2);
+  Self.ListBox.SetTop(-2);
+  Self.ListBox.setWidth(Self.OutterPanel.getWidth());
+  Self.ListBox.setHeight(Self.OutterPanel.getHeight());
+  Self.ListBox.setColor($303030);
+  Self.ListBox.SetFontColor($D5D5D5);
+end;
+
+
+function TDarkListBox.GetLeft(): Integer;
+begin
+  Result := Self.OutterPanel.GetLeft();
+end;
+
+function TDarkListBox.GetTop(): Integer;
+begin
+  Result := Self.OutterPanel.getTop();
+end;
+
+function TDarkListBox.GetWidth(): Integer;
+begin
+  Result := Self.OutterPanel.getWidth();
+end;
+
+function TDarkListBox.GetHeight(): Integer;
+begin
+  Result := Self.OutterPanel.getHeight();
+end;
+
+
+procedure TDarkListBox.SetLeft(value: Integer);
+begin
+  Self.OutterPanel.SetLeft(value);
+end;
+
+procedure TDarkListBox.SetTop(value: Integer);
+begin
+  Self.OutterPanel.SetTop(value);
+end;
+
+procedure TDarkListBox.SetWidth(value: Integer);
+begin
+  Self.OutterPanel.setWidth(value);
+  Self.InnerPanel.setWidth(value - 4);
+  Self.ListBox.setWidth(value);
+end;
+
+procedure TDarkListBox.SetHeight(value: Integer);
+begin
+  Self.OutterPanel.setHeight(value);
+  Self.InnerPanel.setHeight(value - 4);
+  Self.ListBox.setHeight(value);
+end;
+
+
+function TDarkListBox.GetAlign(): TAlign;
+begin
+  Result := Self.OutterPanel.getAlign();
+end;
+
+procedure TDarkListBox.SetAlign(value: TAlign);
+var
+  w, h: Int32;
+begin
+  Self.OutterPanel.setAlign(value);
+  with TPanel(Self.OutterPanel.getOwner()) do
+  begin
+    w := GetWidth();
+    h := getHeight();
+  end;
+
+  h -= 15;
+
+  Self.InnerPanel.setWidth(w-4);
+  Self.InnerPanel.setHeight(h-4);
+
+  Self.ListBox.setWidth(w);
+  Self.ListBox.setHeight(h);
+end;
+
+
+
+type
+  TLabeledControl  = record Panel: TPanel; Caption: TLabel; Control: TControl; end;
+  TLabeledEdit     = record(TLabeledControl) Edit: TEdit; end;
+  TLabeledCheckBox = record(TLabeledControl) CheckBox: TCheckBox; end;
+  TLabeledComboBox = record(TLabeledControl) ComboBox: TComboBox; end;
+  TLabeledListBox  = record(TLabeledControl) ListBox: TListBox; end;
+  TLabeledDarkListBox  = record(TLabeledControl) ListBox: TDarkListBox; end;
+
+procedure TLabeledControl.Create(owner: TControl);
+begin
+  Self.Panel.Create(owner);
+  Self.Panel.setBevelWidth(0);
+
+  Self.Caption.Create(Self.Panel);
+  Self.Caption.setAlign(alTop);
+end;
+
+procedure TLabeledEdit.Create(owner: TControl); override;
+begin
+  inherited;
+
+  Self.Edit.Create(Self.Panel);
+  Self.Edit.setAlign(alClient);
+  Self.Control := Self.Edit;
+
+  Self.Panel.setHeight(Self.Caption.getHeight() + Self.Edit.getHeight());
+end;
+
+procedure TLabeledCheckBox.Create(owner: TControl); override;
+  type TLabeledCheckBox = TLabeledCheckBox;
+  procedure TLabeledCheckBox._PanelToggle(sender: TObject);
+  var
+    check: TCheckBox;
+    event: TNotifyEvent;
+  begin
+    check := TPanel(sender).GetComponent(1);
+    check.Toggle();
+
+    event := check.GetOnChange();
+    if event <> nil then
+      Lapify(event)(check);
+  end;
+
+  procedure TLabeledCheckBox._LabelToggle(sender: TObject);
+  begin
+    Self._PanelToggle(TControl(sender).getParent());
+  end;
+
+begin
+  Self.Panel.Create(owner);
+  Self.Panel.setBevelWidth(0);
+  Self.Panel.setOnClick(@Self._PanelToggle);
+
+  Self.Caption.Create(Self.Panel);
+  Self.Caption.setAlign(alLeft);
+  Self.Caption.setOnClick(@Self._LabelToggle);
+
+  Self.CheckBox.Create(Self.Panel);
+  Self.CheckBox.setAlign(alLeft);
+  Self.Control := Self.CheckBox;
+
+  Self.Panel.setHeight(Self.Caption.GetTrueHeight());
+  Self.Panel.setWidth(22 + Self.Caption.GetTrueWidth());
+end;
+
+procedure TLabeledComboBox.Create(owner: TControl); override;
+begin
+  inherited;
+
+  Self.ComboBox.Create(Self.Panel);
+  Self.ComboBox.setAlign(alClient);
+  Self.Control := Self.ComboBox;
+
+  Self.Panel.setHeight(Self.Caption.getHeight() + Self.ComboBox.getHeight());
+end;
+
+procedure TLabeledListBox.Create(owner: TControl); override;
+begin
+  inherited;
+
+  Self.ListBox.Create(Self.Panel);
+  Self.ListBox.setAlign(alClient);
+  Self.Control := Self.ListBox;
+
+  Self.Panel.setHeight(Self.Caption.getHeight() + Self.ListBox.getHeight());
+end;
+
+procedure TLabeledDarkListBox.Create(owner: TControl); override;
+begin
+  inherited;
+
+  Self.ListBox.Create(Self.Panel);
+  Self.ListBox.setAlign(alClient);
+  Self.Control := Self.ListBox.ListBox;
+
+  Self.Panel.setHeight(Self.Caption.getHeight() + Self.ListBox.getHeight());
+end;
+
+
+procedure TLabeledControl.SetCaption(value: String);
+begin
+  Self.Caption.setCaption(value);
+end;
+
+procedure TLabeledCheckBox.SetCaption(value: String); override;
+begin
+  Self.Caption.setCaption(value);
+  Self.Panel.setHeight(Self.Caption.GetTrueHeight());
+  Self.Panel.setWidth(22 + Self.Caption.GetTrueWidth());
+end;
+
+
+procedure TLabeledControl.SetColor(color: TColor);
+begin
+  Self.Panel.setColor(color);
+end;
+
+procedure TLabeledControl.SetControlColor(color: TColor);
+begin
+  Self.Control.setColor(color);
+end;
+
+
+procedure TLabeledControl.SetFontColor(color: TColor);
+begin
+  Self.Caption.SetFontColor(color);
+end;
+
+procedure TLabeledControl.SetControlFontColor(color: TColor);
+begin
+  Self.Control.SetFontColor(color);
+end;
+
+procedure TLabeledControl.SetFontSize(size: Int32);
+begin
+  Self.Caption.SetFontSize(size);
+end;
+
+
+procedure TLabeledControl.SetName(value: String);
+var
+  caption: String;
+begin
+  caption := Self.Panel.getCaption();
+  Self.Panel.setName(value + '_panel');
+  Self.Panel.setCaption(caption);
+
+  caption := Self.Caption.getCaption();
+  Self.Caption.setName(value + '_label');
+  Self.Caption.setCaption(caption);
+end;
+
+
+procedure TLabeledEdit.SetName(value: String); override;
+var
+  caption: String;
+begin
+  value := LowerCase(StringReplace(LowerCase(value), ' ', '_', [rfReplaceAll]));
+
+  inherited(value);
+  caption := Self.Edit.getCaption();
+  Self.Edit.setName(value + '_edit');
+  Self.Edit.setCaption(caption);
+end;
+
+procedure TLabeledCheckBox.SetName(value: String); override;
+var
+  caption: String;
+begin
+  value := StringReplace(LowerCase(value), ' ', '_', [rfReplaceAll]);
+
+  inherited(value);
+  caption := Self.CheckBox.getCaption();
+  Self.CheckBox.setName(value + '_checkbox');
+  Self.CheckBox.setCaption(caption);
+end;
+
+procedure TLabeledComboBox.SetName(value: String); override;
+var
+  caption: String;
+begin
+  value := StringReplace(LowerCase(value), ' ', '_', [rfReplaceAll]);
+
+  inherited(value);
+  caption := Self.ComboBox.getCaption();
+  Self.ComboBox.setName(value + '_combobox');
+  Self.ComboBox.setCaption(caption);
+end;
+
+procedure TLabeledListBox.SetName(value: String); override;
+var
+  caption: String;
+begin
+  value := StringReplace(LowerCase(value), ' ', '_', [rfReplaceAll]);
+
+  inherited(value);
+  caption := Self.ListBox.getCaption();
+  Self.ListBox.setName(value + '_listbox');
+  Self.ListBox.setCaption(caption);
+end;
+
+procedure TLabeledDarkListBox.SetName(value: String); override;
+var
+  caption: String;
+begin
+  value := StringReplace(LowerCase(value), ' ', '_', [rfReplaceAll]);
+
+  inherited(value);
+  caption := Self.ListBox.ListBox.getCaption();
+  Self.ListBox.ListBox.setName(value + '_listbox');
+  Self.ListBox.ListBox.setCaption(caption);
+end;
+
+
+procedure TLabeledControl.SetLeft(value: Int32);
+begin
+  Self.Panel.setLeft(value);
+end;
+
+procedure TLabeledControl.SetTop(value: Int32);
+begin
+  Self.Panel.SetTop(value);
+end;
+
+
+procedure TLabeledControl.SetWidth(value: Int32);
+begin
+  Self.Panel.setWidth(value);
+end;
+
+procedure TLabeledDarkListBox.SetWidth(value: Int32); override;
+begin
+  Self.Panel.setWidth(value);
+  Self.ListBox.SetAlign(Self.ListBox.GetAlign());
+end;
+
+
+procedure TLabeledControl.SetHeight(value: Int32);
+begin
+  Self.Panel.setHeight(value);
+end;
+
+procedure TLabeledDarkListBox.SetHeight(value: Int32); override;
+begin
+  Self.Panel.setHeight(value);
+  Self.ListBox.SetAlign(Self.ListBox.GetAlign());
+end;
+
+
+procedure TLabeledControl.SetAlign(value: TAlign);
+begin
+  Self.Panel.setAlign(value);
+end;
+
+procedure TLabeledCheckBox.SetAlign(value: TAlign); override;
+begin
+  Self.Panel.setAlign(value);
+end;
+
+
+procedure TLabeledControl.SetVisible(value: Boolean);
+begin
+  Self.Panel.setVisible(value);
+end;
+
+
+function TLabeledControl.GetLeft(): Int32;
+begin
+  Result := Self.Panel.getLeft();
+end;
+
+function TLabeledControl.GetTop(): Int32;
+begin
+  Result := Self.Panel.getTop();
+end;
+
+function TLabeledControl.GetRight(): Int32;
+begin
+  Result := Self.Panel.getBoundsRect().Right;
+end;
+
+function TLabeledControl.GetBottom(): Int32;
+begin
+  Result := Self.Panel.getBoundsRect().Bottom;
+end;
+
+
+function TLabeledControl.GetWidth(): Int32;
+begin
+  Result := Self.Panel.getWidth();
+end;
+
+function TLabeledControl.GetHeight(): Int32;
+begin
+  Result := Self.Panel.getHeight();
+end;
+
+
+function TLabeledControl.GetVisible(): Boolean;
+begin
+  Result := Self.Panel.GetVisible();
+end;
+
+
+procedure TLabeledEdit.SetText(value: String);
+begin
+  Self.Edit.setText(value);
+end;
+
+procedure TLabeledComboBox.SetText(value: String);
+begin
+  Self.ComboBox.setText(value);
+end;
+
+
+function TLabeledEdit.GetText(): String;
+begin
+  Result := Self.Edit.GetText();
+end;
+
+function TLabeledComboBox.GetText(): String;
+begin
+  Result := Self.ComboBox.GetText();
+end;
+
+function TLabeledListBox.GetText(): String;
+begin
+  Result := Self.ListBox.GetSelectedText();
+end;
+
+
+procedure TLabeledEdit.Clear();
+begin
+  Self.Edit.Clear();
+end;
+
+procedure TLabeledComboBox.Clear();
+begin
+  Self.ComboBox.Clear();
+end;
+
+procedure TLabeledListBox.Clear();
+begin
+  Self.ListBox.Clear();
+end;
+
+
+procedure TLabeledCheckBox.SetChecked(value: Boolean);
+begin
+  Self.CheckBox.SetChecked(value);
+end;
+
+
+function TLabeledCheckBox.IsChecked(): Boolean;
+begin
+  Result := Self.CheckBox.IsChecked();
+end;
+
+function TLabeledCheckBox.GetState(): TCheckBoxState;
+begin
+  Result := Self.CheckBox.getState();
+end;
+
+procedure TLabeledEdit.SetEnabled(value: Boolean);
+begin
+  Self.Edit.setEnabled(value);
+end;
+
+procedure TLabeledCheckBox.SetEnabled(value: Boolean);
+begin
+  Self.Panel.setEnabled(value);
+  Self.Caption.setEnabled(value);
+  Self.CheckBox.setEnabled(value);
+end;
+
+procedure TLabeledComboBox.SetEnabled(value: Boolean);
+begin
+  Self.ComboBox.setEnabled(value);
+end;
+
+procedure TLabeledListBox.SetEnabled(value: Boolean);
+begin
+  Self.ListBox.setEnabled(value);
+end;
+
+
+procedure TLabeledEdit.SetPasswordChar(value: Char = '*');
+begin
+  Self.Edit.setPasswordChar(value);
+end;
+
+
+procedure TLabeledComboBox.SetStyle(value: TComboBoxStyle);
+begin
+  Self.ComboBox.setStyle(value);
+end;
+
+procedure TLabeledListBox.SetStyle(value: TListBoxStyle);
+begin
+  Self.ListBox.setStyle(value);
+end;
+
+
+procedure TLabeledCombobox.AddItem(value: String);
+begin
+  Self.ComboBox.getItems().Add(value);
+end;
+
+procedure TLabeledListBox.AddItem(value: String);
+begin
+  Self.ListBox.getItems().Add(value);
+end;
+
+
+procedure TLabeledCombobox.AddItemArray(valueArray: TStringArray);
+var
+  value: String;
+begin
+  for value in valueArray do
+    Self.AddItem(value);
+end;
+
+procedure TLabeledListBox.AddItemArray(valueArray: TStringArray);
+var
+  value: String;
+begin
+  for value in valueArray do
+    Self.AddItem(value);
+end;
+
+
+procedure TLabeledCombobox.SetItemIndex(value: Int32);
+begin
+  Self.ComboBox.setItemIndex(value);
+end;
+
+procedure TLabeledListBox.SetItemIndex(value: Int32);
+begin
+  Self.ListBox.setItemIndex(value);
+end;
+
+
+function TLabeledCombobox.GetItemIndex(): Int32;
+begin
+  Result := Self.ComboBox.getItemIndex();
+end;
+
+function TLabeledListBox.GetItemIndex(): Int32;
+begin
+  Result := Self.ListBox.getItemIndex();
+end;
 

@@ -1,24 +1,266 @@
+{$DEFINE SCRIPT_ID := 'd563990c-4d31-4aba-b214-18e69171ed5e'}
+{$DEFINE SCRIPT_REVISION := '3'}
 
-{$DEFINE WS_LAUNCHER}
-{$DEFINE DEBUG_TIME}
+{.$DEFINE DEVELOPER_MODE}
 
-{$IFNDEF WS_UTILS_INCLUDED}     
+
+{$DEFINE WS_LAUNCHER}{$DEFINE WL_UTILS}{$DEFINE SRL_UTILS}
+
+const
+  SIMBA_DATA_DIR = AppPath + 'Data' + DirectorySeparator;
+  WL_DATAPATH = SIMBA_DATA_DIR + 'WaspLib' + DirectorySeparator;
+  LAUNCHER_DATA = SIMBA_DATA_DIR + 'wasp-launcher' + DirectorySeparator;
+
+type
+  TSRL = record IsSetup: Boolean; end;
+
+var
+  SRL: TSRL;
+  ScriptName: String := ExtractFileName(ScriptFile).Before(ExtractFileExt(ScriptFile));
+
+{$IFNDEF SCRIPT_ID}{$DEFINE SCRIPT_ID := 'd563990c-4d31-4aba-b214-18e69171ed5e'}{$ENDIF}
+{$IFNDEF SCRIPT_REVISION}{$DEFINE SCRIPT_REVISION := '1'}{$ENDIF}
+
+{$IFNDEF SRL_TIME_INCLUDED}        
+{$DEFINE SRL_TIME_INCLUDED}
+
+
 (*
-Utility methods
+# Time
+Time related methods
 *)
+type
+  TTimeFormat = (Time_Formal, Time_Short, Time_Abbrev, Time_Bare, Time_FStop, Time_Formal_Long);
 
-{$DEFINE WS_UTILS_INCLUDED}
+const
+  ONE_SECOND     = 1000;
+  ONE_MINUTE     = ONE_SECOND * 60;
+  FIVE_MINUTES   = ONE_MINUTE * 5;
+  THIRTY_MINUTES = ONE_MINUTE * 30;
+  ONE_HOUR       = ONE_MINUTE * 60;
+  ONE_DAY        = ONE_HOUR   * 24;
+  
+  
+(*
+## srl.MsToTime
+```pascal
+function TSRL.MsToTime(const MS: UInt64; const Format: TTimeFormat): String; constref;
+```
 
+Converts milliseconds to a string following the given time-format.
+*)
+function TSRL.MsToTime(const MS: UInt64; const Format: TTimeFormat): String; constref;
+var
+  STA: array [0..5] of TVariantArray;
+  Time: TIntegerArray;
+  i, t, tl: Integer;
+begin
+  Result := '';
+
+  if (Format = TIME_FORMAL_LONG) then
+  begin
+    tl := 7;
+    t := 6;
+    SetLength(Time, tl);
+    ConvertTime64(MS, Time[0], Time[1], Time[2], Time[3], Time[4], Time[5], Time[6]);
+  end else begin
+    tl := 3;
+    t := 2;
+    SetLength(Time, tl);
+    ConvertTime(MS, Time[0], Time[1], Time[2]);
+  end;
+
+  STA[Ord(Time_Formal)] := [' Hours, ', ' Minutes and ', ' Seconds', False, 0];
+  STA[Ord(Time_Short)]  := ['h ', 'm ', 's', False, 2];
+  STA[Ord(Time_Abbrev)] := [' hr ', ' min ', ' sec', False, 0];
+  STA[Ord(Time_Bare)]   := [':', ':', '', True, 2];
+  STA[Ord(Time_FStop)]  := ['.', '.', '', True, 2];
+  STA[Ord(Time_Formal_Long)] := [' Years, ', ' Months, ', ' Weeks, ', ' Days, ', ' Hours, ', ' Minutes and ', ' Seconds', False, 0];
+
+  for i := 0 to t do
+    if (Time[i] > 0) or (STA[Ord(Format)][tl]) or (i = t) then
+      Result += PadZ(IntToStr(Time[i]), STA[Ord(Format)][tl+1]) + STA[Ord(Format)][i];
+end;
+  
+(*
+## srl.TimeRunning
+```pascal
+function TSRL.TimeRunning(TheType: TTimeFormat = Time_Formal_Long): String; constref;
+```
+
+Returns time the script has been running as a string with the given time-format.
+*)
+function TSRL.TimeRunning(TheType: TTimeFormat = Time_Formal_Long): String; constref;
+begin
+  Result := MsToTime(GetTimeRunning(), TheType);
+end;
+
+function TSRL.TimeStamp: String;
+var
+  Time: Int64;
+  Hours, Mins, Secs, Millis: Int32;
+begin
+  Time := GetTimeRunning();
+
+  Hours  := Time div 3600000;
+  Time   := Time mod 3600000;
+  Mins   := Time div 60000;
+  Time   := Time mod 60000;
+  Secs   := Time div 1000;
+  Millis := Time mod 1000;
+
+  Result := Format('[%.2d:%.2d:%.2d:%.3d]', [Hours, Mins, Secs, Millis]);
+end;
+
+(*
+## TCountDown
+A neat and simple timer type.
+
+Example:
+```pascal
+myTimer.Init(3000); //3000ms
+while not myTimer.IsFinished() do
+  {do something};
+
+myTimer.Restart(Random(-200,200)); //3000 +/- 200ms
+while not myTimer.IsFinished() do
+  {do something};
+```
+*)
+type
+  TCountDown = record
+    Length: UInt64;
+    Timeout: UInt64;
+    Paused: UInt64;
+  end;
+
+procedure TCountDown.Setup(Time: UInt32);
+begin
+  Self.Length  := Time;
+  Self.Timeout := GetTickCount();
+  Self.Paused := 0;
+end;
+
+procedure TCountDown.Init(Time: UInt32);
+begin
+  Self.Length  := Time;
+  Self.Timeout := GetTickCount() + Time;
+  Self.Paused := 0;
+end;
+
+procedure TCountDown.Restart(Rand: Int32 = 0);
+begin
+  if Self.Length > 0 then
+  begin
+    Self.Paused := 0;
+    Self.Timeout := GetTickCount() + (Length + Rand);
+  end;
+end;
+
+procedure TCountDown.Extend(Time: UInt32);
+begin
+  Self.Timeout := Self.Timeout + Time;
+end;
+
+function TCountDown.TimeRemaining: UInt32;
+begin
+  if Self.IsPaused() then
+    Result := Max(Self.Timeout - Self.Paused, 0)
+  else
+    Result := Max(Self.Timeout - GetTickCount(), 0);
+end;
+
+function TCountDown.IsFinished: Boolean;
+begin
+  Result := (Self.Timeout > 0) and (Self.Paused = 0) and (TimeRemaining() = 0);
+end;
+
+function TCountDown.IsPaused: Boolean;
+begin
+  Result := Self.Paused > 0;
+end;
+
+procedure TCountDown.Pause;
+begin
+  if not Self.IsPaused() then
+    Self.Paused := GetTickCount();
+end;
+
+procedure TCountDown.Resume;
+begin
+  if Self.IsPaused() then
+  begin
+    Self.Timeout := Self.Timeout + (GetTickCount() - Self.Paused);
+    Self.Paused := 0;
+  end;
+end;
+
+(*
+## TStopWatch
+A neat and simple stopwatch type.
+
+Example:
+```pascal
+var StopWatch: TStopWatch;
+
+StopWatch.Start();
+Wait(1000);
+WriteLn(StopWatch.ElapsedTime()); // ~1000
+```
+*)
+type
+  TStopwatch = record
+    StartTime: UInt64;
+    PausedTime: UInt64;
+    TotalPausedTime: UInt64;
+  end;
+
+procedure TStopWatch.Start;
+begin
+  if Self.PausedTime > 0 then
+  begin
+    Self.TotalPausedTime += GetTickCount() - Self.PausedTime;
+    Self.PausedTime := 0;
+  end else
+    Self.StartTime := GetTickCount();
+end;
+
+procedure TStopWatch.Resume;
+begin
+  Self.Start();
+end;
+
+procedure TStopWatch.Pause;
+begin
+  Self.PausedTime := GetTickCount();
+end;
+
+procedure TStopWatch.Reset;
+begin
+  Self.StartTime := GetTickCount();
+  Self.PausedTime := 0;
+  Self.TotalPausedTime := 0;
+end;
+
+function TStopWatch.ElapsedTime: UInt64;
+begin
+  if Self.PausedTime > 0 then
+    Result := (GetTickCount() - Self.StartTime) - (GetTickCount() - Self.PausedTime)
+  else
+    Result := (GetTickCount() - Self.StartTime) - Self.TotalPausedTime;
+end;
+
+function TStopWatch.IsPaused: Boolean;
+begin
+  Result := Self.PausedTime > 0;
+end;
 
 {$IFDEF WINDOWS}
-const
-  WINAPI_CC = {$IFDEF CPU386}'stdcall'{$ELSE}'win64'{$ENDIF};
-
 function PerformanceTimer(): Double;
 var
   frequency,counter: ^UInt64;
-  function QPF(F: ^UInt64): LongBool; static; external 'QueryPerformanceFrequency@Kernel32.dll '+ WINAPI_CC;
-  function QPC(C: ^UInt64): LongBool; static; external 'QueryPerformanceCounter@Kernel32.dll '+ WINAPI_CC;
+  function QPF(F: ^UInt64): LongBool; static; external 'QueryPerformanceFrequency@Kernel32.dll '+{$IFDEF CPU386}'stdcall'{$ELSE}'win64'{$ENDIF};
+  function QPC(C: ^UInt64): LongBool; static; external 'QueryPerformanceCounter@Kernel32.dll '+{$IFDEF CPU386}'stdcall'{$ELSE}'win64'{$ENDIF};
 begin
   frequency := GetMem(SizeOf(UInt64)); // at least qword aligned
   counter   := GetMem(SizeOf(UInt64)); // ...
@@ -37,50 +279,208 @@ begin
   Result := GetTickCount();
 end;
 {$ENDIF}
-procedure TerminateScript(reason: String); overload;
-begin
-  WriteLn('Terminating: ' + reason);
-  TerminateScript();
-end;
 
-function TimeStamp(): String;
-var
-  Time: Int64;
-  Hours, Mins, Secs, Millis: Int32;
-begin
-  Time := GetTimeRunning();
 
-  Hours  := Time div 3600000;
-  Time   := Time mod 3600000;
-  Mins   := Time div 60000;
-  Time   := Time mod 60000;
-  Secs   := Time div 1000;
-  Millis := Time mod 1000;
+{$IFNDEF SRL_STRING_INCLUDED}      
+{$DEFINE SRL_STRING_INCLUDED}
 
-  Result := Format('[%.2d:%.2d:%.2d:%.3d]', [Hours, Mins, Secs, Millis]);
-end;
 
-function String.IsEmail(): Boolean;
+(*
+# String
+String related methods
+*)
+
 const
-  REGEX: String = '^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$';
+  STR_WHITESPACE = #9#10#11#12#13#32;
+  STR_NEW_LINE = #13#10;
+
+(*
+## String.Len
+```pascal
+function String.Len(): Int32; constref;
+```
+
+Returns the length of the string
+*)
+function String.Len: Int32; constref;
 begin
-  Result := ExecRegExpr(REGEX, System.Trim(Self));
+  Result := Length(Self);
 end;
 
+(*
+## String.Pos
+```pascal
+function String.Pos(SubStr: String): Int32; constref;
+```
+Returns the position of the position of the first occurance of the substring
+*)
+function String.Pos(SubStr: String): Int32; constref;
+begin
+  Result := System.Pos(SubStr, self);
+end;
+
+(*
+## String.PosR
+```pascal
+function String.PosR(SubStr: String): Int32; constref;
+```
+Returns the position of the position of the last occurance of the substring
+*)
+function String.PosR(SubStr: String): Int32; constref; 
+var 
+  list:TIntegerArray;
+begin
+  list := System.PosMulti(SubStr, self);
+  if Length(list) > 0 then
+    Result := list[high(list)]
+  else
+    Result := 0;
+end;
+
+(*
+## String.PosEx
+```pascal
+function String.PosEx(SubStr: String): TIntegerArray; constref;
+```
+Returns the position of every occurance of the substring
+*)
+function String.PosEx(SubStr: String): TIntegerArray; constref;
+begin
+  Result := System.PosMulti(SubStr, self);
+end;
+
+
+(*
+## String.Contains
+```pascal
+function String.Contains(subString: String): Boolean;
+```
+Returns true if the substring exists on the string.
+*)
 function String.Contains(subString: String): Boolean;
 begin
-  Result := System.Pos(subString, Self) > 0;
+  Result := Self.Pos(subString) > 0;
 end;
 
-function String.Before(SubStr: String): String; constref;
+(*
+## String.ContainsAny
+```pascal
+function String.ContainsAny(subStrings: TStringArray): Boolean;
+```
+Returns true if any of the substrings exists on the string.
+*)
+function String.ContainsAny(subStrings: TStringArray): Boolean;
 var
-  p: UInt32;
+  str: String;
 begin
-  p := System.Pos(SubStr, Self);
-  if (p = 0) then Exit(Self);
-  Result := Copy(Self, 1, p - 1);
+  for str in subStrings do
+    if Self.Contains(str) then
+      Exit(True);
 end;
 
+(*
+## String.ContainsAll
+```pascal
+function String.ContainsAll(subStrings: TStringArray): Boolean;
+```
+Returns true if all of the substrings exist on the string.
+*)
+function String.ContainsAll(subStrings: TStringArray): Boolean;
+var
+  str: String;
+begin
+  Result := True;
+  for str in subStrings do
+    if not Self.Contains(str) then
+      Exit(False);
+end;
+
+
+(*
+## String.Startswith
+```pascal
+function String.Startswith(Prefix: String): Boolean; constref;
+```
+
+Returns `True` if the string starts with the given string `Prefix`
+*)
+function String.StartsWith(Prefix: String): Boolean; constref;
+begin
+  Result := Self.Pos(Prefix) = 1;
+end;
+
+(*
+## String.Endswith
+```pascal
+function String.Endswith(Suffix: String): Boolean; constref;
+```
+
+Returns `True` if the string ends with the given string `Suffix`
+*)
+function String.EndsWith(Suffix: String): Boolean; constref;
+var
+  i,l: Int32;
+begin
+  if Length(Suffix) > Length(Self) then
+    Exit(False);
+  Result := True;
+  l := Length(Self);
+  for i:=1 to Length(Suffix) do
+    if (Suffix[i] <> Self[l-Length(Suffix)+i]) then
+      Exit(False);
+end;
+
+(*
+## String.Capitalize
+```pascal
+function String.Capitalize(): String; constref;
+```
+
+Returns the string with every word captalized
+*)
+function String.Capitalize(): String; constref;
+begin
+  Result := System.Capitalize(Self);
+end;
+
+(*
+## String.Upper
+```pascal
+function String.Upper(): String; constref;
+```
+
+Returns the string with every character converted to uppercase
+*)
+function String.Upper(): String; constref;
+begin
+  Result := Uppercase(Self);
+end;
+
+(*
+## String.Lower()
+```pascal
+function String.Lower(): String; constref;
+function String.ToLower(): String; constref;
+```
+Returns the string with every character converted to lowercase
+*)
+function String.Lower(): String; constref;
+begin
+  Result := Lowercase(Self);
+end;
+
+function String.ToLower(): String; constref;
+begin
+  Result := Lowercase(Self);
+end;
+
+(*
+## String.After
+```pascal
+function String.After(SubStr: String): String; constref;
+```
+Copy the string from after the first occurrence of SubStr
+*)
 function String.After(SubStr: String): String; constref;
 var
   p: UInt32;
@@ -91,6 +491,843 @@ begin
   Result := Copy(Self, p, Length(Self) - p + 1);
 end;
 
+(*
+## String.Before
+```pascal
+function String.Before(SubStr: String): String; constref;
+```
+
+Copy the string from before the first occurrence of SubStr
+*)
+function String.Before(SubStr: String): String; constref;
+var
+  p: UInt32;
+begin
+  p := System.Pos(SubStr, Self);
+  if (p = 0) then Exit(Self);
+  Result := Copy(Self, 1, p - 1);
+end;
+
+function String.Between(start, finish: String): String; constref;
+begin
+  Result := System.Between(start, finish, Self);
+end;
+
+
+
+function String.SubString(start, finish: Int32): String;
+begin
+  Result := Copy(Self, start, finish);
+end;
+
+function String.SubString(finish: Int32): String; overload;
+begin
+  Result := Copy(Self, 1, finish);
+end;
+
+
+(*
+## String.Count
+```pascal
+function String.Count(Str: String): Int32; constref;
+```
+
+Count the number of occurrences of the given string.
+*)
+function String.Count(Str: String): Int32;
+begin
+  Result := Length(Self.PosEx(Str));
+end;
+
+(*
+## String.Replace
+```pascal
+function String.Replace(SubStr, ReplaceStr: String; Flags: TReplaceFlags=[rfReplaceAll]): String; constref;
+```
+
+Replace [all by default] occurrences of the given SubStr with with ReplaceStr
+*)
+function String.Replace(SubStr, ReplaceStr: String; Flags: TReplaceFlags=[rfReplaceAll]): String; constref;
+begin
+  Result := StringReplace(Self, SubStr, ReplaceStr, Flags);
+end;
+
+
+(*
+## String.Split
+```pascal
+function String.Split(delimiter: String): TStringArray; constref;
+```
+Split up the string at each delimiter into smaller strings
+*)
+function String.Split(delimiter: String): TStringArray; constref;
+begin
+  Result := System.Explode(delimiter, Self);
+end;
+
+function String.Explode(Delimiter: String): TStringArray; constref;
+begin
+  Result := System.Explode(Delimiter, Self);
+end;
+
+(*
+## String.Trim
+```pascal
+function String.Trim(chars:String = STR_WHITESPACE): String; constref;
+function String.Strip(chars:String = STR_WHITESPACE): String; constref;
+```
+Return a copy of the string with leading and trailing characters removed.
+*)
+function String.Trim(chars:String = STR_WHITESPACE): String; constref;
+var Lo,Hi: UInt32 = 1;
+begin
+  Hi:=Length(Self);
+  while (Lo <= Hi) and (System.Pos(Self[Lo],Chars) <> 0) do Inc(Lo);
+  while (Hi >= 1)  and (System.Pos(Self[Hi],Chars) <> 0) do Dec(Hi);
+  Result := Copy(Self, Lo, Hi-Lo+1);
+end;
+
+function String.Strip(chars:String = STR_WHITESPACE): String; constref;
+var Lo,Hi: UInt32 = 1;
+begin
+  Hi:=Length(Self);
+  while (Lo <= Hi) and (System.Pos(Self[Lo],Chars) <> 0) do Inc(Lo);
+  while (Hi >= 1)  and (System.Pos(Self[Hi],Chars) <> 0) do Dec(Hi);
+  Result := Copy(Self, Lo, Hi-Lo+1);
+end;
+
+
+{*
+## String.StripL
+```pascal
+function String.StripL(Chars:String = STR_WHITESPACE): String; constref;
+```
+
+Return a copy of the string with leading characters removed.
+*}
+function String.StripL(Chars:String = STR_WHITESPACE): String; constref;
+var Lo,Hi: UInt32 = 1;
+begin
+  Hi:=Length(Self);
+  while (Lo <= Hi) and (System.Pos(Self[Lo],Chars) <> 0) do Inc(Lo);
+  Result := Copy(Self, Lo, Hi-Lo+1);
+end;  
+
+
+{*
+## String.StripR
+```pascal
+function String.StripR(Chars:String = STR_WHITESPACE): String; constref;
+```
+
+Return a copy of the string with trailing characters removed.
+*}
+function String.StripR(Chars:String = STR_WHITESPACE): String; constref;
+var Lo,Hi: UInt32 = 1;
+begin
+  Hi:=Length(Self);
+  while (Hi >= 1) and (System.Pos(Self[Hi],Chars) <> 0) do Dec(Hi);
+  Result := Copy(Self, Lo, Hi-Lo+1);
+end; 
+
+(*
+## String.IsAlphaNum
+```pascal
+function String.IsAlphaNum(): Boolean; constref;
+```
+
+Test if a string only contains alpha numerical characters.
+*)
+function String.IsAlphaNum(): Boolean; constref;
+var ptr: PChar; hiptr:PtrUInt;
+begin
+  if Length(Self) = 0 then Exit(False);
+  ptr := PChar(Self);
+  hiptr := PtrUInt(PtrUInt(ptr) + Length(self));
+  while PtrUInt(ptr) < hiptr do
+    if not (ptr^ in ['0'..'9','a'..'z','A'..'Z']) then
+      Exit(False)
+    else
+      Inc(ptr);
+  Result := True;
+end;
+
+function Char.IsAlphaNum(): Boolean; constref;
+begin
+  Result := (Self in ['A'..'Z', 'a'..'z','0'..'9']);
+end;
+
+(*
+## String.IsDigit
+```pascal
+function String.IsDigit(): Boolean; constref;
+```
+
+Test if a sting is a digit
+*)
+function String.IsDigit(): Boolean; constref;
+var 
+  ptr: PChar;
+  hiptr:PtrUInt;
+begin
+  if Length(Self) = 0 then Exit(False);
+  ptr := PChar(Self);
+  hiptr := PtrUInt(PtrUInt(ptr) + Length(self));
+  while PtrUInt(ptr) < hiptr do
+    if not (ptr^ in ['0'..'9']) then
+      Exit(False)
+    else
+      Inc(ptr);
+  Result := True;
+end;
+
+function Char.IsDigit(): Boolean; constref;
+begin
+  Result := (Self in ['0'..'9']);
+end;
+
+(*
+## String.IsFloat
+```pascal
+function String.IsFloat(): Boolean; constref;
+```
+
+Test if a string is a floating point number
+*)
+function String.IsFloat(): Boolean; constref;
+var 
+  ptr: PChar; 
+  hiptr:PtrUInt; 
+  i:Int32; 
+  dotAdded:Boolean;
+begin
+  if Length(Self) = 0 then Exit(False);
+  ptr := PChar(Self);
+  i:=0;
+  hiptr := PtrUInt(PtrUInt(ptr) + Length(self));
+  while PtrUInt(ptr) < hiptr do
+    if not (ptr^ in ['0'..'9']) then
+      if (i >= 1) and (ptr^ = '.') and not(dotAdded) then
+      begin
+        Inc(ptr);
+        inc(i);
+        dotAdded:=True;
+      end else
+        Exit(False)
+    else begin
+      Inc(ptr);
+      inc(i);
+    end;
+  Result := True;
+end;
+
+function Char.IsFloat(): Boolean; constref;
+begin
+  Result := String(Self).IsFloat();
+end;
+
+(*
+## String.IsAlpha
+```pascal
+function String.IsAlpha(): Boolean; constref;
+```
+
+Test if a string only contains letters a-zA-Z
+*)
+function String.IsAlpha(): Boolean; constref;
+var 
+  ptr: PChar; 
+  hiptr:PtrUInt;
+begin
+  if Length(Self) = 0 then Exit(False);
+  ptr := PChar(Self);
+  hiptr := PtrUInt(PtrUInt(ptr) + Length(self));
+  while PtrUInt(ptr) < hiptr do
+    if not (ptr^ in ['A'..'Z', 'a'..'z']) then
+      Exit(False)
+    else
+      Inc(ptr);
+  Result := True;
+end;
+
+function Char.IsAlpha(): Boolean;
+begin
+  Result := (Self in ['A'..'Z', 'a'..'z']);
+end;
+
+function String.ExtractNumber(DefaultValue: Int64 = -1): Int64; constref;
+begin
+  Result := StrToIntDef(ExtractFromStr(Self, Numbers), DefaultValue);
+end;
+
+function String.ExtractInteger(DefaultValue: Int64 = -1): Int64; constref;
+begin
+  Result := StrToIntDef(ExtractFromStr(Self, Numbers), DefaultValue);
+end;
+
+(*
+## String.ExtractNumbers
+```pascal
+function String.ExtractNumbers(): TExtendedArray; constref;
+```
+
+Extract all the numbers found in the string, as there could be floating point numbers 
+as well it reutnrs a TExtendedArray.
+*)
+function String.ExtractNumbers(): TExtendedArray; constref;
+var
+  i,c,l:Int32;
+  Tmp: TStringArray;
+begin
+  L := Length(Self);
+  for i:=1 to Length(Self) do
+  begin
+    if Self[i].IsDigit() then
+    begin
+      Tmp += Self[i];
+      while (Inc(i) <= L) and (Self[i].IsDigit()) do Tmp[c] += Self[i];
+      if (i <= L) and (Self[i] = '.') then
+      begin
+        Tmp[c] += Self[i];
+        while (Inc(i) <= L) and (Self[i].IsDigit()) do Tmp[c] += Self[i];
+      end;
+      if (i > L) then Break;
+      Inc(c);
+    end;
+  end;
+
+  SetLength(Result, Length(tmp));
+  for i:=0 to High(Tmp) do
+    Result[i] := StrToFloat(Tmp[i]);
+end;
+
+(*
+## String.ExtractNumbersEx
+```pascal
+function String.ExtractNumbersEx(): TExtendedArray; constref;
+```
+
+Extract all the numbers found in the string, this time every number 
+ends up in each their index. For example ``'1234'`` would return ``[1,2,3,4]``
+*)
+function String.ExtractNumbersEx(): TExtendedArray; constref;
+var
+  i, c: Int32;
+begin
+  SetLength(Result, 0);
+  c := 0;
+
+  for i := 1 to High(Self) do
+    if (Self[i] in ['0'..'9']) then
+    begin
+      SetLength(Result, c + 1);
+      Result[c] := StrToInt(Self[i]);
+      Inc(c);
+    end;
+end;
+
+(*
+## String.FileExt
+```pascal
+function String.FileExt(): String; constref;
+```
+
+Returns the file extension
+*)
+function String.FileExt(): String; constref;
+begin
+  Result := ExtractFileExt(Self);
+  Delete(Result,1,1);
+end;
+
+(*
+## String.FileName
+```pascal
+function String.FileName(): String; constref;
+```
+
+Returns the file name
+*)
+function String.FileName(): String; constref;
+begin
+  if Length(Self) <> 0 then
+    Result := Self.Explode('.')[0];
+end;
+
+//---| operator overloads bellow this |---------------------------------------\\
+(*
+## operator string * int32
+```pascal
+operator * (left:String; Right:Int32): String;
+```
+
+Replicates the string the given amount of times. So ``'ho!' * 3`` would generate ``ho!ho!ho!``
+*)
+operator * (left: String; Right: Int32): String;
+var
+  i,H: Int32;
+begin
+  if Length(left) = 0 then 
+    Exit('');
+  Result := left;
+  H := Length(left);
+  SetLength(Result, H*Right);
+  for i:=1 to Right-1 do
+    MemMove(left[1], Result[1+H*i], H);
+end;
+
+operator * (left:Char; Right:Int32): String;
+begin
+  Result := String(Left) * Right;
+end;
+
+(*
+## operator string in string
+```pascal
+operator in (left:String; Right:String): Boolean;
+```
+
+Returns ``True`` if the string exists in the other string. So ``'hell' in 'hello world'`` would be ``True`` 
+*)
+operator in (left:Char; Right:String): Boolean;
+begin
+  Result := System.Pos(left, Right) > 0;
+end;
+
+operator in (left:String; Right:String): Boolean;
+begin
+  Result := System.Pos(left, Right) > 0;
+end;
+
+operator in (Right: TStringArray; Left: String): Boolean;
+var
+  i: Int32;
+begin
+  for i := 0 to High(Right) do
+    if System.Pos(Right[i], Left) > 0 then
+      Exit(True);
+end;
+
+
+{$IFNDEF SRL_STRINGARRAY_INCLUDED} 
+{$DEFINE SRL_STRINGARRAY_INCLUDED}
+
+
+procedure TStringArray.Append(const Value: String);
+var top:Int32;
+begin
+  top := Length(Self);
+  SetLength(self, top+1);
+  Self[top] := Value;
+end;
+
+procedure TStringArray.Insert(const Value: String; Index: Integer);
+var
+  l: UInt32;
+begin
+  l := Length(Self);
+  if (l <= Index) then
+  begin
+    Self.Append(Value);
+    Exit();
+  end;
+
+  SetLength(Self, l + 1);
+  MemMove(Self[Index], self[Index + 1], (L - Index) * SizeOf(Pointer));
+  Self[Index] := Value;
+end;
+
+procedure TStringArray.Del(const Index: Integer; const Count: Integer = 1);
+begin
+  Delete(Self, Index, Count);
+end;
+
+function TStringArray.Len(): Integer;
+begin
+  Result := Length(Self);
+end;
+
+procedure TStringArray.Remove(const Value: String; const All: Boolean = False);
+var
+  i: Int32;
+  lst: TIntegerArray;
+begin
+  if (not All) then
+  begin
+    i := Self.Find(Value);
+    if i >= 0 then Self.Del(i);
+    Exit;
+  end;
+
+  lst := Self.FindAll(Value);
+  for i:=High(lst) downto 0 do
+    Self.Del(lst[i]);
+end;
+
+function TStringArray.Pop(): String;
+var
+  h: Integer;
+begin
+  h := High(Self);
+  Result := Self[h];
+  SetLength(Self, h);
+end;
+
+procedure TStringArray.Extend(const Arr: TStringArray);
+var i,len:Int32;
+begin
+  len := Length(Self);
+  SetLength(Self, len+Length(Arr));
+  for i:=0 to High(Arr) do
+    Self[len+i] := Arr[i];
+end;
+
+
+function TStringArray.Find(const value: String): Integer; constref;
+begin
+  for Result := 0 to High(Self) do
+    if value = Self[Result] then
+      Exit;
+  Result := -1;
+end;
+
+function TStringArray.FindAll(const Value: String): TIntegerArray; constref;
+var
+  i: UInt32;
+begin
+  for i:=0 to High(Self) do
+    if (Self[i] = Value) then
+      Result += i;
+end;
+
+function TStringArray.Contains(const value: String): Boolean; constref;
+begin
+  Result := Self.Find(value) > -1;
+end;
+
+function TStringArray.ContainsAny(const values: TStringArray): Boolean; constref;
+var
+  value: String;
+begin
+  for value in values do
+    if Self.Contains(value) then
+      Exit(True);
+end;
+
+function TStringArray.ContainsAll(const values: TStringArray): Boolean; constref;
+var
+  value: String;
+begin
+  for value in values do
+    if not Self.Contains(value) then
+      Exit;
+  Result := True;
+end;
+
+
+function TStringArray.Reversed(): TStringArray;
+var
+  lo:PtrUInt;
+  p,r:^String;
+begin
+  if (Length(Self) = 0) then
+    Exit();
+
+  SetLength(Result,length(self));
+  p := @Self[high(self)];
+  r := @Result[0];
+
+  lo := PtrUInt(@Self[0]);
+  while (lo<=PtrUInt(p)) do
+  begin
+    r^ := p^;
+    dec(p);
+    inc(r);
+  end;
+end;
+
+procedure TStringArray.Reverse();
+var
+  tmp:String;
+  lo,hi:^String;
+begin
+  if (Length(Self) = 0) then
+    Exit();
+
+  lo := @Self[0];
+  hi := @Self[High(self)];
+  while (PtrUInt(lo)<PtrUInt(hi)) do
+  begin
+    tmp := hi^;
+    hi^ := lo^;
+    lo^ := tmp;
+    dec(hi);
+    inc(lo);
+  end;
+end;
+
+function TStringArray.Combine(const Arr2: TStringArray): TStringArray; constref;
+var
+  i,j: Int32;
+begin
+  if (Length(Arr2) = 0) then
+    Exit(Copy(Self));
+
+  Result := Self;
+  SetLength(Result, Length(Self) + Length(Arr2));
+
+  j := 0;
+  for i := Length(Self) to High(Arr2) + Length(Self) do
+  begin
+    Result[i] := Arr2[j];
+    Inc(j);
+  end;
+end;
+
+function TStringArray.Equals(Other:TStringArray): Boolean; constref;
+var i:Int32;
+begin
+  if (Length(Self) <> Length(Other)) then Exit(False);
+  if (Length(Self) = 0) then Exit(True);
+
+  for i:=0 to High(self) do
+    if (self[i] <> Other[i]) then
+      Exit(False);
+  Result := True;
+end;
+
+function TStringArray.Merge(glue:String=''): String; constref;
+var
+  i:Int32;
+begin
+  if Length(Self) = 0 then
+    Exit();
+
+  Result := Self[0];
+  for i:=1 to High(Self) do
+    Result += glue + Self[i];
+end;
+
+
+{$IFNDEF WL_STRING_INCLUDED}       
+{$DEFINE WL_STRING_INCLUDED}
+
+
+//by Flight
+function String.Replicate(count: Integer; separator: String = ''): String;
+var
+  i: Int32;
+begin
+ Result := Self;
+
+ for i := 1 to count do
+   Result += separator + Self;
+end;
+
+
+function String.CamelCase(): String; constref;
+var
+  i, len: Int32;
+begin
+  for i := 1 to len := Length(Self) do
+  begin
+    if (Self[i] <> ' ') then
+    begin
+      Result += LowerCase(Self[i]);
+      Continue;
+    end;
+
+    if (Inc(i) <= len) then
+      Result += UpCase(Self[i]);
+  end;
+end;
+
+function String.SnakeCase(): String; constref;
+var
+  i, len: Int32;
+begin
+  for i := 1 to len := Length(Self) do
+  begin
+    if (Self[i] <> ' ') then
+    begin
+      Result += LowerCase(Self[i]);
+      Continue;
+    end;
+
+    Result += '_';
+  end;
+end;
+
+function String.UpperSnakeCase(): String; constref;
+var
+  i, len: Int32;
+begin
+  for i := 1 to len := Length(Self) do
+  begin
+    if (Self[i] <> ' ') then
+    begin
+      Result += UpCase(Self[i]);
+      Continue;
+    end;
+
+    Result += '_';
+  end;
+end;
+
+function String.KebabCase(): String; constref;
+var
+  i, len: Int32;
+begin
+  for i := 1 to len := Length(Self) do
+  begin
+    if (Self[i] <> ' ') then
+    begin
+      Result += LowerCase(Self[i]);
+      Continue;
+    end;
+
+    Result += '-';
+  end;
+end;
+
+function String.PascalCase(): String; constref;
+var
+  i, len: Int32;
+begin
+  if Length(Self) = 0 then
+    Exit;
+  Result += UpCase(Self[1]);
+  for i := 2 to len := Length(Self) do
+  begin
+    if (Self[i] <> ' ') then
+    begin
+      Result += LowerCase(Self[i]);
+      Continue;
+    end;
+
+    if (Inc(i) <= len) then
+      Result += UpCase(Self[i]);
+  end;
+end;
+
+function String.SentenceCase(): String; constref;
+begin
+  if Length(Self) = 0 then
+    Exit;
+  Result := Self;
+  Result[1] := UpCase(Result[1]);
+end;
+
+function String.TitleCase(): String; constref;
+var
+  i, len: Int32;
+begin
+  if Length(Self) = 0 then
+    Exit;
+
+  Result += UpCase(Self[1]);
+
+  for i := 2 to len := Length(Self) do
+  begin
+    if (Self[i] <> ' ') then
+    begin
+      Result += LowerCase(Self[i]);
+      Continue;
+    end;
+
+    Result += ' ';
+    if (Inc(i) <= len) then
+      Result += UpCase(Self[i]);
+  end;
+end;
+
+
+function String.IsURL(): Boolean;
+const
+  REGEX: String = '^https?:\/\/(?:www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b(?:[-a-zA-Z0-9()@:%_\+.~#?&\/=]*)$';
+begin
+  Result := ExecRegExpr(REGEX, System.Trim(Self));
+end;
+
+function String.IsEmail(): Boolean;
+const
+  REGEX: String = '^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$';
+begin
+  Result := ExecRegExpr(REGEX, System.Trim(Self));
+end;
+
+function String.IsUUID(): Boolean;
+const
+  REGEX: String = '[0-9a-fA-F]{32}|[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}';
+begin
+  Result := ExecRegExpr(REGEX, System.Trim(Self));
+end;
+
+function String.IsUUIDV4(): Boolean;
+const
+  REGEX: String = '[0-9a-fA-F]{32}|[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}';
+var
+  tmp: String;
+begin
+  tmp := System.Trim(Self);
+
+  case Length(tmp) of
+    36: if Self[15] <> '4' then Exit;
+    32: if Self[13] <> '4' then Exit;
+    else Exit;
+  end;
+
+  Result := ExecRegExpr(REGEX, tmp);
+end;
+
+function String.IsRefreshToken(): Boolean;
+const
+  REGEX = '[0-9A-Za-z-_]{22}';
+begin
+  Result := ExecRegExpr(REGEX, System.Trim(Self));
+end;
+
+
+function TStringArray.ToLower(): TStringArray;
+var
+  i: Int32;
+begin
+  for i := 0 to High(Self) do
+    Result += Self[i].Lower();
+end;
+
+function TStringArray.RandomValue(): String; constref;
+begin
+  if Self <> [] then
+    Result := Self[System.Random(Low(Self), High(Self))];
+end;
+
+
+
+
+{$IFNDEF WS_UTILS_INCLUDED}        
+(*
+Utility methods
+*)
+
+{$DEFINE WS_UTILS_INCLUDED}
+
+
+procedure TerminateScript(reason: String); overload;
+begin
+  WriteLn('Terminating: ' + reason);
+  TerminateScript();
+end;
+
+function CountSimbaWindows(): Int32;
+var
+  wins: TOSWindowArray;
+begin
+  wins := GetWindows();
+  Result := Length(wins.GetByTitleAndClass('Simba', 'Window'));
+end;
+
+
 function TJSONArray.High(): Int32;
 begin
   Result := Self.length()-1;
@@ -98,40 +1335,181 @@ end;
 
 procedure DebugLn(name, text: String);
 begin
-  WriteLn(TimeStamp() + ':[' + name + ']: ' + text);
+  WriteLn(SRL.TimeStamp() + ':[' + name + ']: ' + text);
 end;
 
+
+procedure DeleteAsyncFile(name: String);
+var
+  path: String;
+begin
+  if not name.EndsWith('.simba') then
+    name += '.simba';
+  path := LAUNCHER_DATA + 'async' + DirectorySeparator + name;
+  if FileExists(path) and not DeleteFile(path) then
+    TerminateScript('Failed to delete async file: ' + name);
+end;
+
+procedure WriteAsyncFile(name, content: String; autoDelete: Boolean = True);
+var
+  path: String;
+begin
+  if not name.EndsWith('.simba') then
+    name += '.simba';
+  DeleteAsyncFile(name);
+
+  path := LAUNCHER_DATA + 'async' + DirectorySeparator;
+
+  if not ForceDirectories(path) then
+    TerminateScript('Failed to create async files directory.');
+
+  if autoDelete then
+    content += LineEnding + 'begin DeleteFile(ScriptFile); end;';
+
+  if not WriteFileContents(path + name, content, False) then
+    TerminateScript('Failed to write async file: ' + name);
+end;
+
+procedure RunAsyncFile(name: String; params: TStringArray);
+var
+  path: String;
+begin
+  if not name.EndsWith('.simba') then
+    name += '.simba';
+  path := LAUNCHER_DATA + 'async' + DirectorySeparator;
+
+  RunScript(path + name, params);
+end;
+
+
 {$IFDEF WINDOWS}
+const
+  WINAPI_CC = {$IFDEF CPU386}'stdcall'{$ELSE}'win64'{$ENDIF};
+  DARK_MODE_ATTRIBUTE = 20;
+
+function ShowWindow(hwnd: TOSWindow; nCmdShow: UInt32): LongBool;
+external 'ShowWindow@user32.dll ' + WINAPI_CC;
+
 function SetWindowAttribute(hwnd: TOSWindow; dwAttribute: DWORD; pvAttribute: Pointer; cbAttribute: DWORD): UInt32;
 external 'DwmSetWindowAttribute@dwmapi.dll ' + WINAPI_CC;
 
-function SetWindowTheme(hwnd: TOSWindow; pszSubAppName: ^WideString; pszSubIdList: ^WideString): UInt32;
+function SetWindowAttribute(hwnd: TOSWindow; dwAttribute: DWORD; pvAttribute: LongBool): UInt32; overload;
+begin
+  Result := SetWindowAttribute(hwnd, dwAttribute, @pvAttribute, SizeOf(pvAttribute));
+end;
+
+function SetWindowDarkTitleBar(hwnd: TOSWindow): UInt32;
+begin
+  Result := SetWindowAttribute(hwnd, DARK_MODE_ATTRIBUTE, True);
+end;
+
+type PWideChar = ^WideChar;
+
+function SetWindowTheme(hwnd: TOSWindow; pszSubAppName: PWideChar; pszSubIdList: PWideChar): UInt32;
 external 'SetWindowTheme@uxtheme.dll ' + WINAPI_CC;
+
+function SetWindowTheme(hwnd: TOSWindow; pszSubAppName: WideString; pszSubIdList: PWideChar = nil): UInt32; overload;
+begin
+  Result := SetWindowTheme(hwnd, PWideChar(pszSubAppName), pszSubIdList);
+end;
+
+function GetProcAddr(handle: PtrUInt; name: PChar): Pointer;
+external 'GetProcAddress@kernel32.dll '+ WINAPI_CC;
+
+type
+{$SCOPEDENUMS ON}
+  TPreferredAppMode = (Default, AllowDark, ForceDark, ForceLight, Max);
+{$SCOPEDENUMS OFF}
+
+var
+{$H-}
+  ShouldAppUseDarkMode: function(): LongBool;
+  AllowDarkModeForWindow: function(hWnd: TOSWindow; allow: LongBool): LongBool;
+  AllowDarkModeForApp: function(allow: LongBool): LongBool;
+  SetPreferredAppMode: function(appMode: TPreferredAppMode): TPreferredAppMode;
+  FlushMenuThemes: procedure();
+  RefreshImmersiveColorPolicyState: procedure();
+{$H+}
 {$ENDIF}
 
 
-{$IFNDEF WS_CONFIG_INCLUDED}    
+{$IFNDEF WS_CONFIG_INCLUDED}       
 (*
-# WaspConfig
-Responsible for loading settings from and saving them in json format.
+# Config
+A full featured JSON config writer and reader.
 *)
 
-{$DEFINE WS_CONFIG_INCLUDED}
+{$DEFINE WL_CONFIG_INCLUDED}
 
 
 type
-  TWaspConfig = record
-    ConfigPath: String;
-    JSON: TJSONObject;
+  TJSONArrayObject = record
+    Key: String;
+    JSONArray: TJSONArray;
   end;
 
+  TJSONArrayObjectArray = array of TJSONArrayObject;
+
+function TJSONArrayObjectArray.Find(key: String): Int32;
+begin
+  for Result := 0 to High(Self) do
+    if Self[Result].Key = key then
+      Exit;
+  Result := -1;
+end;
+
+function TJSONArrayObjectArray.Put(key: String): Int32;
+begin
+  Result := Length(Self);
+  Self += [key, nil];
+end;
+
+function TJSONArrayObjectArray.Get(key: String): Int32;
+begin
+  Result := Self.Find(key);
+  if Result > -1 then
+  begin
+    Self[Result].JSONArray.Free();
+    Self[Result].JSONArray := nil;
+    Exit;
+  end;
+  Result := Self.Put(key);
+end;
+
+
+type
+(*
+(Config)=
+## type TWaspConfig
+```pascal
+TWaspConfig = record
+  Path: String;
+  JSON: TJSONObject;
+end;
+```
+*)
+  TWaspConfig = record
+    Path: String;
+    JSON: TJSONObject;
+    _ArrayHelper: TJSONArrayObjectArray; //Don't touch.
+    IsSetup, OnTerminate: Boolean;       //Don't touch.
+  end;
+
+(*
+## Config.GeTWaspConfig()
+```pascal
+function TWaspConfig.GeTWaspConfig(): TJSONObject;
+```
+Helper method to return the current TWaspConfig.Path file as a TJSONObject.
+You probably don't need to use this directly.
+*)
 function TWaspConfig.GetConfig(): TJSONObject;
 var
   str: String;
 begin
-  if FileExists(Self.ConfigPath) then
+  if FileExists(Self.Path) then
   begin
-    str := ReadFileContents(Self.ConfigPath);
+    str := ReadFileContents(Self.Path);
     if str <> '' then
     begin
       Result.Init(str);
@@ -142,61 +1520,426 @@ begin
   Result.Init();
 end;
 
-procedure TWaspConfig.Setup();
+(*
+## Config.Free()
+```pascal
+procedure TWaspConfig.Free();
+```
+Used to free your `TWaspConfig`.
+It's automatically called on script termination, but you may call it sooner if
+you wish to unlock the ram used by this (which should be minimal).
+*)
+procedure TWaspConfig.Free();
 begin
-  Self.ConfigPath := AppPath + 'Data' + DirectorySeparator + 'WaspLib' + DirectorySeparator + 'configs' + DirectorySeparator;
-  if not ForceDirectories(Self.ConfigPath) then
-    TerminateScript('Can''t create configs directory.');
+  if not Self.IsSetup then
+    Exit;
 
-  Self.ConfigPath += 'launcher.json';
+  Self.JSON.Free();
+  Self.JSON := nil;
+  Self._ArrayHelper := [];
 
-  Self.JSON := Self.GetConfig();
-  AddOnTerminate(@Self.JSON.Free);
+  Self.IsSetup := False;
 end;
 
+(*
+## Config.Setup
+```pascal
+procedure TWaspConfig.Setup(jsonFile: String);
+```
+Main method to setup your `TWaspConfig`
+*)
+procedure TWaspConfig.Setup(jsonFile: String = ScriptName);
+begin
+  if jsonFile.Contains(DirectorySeparator) then
+  begin
+    Self.Path := ExtractFilePath(jsonFile);
+    jsonFile := ExtractFileName(jsonFile);
+  end
+  else
+    Self.Path := WL_DATAPATH + 'configs' + DirectorySeparator;
+
+  if not ForceDirectories(Self.Path) then
+    TerminateScript('Can''t create configs directory.');
+
+  if not jsonFile.EndsWith('.json') then
+    jsonFile += '.json';
+  Self.Path += jsonFile;
+
+  Self.JSON := Self.GetConfig();
+  Self.IsSetup := True;
+
+  if not Self.OnTerminate then
+  begin
+    AddOnTerminate(@Self.Free);
+    Self.OnTerminate := True;
+  end;
+end;
+
+(*
+## Config.DeleteConfig()
+```pascal
+procedure TWaspConfig.DeleteConfig();
+```
+Delete your `TWaspConfig` from disk.
+*)
+procedure TWaspConfig.DeleteConfig();
+begin
+  if not DeleteFile(Self.Path) then
+    TerminateScript('Failed to delete: ' + Self.Path);
+end;
+
+(*
+## Config.SaveConfig()
+```pascal
+procedure TWaspConfig.SaveConfig();
+```
+Used to save your `TWaspConfig`.
+By default, this is always called automatically whenever the config is modified by the {ref}`TWaspConfig.Put()` methods.
+*)
 procedure TWaspConfig.SaveConfig();
 begin
   if Self.JSON = nil then
-    Self.Setup();
-  if not WriteFileContents(Self.ConfigPath, json.toString(), False) then
+    TerminateScript('You need to use TWaspConfig.Setup() before trying to save it into a config file.');
+  if not WriteFileContents(Self.Path, json.toString(2), False) then
     TerminateScript('Failed to save config.');
 end;
 
-procedure TWaspConfig.Put(key, value: String);
+
+(*
+## Config.Put()
+```pascal
+procedure TWaspConfig.Put(key, value: String; save: Boolean = True);
+procedure TWaspConfig.Put(key: String; value: Int32; save: Boolean = True); overload;
+procedure TWaspConfig.Put(key: String; value: Double; save: Boolean = True); overload;
+procedure TWaspConfig.Put(key: String; value: Boolean; save: Boolean = True); overload;
+procedure TWaspConfig.Put(key: String; values: TStringArray; save: Boolean = True); overload;
+procedure TWaspConfig.Put(key: String; values: TIntegerArray; save: Boolean = True); overload;
+procedure TWaspConfig.Put(key: String; values: TDoubleArray; save: Boolean = True); overload;
+procedure TWaspConfig.Put(key: String; values: TBoolArray; save: Boolean = True); overload;
+procedure TWaspConfig.Put(key: String; value: Pointer; save: Boolean = True); overload;
+```
+This should be self explanatory. Put a `key` and a `value` pair into your `TWaspConfig`.
+The `pointer` version of the method is the only one that might need a little bit more knowledge of
+Simba's lower JSON methods and/or pointers but you can use it to place a value that is another JSON object or a JSON array.
+*)
+procedure TWaspConfig.Put(key, value: String; save: Boolean = True);
 begin
   if Self.JSON = nil then
-    Self.Setup();
+    Exit;
+  Self.JSON.Remove(key);
   Self.JSON.Put(key, value);
-  Self.SaveConfig();
+  if save then
+    Self.SaveConfig();
 end;
 
-function TWaspConfig.Get(key: String): String;
+procedure TWaspConfig.Put(key: String; value: Int32; save: Boolean = True); overload;
 begin
   if Self.JSON = nil then
-    Self.Setup();
-  if Self.JSON.has(key) then
+    Exit;
+  Self.JSON.Remove(key);
+  Self.JSON.Put(key, value);
+  if save then
+    Self.SaveConfig();
+end;
+
+procedure TWaspConfig.Put(key: String; value: Double; save: Boolean = True); overload;
+begin
+  if Self.JSON = nil then
+    Exit;
+  Self.JSON.Remove(key);
+  Self.JSON.Put(key, value);
+  if save then
+    Self.SaveConfig();
+end;
+
+procedure TWaspConfig.Put(key: String; value: Boolean; save: Boolean = True); overload;
+begin
+  if Self.JSON = nil then
+    Exit;
+  Self.JSON.Remove(key);
+  Self.JSON.Put(key, value);
+  if save then
+    Self.SaveConfig();
+end;
+
+procedure TWaspConfig.Put(key: String; values: TStringArray; save: Boolean = True); overload;
+var
+  i, j: Int32;
+begin
+  if Self.JSON = nil then
+    Exit;
+
+  i := Self._ArrayHelper.Get(key);
+  Self._ArrayHelper[i].JSONArray.Init();
+
+  for j := 0 to High(values) do
+    Self._ArrayHelper[i].JSONArray.Put(values[j]);
+
+  Self.JSON.Remove(key);
+  Self.JSON.Put(key, Self._ArrayHelper[i].JSONArray);
+
+  if save then
+    Self.SaveConfig();
+end;
+
+procedure TWaspConfig.Put(key: String; values: TIntegerArray; save: Boolean = True); overload;
+var
+  i, j: Int32;
+begin
+  if Self.JSON = nil then
+    Exit;
+
+  i := Self._ArrayHelper.Get(key);
+  Self._ArrayHelper[i].JSONArray.Init();
+
+  for j := 0 to High(values) do
+    Self._ArrayHelper[i].JSONArray.Put(values[j]);
+
+  Self.JSON.Remove(key);
+  Self.JSON.Put(key, Self._ArrayHelper[i].JSONArray);
+
+  if save then
+    Self.SaveConfig();
+end;
+
+procedure TWaspConfig.Put(key: String; values: TDoubleArray; save: Boolean = True); overload;
+var
+  i, j: Int32;
+begin
+  if Self.JSON = nil then
+    Exit;
+
+  i := Self._ArrayHelper.Get(key);
+  Self._ArrayHelper[i].JSONArray.Init();
+
+  for j := 0 to High(values) do
+    Self._ArrayHelper[i].JSONArray.Put(values[j]);
+
+  Self.JSON.Remove(key);
+  Self.JSON.Put(key, Self._ArrayHelper[i].JSONArray);
+
+  if save then
+    Self.SaveConfig();
+end;
+
+procedure TWaspConfig.Put(key: String; values: TBoolArray; save: Boolean = True); overload;
+var
+  i, j: Int32;
+begin
+  if Self.JSON = nil then
+    Exit;
+
+  i := Self._ArrayHelper.Get(key);
+  Self._ArrayHelper[i].JSONArray.Init();
+
+  for j := 0 to High(values) do
+    Self._ArrayHelper[i].JSONArray.Put(values[j]);
+
+  Self.JSON.Remove(key);
+  Self.JSON.Put(key, Self._ArrayHelper[i].JSONArray);
+
+  if save then
+    Self.SaveConfig();
+end;
+
+procedure TWaspConfig.Put(key: String; value: Pointer; save: Boolean = True); overload;
+begin
+  if Self.JSON = nil then
+    Exit;
+
+  Self.JSON.Remove(key);
+  Self.JSON.put(key, value);
+
+  if save then
+    Self.SaveConfig();
+end;
+
+
+(*
+## Config.Has()
+```pascal
+function TWaspConfig.Has(key: String; nullIsValid: Boolean = True): Boolean;
+```
+Checks if a key exists. `nullIsValid` is true by default when set to false
+this will return false if the key exists but is set to null.
+*)
+function TWaspConfig.Has(key: String; nullIsValid: Boolean = True): Boolean;
+begin
+  if Self.JSON = nil then
+    Exit;
+  Result := Self.JSON.has(key);
+
+  if not nullIsValid and Result then
+    Result := not Self.JSON.isNull(key);
+end;
+
+
+(*
+## Config.Get()
+```pascal
+function TWaspConfig.GetString(key: String): String;
+function TWaspConfig.GetInt(key: String): Int32;
+function TWaspConfig.GetDouble(key: String): Double;
+function TWaspConfig.GetBoolean(key: String): Boolean;
+function TWaspConfig.GetNull(key: String): Boolean;
+function TWaspConfig.GetStringArray(key: String): TStringArray;
+function TWaspConfig.GetIntArray(key: String): TIntegerArray;
+function TWaspConfig.GetDoubleArray(key: String): TDoubleArray;
+function TWaspConfig.GetBooleanArray(key: String): TBoolArray;
+function TWaspConfig.GetObject(key: String): TJSONObject;
+```
+This should be self explanatory. Returns the value of a `key` in your `TWaspConfig`.
+The `Object` version of the method is the only one that might need a little bit more knowledge of
+Simba's lower JSON methods and/or pointers but you can use it to return a JSON object or a TJSONArray of TJSONObjects.
+*)
+function TWaspConfig.GetString(key: String): String;
+begin
+  if Self.JSON = nil then
+    Exit;
+  if Self.JSON.has(key) and not Self.JSON.isNull(key) then
     Result := Self.JSON.getString(key);
 end;
 
+function TWaspConfig.GetInt(key: String): Int32;
+begin
+  if Self.JSON = nil then
+    Exit;
+  if Self.JSON.has(key) and not Self.JSON.isNull(key) then
+    Result := Self.JSON.getInt(key);
+end;
+
+function TWaspConfig.GetDouble(key: String): Double;
+begin
+  if Self.JSON = nil then
+    Exit;
+  if Self.JSON.has(key) and not Self.JSON.isNull(key) then
+    Result := Self.JSON.getDouble(key);
+end;
+
+function TWaspConfig.GetBoolean(key: String): Boolean;
+begin
+  if Self.JSON = nil then
+    Exit;
+  if Self.JSON.has(key) and not Self.JSON.isNull(key) then
+    Result := Self.JSON.getBoolean(key);
+end;
+
+function TWaspConfig.GetNull(key: String): Boolean;
+begin
+  if Self.JSON = nil then
+    Exit;
+  Result := not Self.JSON.has(key) or Self.JSON.isNull(key);
+end;
+
+function TWaspConfig.GetStringArray(key: String): TStringArray;
+var
+  tmp: TJSONArray;
+  i: Int32;
+begin
+  if Self.JSON = nil then
+    Exit;
+  if Self.JSON.has(key) and not Self.JSON.isNull(key) then
+  begin
+    tmp := Self.JSON.getJSONArray(key);
+    for i := 0 to tmp.length()-1 do
+      Result += tmp.getString(i);
+  end;
+end;
+
+function TWaspConfig.GetIntArray(key: String): TIntegerArray;
+var
+  tmp: TJSONArray;
+  i: Int32;
+begin
+  if Self.JSON = nil then
+    Exit;
+  if Self.JSON.has(key) and not Self.JSON.isNull(key) then
+  begin
+    tmp := Self.JSON.getJSONArray(key);
+    for i := 0 to tmp.length()-1 do
+      Result += tmp.getInt(i);
+  end;
+end;
+
+function TWaspConfig.GetDoubleArray(key: String): TDoubleArray;
+var
+  tmp: TJSONArray;
+  i: Int32;
+begin
+  if Self.JSON = nil then
+    Exit;
+  if Self.JSON.has(key) and not Self.JSON.isNull(key) then
+  begin
+    tmp := Self.JSON.getJSONArray(key);
+    for i := 0 to tmp.length()-1 do
+      Result += tmp.getDouble(i);
+  end;
+end;
+
+function TWaspConfig.GetBooleanArray(key: String): TBoolArray;
+var
+  tmp: TJSONArray;
+  i: Int32;
+begin
+  if Self.JSON = nil then
+    Exit;
+  if Self.JSON.has(key) and not Self.JSON.isNull(key) then
+  begin
+    tmp := Self.JSON.getJSONArray(key);
+    for i := 0 to tmp.length()-1 do
+      Result += tmp.getBoolean(i);
+  end;
+end;
+
+function TWaspConfig.GetObject(key: String): TJSONObject;
+begin
+  if Self.JSON = nil then
+    Exit;
+  if Self.JSON.has(key) and not Self.JSON.isNull(key) then
+    Result := Self.JSON.getJSONObject(key);
+end;
+
+
+(*
+## Config.Remove()
+```pascal
+procedure TWaspConfig.Remove(key: String);
+```
+Remove a `key` and it's respective `value` from your `TWaspConfig`.
+*)
 procedure TWaspConfig.Remove(key: String);
 begin
   if Self.JSON = nil then
-    Self.Setup();
+    TerminateScript('You need to use TWaspConfig.Setup() before trying to delete a key on it.');
   Self.JSON.remove(key);
   Self.SaveConfig();
 end;
 
-var
-  WaspConfig: TWaspConfig;
-
 (*
-# HTTPClient
-Responsible for connecting to the internet
+## Config.ToString()
+```pascal
+function TWaspConfig.ToString(indentFactor: Int32 = 2): String;
+```
+Returns a string version of your `TWaspConfig`.
+
+Example:
+```pascal
+WriteLn MyConfig.ToString();
+```
 *)
+function TWaspConfig.ToString(indentFactor: Int32 = 2): String;
+begin
+  if Self.JSON = nil then
+    Exit;
+  Result := Self.JSON.ToString(indentFactor);
+end;
+
+var
+{$H-}WaspConfig: TWaspConfig;{$H+}
 
 
 
-{$IFNDEF WS_HTTP_INCLUDED}      
+{$IFNDEF WS_HTTP_INCLUDED}         
 (*
 # HTTPClients
 Responsible for loading settings from and saving them in json format.
@@ -227,11 +1970,33 @@ var
   time: UInt64;
 begin
   time := GetTickCount();
-  Result := GetHTTPPage(Self.Client, route);
+  Result := GetHTTPPage(Self.Client, Self.Server + route);
   time := GetTickCount() - time;
   Result := StringReplace(Result, '\u0020', ' ', [rfReplaceAll]);
   if verbose then
+    {$IFNDEF DEVELOPER_MODE}
     DebugLn(Self.Name, 'HTTPCode: ' + ToStr(Self.GetHTTPCode()) + ' - ' + Result + ' - Response took: ' + ToStr(time) + 'ms.');
+    {$ELSE}
+    DebugLn(Self.Name, 'HTTPCode: ' + ToStr(Self.GetHTTPCode()) + ' - Response took: ' + ToStr(time) + 'ms.');
+    {$ENDIF}
+end;
+
+function THTTPClient.GETEx(route, destination: String; verbose: Boolean = True): Boolean;
+var
+  time: UInt64;
+  response: String;
+begin
+  time := GetTickCount();
+  response := GetHTTPPage(Self.Client, Self.Server + route);
+  Result := (Self.GetHTTPCode() = 200) and WriteFileContents(destination, response, False);
+  time := GetTickCount() - time;
+
+  if verbose then
+    {$IFNDEF DEVELOPER_MODE}
+    DebugLn(Self.Name, 'HTTPCode: ' + ToStr(Self.GetHTTPCode()) + ' - ' + ExtractFileName(destination) + ' - Download took: ' + ToStr(time) + 'ms.');
+    {$ELSE}
+    DebugLn(Self.Name, 'HTTPCode: ' + ToStr(Self.GetHTTPCode()) + ' - Download took: ' + ToStr(time) + 'ms.');
+    {$ENDIF}
 end;
 
 function THTTPClient.POST(route: String; verbose: Boolean = True): String;
@@ -240,11 +2005,15 @@ var
 begin
   time := GetTickCount();
   ClearPostData(Self.Client);
-  Result := PostHTTPPageEx(Self.Client, route);
+  Result := PostHTTPPageEx(Self.Client, Self.Server + route);
   time := GetTickCount() - time;
   Result := StringReplace(Result, '\u0020', ' ', [rfReplaceAll]);
   if verbose then
+    {$IFNDEF DEVELOPER_MODE}
     DebugLn(Self.Name, 'HTTPCode: ' + ToStr(Self.GetHTTPCode()) + ' - ' + Result + ' - Response took: ' + ToStr(time) + 'ms.');
+    {$ELSE}
+    DebugLn(Self.Name, 'HTTPCode: ' + ToStr(Self.GetHTTPCode()) + ' - Response took: ' + ToStr(time) + 'ms.');
+    {$ENDIF}
 end;
 
 function THTTPClient.POST(route: String; payload: String; verbose: Boolean = True): String; overload;
@@ -252,11 +2021,15 @@ var
   time: UInt64;
 begin
   time := GetTickCount();
-  Result := PostHTTPPage(Self.Client, route, payload);
+  Result := PostHTTPPage(Self.Client, Self.Server + route, payload);
   time := GetTickCount() - time;
   Result := StringReplace(Result, '\u0020', ' ', [rfReplaceAll]);
   if verbose then
+    {$IFNDEF DEVELOPER_MODE}
     DebugLn(Self.Name, 'HTTPCode: ' + ToStr(Self.GetHTTPCode()) + ' - ' + Result + ' - Response took: ' + ToStr(time) + 'ms.');
+    {$ELSE}
+    DebugLn(Self.Name, 'HTTPCode: ' + ToStr(Self.GetHTTPCode()) + ' - Response took: ' + ToStr(time) + 'ms.');
+    {$ENDIF}
 end;
 
 function THTTPClient.POST(route: String; payload: TJSONObject; verbose: Boolean = True): String; overload;
@@ -308,7 +2081,8 @@ var
   response: String;
 begin
   try
-    response := Self.GET(Self.Server + ROUTE + pkg + '/releases/latest', False);
+    response := Self.GET(ROUTE + pkg + '/releases/latest', {$IFDEF FULL_DEVELOPER_MODE}True{$ELSE}{$IFDEF DEVELOPER_MODE}True{$ELSE}False{$ENDIF}{$ENDIF});
+
     if Self.GetHTTPCode() = 200 then
       Result.Init(response);
   except
@@ -332,10 +2106,10 @@ var
 begin
   Self.Name := 'GitHub Client';
   Self.Server := 'https://api.github.com/';
-  Self.DownloadPath := AppPath + 'Data' + DirectorySeparator + 'WaspLib' + DirectorySeparator + 'downloads' + DirectorySeparator;
+  Self.DownloadPath := LAUNCHER_DATA + 'downloads' + DirectorySeparator;
 
   if not ForceDirectories(Self.DownloadPath) then
-    TerminateScript('Can''t create downloads directory.');
+    TerminateScript('GitHubClient can''t create downloads directory.');
 
   Self.RefreshClient(False);
   AddOnTerminate(@Self.Free);
@@ -364,9 +2138,28 @@ begin
     Self.Packages.Latest.WaspLib := 'Failed!';
 end;
 
+
+function TGitHubClient.GetDownloaderContent(): String;
+begin
+  Result += "var httpClient: Int32; url, destination, pkg: String;" + LineEnding;
+  Result += "begin" + LineEnding;
+  Result += "  url := GetProcessParameter('url');" + LineEnding;
+  Result += "  destination := GetProcessParameter('destination');" + LineEnding;
+  Result += "  pkg := GetProcessParameter('pkg');" + LineEnding;
+  Result += "  WriteLn('[AsyncDownloader]: Downloading ', pkg, ', this might take a few seconds.');" + LineEnding;
+  Result += "  httpClient := InitializeHTTPClient(True);" + LineEnding;
+  Result += "  if GetHTTPPageEx(httpClient, url, destination) <> 200 then" + LineEnding;
+  Result += "    WriteLn('[AsyncDownloader]: Something went wrong while trying to download: ' + url);" + LineEnding;
+  Result += "  FreeHTTPClient(httpClient);" + LineEnding;
+  Result += "  WriteLn pkg + 'Downloaded.'";
+  Result += "end;";
+end;
+
+
 procedure TGitHubClient.Download(pkg: String);
 var
   url: String;
+  params: TStringArray;
 begin
   case LowerCase(pkg) of
     'srlt', 'srl-t': url := Self.Packages.Release.SRLT;
@@ -375,11 +2168,13 @@ begin
       TerminateScript('Unrecognized package to download: ' + pkg);
   end;
 
-  DebugLn(Self.Name, 'Downloading ' + pkg + ' this might take a while.');
-  GetHTTPPageEx(Self.Client, url, Self.DownloadPath + pkg + '.zip');
-  if Self.GetHTTPCode() <> 200 then
-    TerminateScript('Something went wrong while trying to download: ' + url);
+  DebugLn(Self.Name, ' Downloading ' + pkg + ' this might take a while.');
+
+  WriteAsyncFile(pkg + '-downloader.simba', Self.GetDownloaderContent());
+  params := ['url=' + url,'destination="'+ Self.DownloadPath + pkg + '.zip"', 'pkg=' + pkg];
+  RunScript(Self.DownloadPath + pkg + '-downloader.simba', params);
 end;
+
 
 var
   GitHubClient: TGitHubClient;
@@ -404,9 +2199,13 @@ type
   TScriptData = record
     ID: String;
     Name: String;
+    Description: String;
+    Content: String;
     URL: String;
     Categories: TStringArray;
+    Revision: Int32;
   end;
+
   TScriptDataArray = array of TScriptData;
 
   TBundleData = record
@@ -416,6 +2215,7 @@ type
     Owner: String;
     Scripts: TScriptDataArray;
   end;
+
   TBundleDataArray = array of TBundleData;
 
   TProductData = record
@@ -433,9 +2233,37 @@ type
   end;
   TSubscriptionDataArray = array of TSubscriptionData;
 
+function TScriptDataArray.Find(const id: String): Int32; constref;
+begin
+  for Result := 0 to High(Self) do
+    if Self[Result].ID = id then
+      Exit;
+  Result := -1;
+end;
+
+function TScriptDataArray.Contains(const id: String): Boolean; constref;
+begin
+  Result := Self.Find(id) > -1;
+end;
+
+function ScriptDataSort(constref left, right: TScriptData): Int32;
+begin
+  if LowerCase(left.Name) > LowerCase(right.Name) then
+    Exit(1);
+  if LowerCase(left.Name) < LowerCase(right.Name) then
+    Exit(-1);
+end;
+
+function TScriptDataArray.Sorted(): TScriptDataArray;
+begin
+  Result := System.Sorted(Self, @ScriptDataSort);
+end;
+
+type
   TWaspClient = record(THTTPClient)
     Schema: String;
     APIKey: String;
+    DownloadPath: String;
 
     Cache: record
       User: record
@@ -451,30 +2279,21 @@ type
         SubscribbedProducts: TProductDataArray;
         FreeAccessProducts: TProductDataArray;
         SubscribbedScripts: TScriptDataArray;
+        AllUserScripts: TScriptDataArray;
       end;
 
+      Launcher: TScriptData;
       Scripts: TScriptDataArray;
       FreeScripts: TScriptDataArray;
       PremiumScripts: TScriptDataArray;
 
       Bundles: TBundleDataArray;
-      //BundledScripts: array [String] of TScriptDataArray;
-
       Products: TProductDataArray;
 
       Free: Boolean;
     end;
+
   end;
-
-function TScriptDataArray.Contains(id: String): Boolean;
-var
-  i: Int32;
-begin
-  for i := 0 to High(Self) do
-    if Self[i].ID = id then
-      Exit(True);
-end;
-
 
 procedure TWaspClient.FreeUserData();
 begin
@@ -486,6 +2305,7 @@ begin
   Self.Cache.User.SubscribbedProducts := [];
   Self.Cache.User.FreeAccessProducts := [];
   Self.Cache.User.SubscribbedScripts := [];
+  Self.Cache.User.AllUserScripts := [];
 
   Self.Cache.User.UserData.Free();
   Self.Cache.User.UserData := nil;
@@ -529,7 +2349,7 @@ var
   response: TJSONObject;
 begin
   try
-    response.Init(Self.POST(Self.Server + ROUTE + QUERY + grantType, payload, False));
+    response.Init(Self.POST(ROUTE + QUERY + grantType, payload, False));
 
     Result := Self.GetHTTPCode() = 200;
     if Result then
@@ -542,7 +2362,7 @@ begin
       Self.SaveRefreshToken();
       Self.Cache.Free := False;
 
-      Self.GetSubscribbedScripts();
+      Self.GetAllUserScripts();
     end
     else if not Result then
     begin
@@ -587,7 +2407,7 @@ begin
     Exit(Self.Cache.User.UserData);
 
   try
-    response := Self.GET(Self.Server + ROUTE, False);
+    response := Self.GET(ROUTE, False);
     if Self.GetHTTPCode() = 200 then
     begin
       Result.Init(response);
@@ -603,7 +2423,7 @@ const
   ROUTE: String = 'auth/v1/logout';
 begin
   try
-    Self.POST(Self.Server + ROUTE, False);
+    Self.POST(ROUTE, False);
     Result := Self.GetHTTPCode() = 204;
     if Result then
     begin
@@ -624,10 +2444,11 @@ procedure TWaspClient.LoadRefreshToken();
 var
   token: String;
 begin
-  token := WaspConfig.Get('refresh_token');
+  token := WaspConfig.GetString('refresh_token');
   if (token <> '') and Self.Login(token) then
     DebugLn(Self.Name, 'Previous session refreshed!');
 end;
+
 
 
 procedure TWaspClient.SetSchema(schema: String);
@@ -654,7 +2475,7 @@ begin
   Self.SetSchema('profiles');
   query += '&id=eq.' + Self.Cache.User.ID + '&limit=1';
   try
-    response := Self.GET(Self.Server + ROUTE + query, False);
+    response := Self.GET(ROUTE + query, False);
     if Self.GetHTTPCode() = 200 then
     begin
       tmp.Init(response);
@@ -676,7 +2497,7 @@ begin
   end;
 end;
 
-function TWaspClient.Select(schema, table, query: String; filters: TStringArray = []): TJSONArray;
+function TWaspClient.Select(schema, table, query: String; filters: TStringArray = []; orders: TStringArray = []): TJSONArray;
 const
   ROUTE: String = 'rest/v1/';
 var
@@ -686,8 +2507,13 @@ begin
 
   if filters <> [] then
     query += '&' + Implode('&', filters);
+
+  if orders <> [] then
+    query += '&order=' + Implode('&order=', orders);
+
   try
-    response := Self.GET(Self.Server + ROUTE + table + '?select=' + query, False);
+    response := Self.GET(ROUTE + table + '?select=' + query, False);
+
     if Self.GetHTTPCode() = 200 then
       Result.Init(response);
   except
@@ -756,7 +2582,13 @@ var
 begin
   if Self.Cache.Scripts <> [] then
     Exit(Self.Cache.Scripts);
-  jsonArray := Self.Select('scripts', 'scripts', 'id,product,title,url,categories');
+  jsonArray := Self.Select(
+                  'scripts',
+                  'scripts',
+                  'id,product,title,description,content,url,categories,protected!inner(revision)',
+                  ['published=eq.true'],
+                  ['title.asc']
+               );
 
   for i := 0 to jsonArray.High() do
   begin
@@ -765,12 +2597,19 @@ begin
     begin
       script.ID := getString('id');
       script.Name := getString('title');
+      script.Description := getString('description');
+      script.Content := getString('content');
       script.URL := 'https://waspscripts.com/scripts/' + getString('url');
+      script.Revision := getJSONObject('protected').getInt('revision');
+
       for j := 0 to categories.High() do
         script.Categories += categories.getString(j);
     end;
 
-    Result += script;
+    if script.ID = {$MACRO SCRIPT_ID} then
+      Self.Cache.Launcher := script
+    else
+      Result += script;
     script := [];
   end;
 
@@ -778,6 +2617,7 @@ begin
 
   Self.Cache.Scripts := Result;
 end;
+
 
 function TWaspClient.GetFreeScripts(): TScriptDataArray;
 var
@@ -824,7 +2664,6 @@ begin
   Self.Cache.PremiumScripts := Result;
 end;
 
-
 function TWaspClient.GetBundles(): TBundleDataArray;
 var
   jsonArray, scriptsJSON: TJSONArray;
@@ -837,10 +2676,10 @@ begin
     Exit(Self.Cache.Bundles);
   jsonArray := Self.Select('scripts', 'bundles', 'product,id,name,scripts,user_id');
 
+  scripts := Self.GetPremiumScripts();
+
   for i := 0 to jsonArray.High() do
   begin
-    scripts := Self.GetPremiumScripts();
-
     with jsonArray.getJSONObject(i) do
     begin
       bundle.ID := getString('id');
@@ -914,6 +2753,29 @@ begin
 end;
 
 
+
+procedure TWaspClient.Setup();
+begin
+  Self.Name := 'WaspClient';
+  Self.Server := 'https://db.waspscripts.com/';
+  Self.APIKey := 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVucWxwY2hvYm5peWx3cHNqY3FjIiwicm9sZSI6ImFub24iLCJpYXQiOjE2NjM5MzIxMDAsImV4cCI6MTk3OTUwODEwMH0.WUiK6CteSjnOT8A9AcbUHnYyvWwDxlwUwq_ueifPAxY';
+  Self.DownloadPath := LAUNCHER_DATA + 'downloads' + DirectorySeparator;
+
+  if not ForceDirectories(Self.DownloadPath) then
+    TerminateScript('WaspClient can''t create downloads directory.');
+
+  Self.RefreshClient(False);
+  AddOnTerminate(@Self.Free);
+  Self.LoadRefreshToken();
+
+  //Pre-load data...
+  Self.GetProducts();
+  Self.GetBundles();
+  Self.GetFreeScripts();
+end;
+
+
+
 function TWaspClient.GetSubscribbedProducts(): TProductDataArray;
 var
   subs: TSubscriptionDataArray;
@@ -967,7 +2829,7 @@ begin
 end;
 
 
-function TWaspClient.GetSubscribbedScripts(): TScriptDataArray;
+function TWaspClient.GetAccessScripts(): TScriptDataArray;
 var
   subs, freeAccess: TProductDataArray;
   scripts, bundled: TScriptDataArray;
@@ -1012,28 +2874,85 @@ begin
 
     for j := 0 to High(scripts) do
     begin
-      if scripts[i].ID <> freeAccess[i].Script then
+      if scripts[j].ID <> freeAccess[i].Script then
         Continue;
-      if not Result.Contains(scripts[i].ID) then
-        Result += scripts[i];
+      if not Result.Contains(scripts[j].ID) then
+        Result += scripts[j];
     end;
   end;
+
   Self.Cache.User.SubscribbedScripts := Result;
 end;
 
-
-procedure TWaspClient.Setup();
+function TWaspClient.GetAllUserScripts(): TScriptDataArray;
 begin
-  Self.Name := 'WaspClient';
-  Self.Server := 'https://db.waspscripts.com/';
-  Self.APIKey := 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVucWxwY2hvYm5peWx3cHNqY3FjIiwicm9sZSI6ImFub24iLCJpYXQiOjE2NjM5MzIxMDAsImV4cCI6MTk3OTUwODEwMH0.WUiK6CteSjnOT8A9AcbUHnYyvWwDxlwUwq_ueifPAxY';
-  Self.RefreshClient(False);
-  AddOnTerminate(@Self.Free);
-  Self.LoadRefreshToken();
+  if Self.Cache.User.AllUserScripts <> [] then
+    Exit(Self.Cache.User.AllUserScripts);
 
-  Self.GetFreeScripts();
-  Self.GetPremiumScripts();
-  Self.GetBundles();
+  Result := Self.GetAccessScripts() + Self.GetFreeScripts();
+  Result := Result.Sorted();
+
+  Self.Cache.User.AllUserScripts := Result;
+end;
+
+
+function TWaspClient.Storage(route: String): String;
+var
+  response: String;
+begin
+  try
+    response := Self.GET(route, False);
+    if Self.GetHTTPCode() = 200 then
+      Result := response;
+  except
+    TerminateScript(GetExceptionMessage());
+  end;
+end;
+
+function TWaspClient.Storage(bucket, path: String): String; overload;
+const
+  ROUTE: String = 'storage/v1/object/authenticated/';
+begin
+  Result := Self.Storage(ROUTE + bucket + '/' + path);
+end;
+
+function TWaspClient.StorageGetSignedURL(bucket, path: String; expiresIn: UInt32 = 10): String;
+const
+  ROUTE: String = 'storage/v1/object/sign/';
+var
+  response: String;
+  payload, json: TJSONObject;
+begin
+  payload.Init();
+  payload.Put('expiresIn', expiresIn);
+
+  try
+    response := Self.POST(ROUTE + bucket + '/' + path, payload, False);
+    if Self.GetHTTPCode() = 200 then
+    begin
+     json.Init(response);
+     Result := 'storage/v1' + json.getString('signedURL');
+     json.Free();
+    end;
+  except
+    TerminateScript(GetExceptionMessage());
+  finally
+    payload.Free();
+  end;
+end;
+
+
+procedure TWaspClient.Download(id: String; revision: Int32);
+const
+  ROUTE: String = 'storage/v1/object/authenticated/scripts/';
+var
+  url, revStr: String;
+begin
+  revStr := PadL(ToStr(revision), 9, '0');
+  url := ROUTE + id + '/' + revStr + '/script.simba';
+  DebugLn(Self.Name, 'Downloading ' + id + ' this might take a while.');
+  if not Self.GETEx(url, Self.DownloadPath + id + '.simba') then
+    TerminateScript('Something went wrong while trying to download: ' + url);
 end;
 
 
@@ -1051,194 +2970,14 @@ begin
   WriteLn('Products:', Self.GetProducts());
   WriteLn('SubbedProducts:', Self.GetSubscribbedProducts());
   WriteLn('BundledScripts:', Self.GetBundledScripts('86a1dbfc-338d-4c98-87c7-29b875549d9b'));
-  WriteLn('SubbedScripts:', Self.GetSubscribbedScripts());
+  WriteLn('SubbedScripts:', Self.GetAccessScripts());
 end;
 
 var
   WaspClient: TWaspClient;
 
 
-{$IFNDEF WS_UPDATER_INCLUDED}   
-{$DEFINE WS_UPDATER_INCLUDED}
-
-
-type
-  TWaspUpdater = record
-    Name: String;
-    Paths: TStringArray;
-    Plugins: TStringArray;
-  end;
-
-procedure TWaspUpdater.Setup();
-begin
-  Self.Name := 'WaspUpdater';
-
-  Self.Paths := [
-    IncludePath + 'SRL' + DirectorySeparator + 'plugins' + DirectorySeparator,
-    IncludePath + 'SRL-T' + DirectorySeparator + 'plugins' + DirectorySeparator
-  ];
-
-  Self.Plugins := [
-    'libremoteinput64.so.aarch64',
-    'libremoteinput64.so',
-    'libremoteinput64.dylib',
-    'libremoteinput64.dll',
-    'libremoteinput32.dll'
-  ];
-end;
-
-function TWaspUpdater.BackupFile(filePath: String): Boolean;
-var
-  f: Int32;
-  str: String;
-begin
-  f := OpenFile(filePath, False);
-  if not ReadFileString(f, str, FileSize(f)) then
-    Exit;
-  CloseFile(f);
-  Result := WriteFileContents(filePath + '.bak', str, False);
-end;
-
-function TWaspUpdater.RestoreFile(filePath: String): Boolean;
-var
-  f: Int32;
-  str: String;
-begin
-  f := OpenFile(filePath + '.bak', False);
-  if not ReadFileString(f, str, FileSize(f)) then
-    Exit;
-  CloseFile(f);
-  Result := WriteFileContents(filePath, str, False);
-  DeleteFile(filePath + '.bak');
-end;
-
-function TWaspUpdater.IsFileLocked(filePath: AnsiString): Boolean;
-begin
-  if not Self.BackupFile(filePath) then
-    TerminateScript('Failed to backup file: ' + filePath);
-
-  Result := not DeleteFile(filePath);
-
-  if not Result then
-    if not Self.RestoreFile(filePath) then
-      TerminateScript('Failed to restore file: ' + filePath);
-end;
-
-function TWaspUpdater.FindLockedPlugins(): TStringArray;
-var
-  path, plugin: String;
-begin
-  for path in Self.Paths do
-    for plugin in Self.Plugins do
-      if Self.IsFileLocked(path + plugin) then
-        Result += path + plugin;
-end;
-
-procedure TWaspUpdater.KillClients();
-var
-  window: TOSWindow;
-begin
-  for window in GetWindows().GetByClass('SunAwtCanvas') do
-    window.Kill();
-end;
-
-function TWaspUpdater.UnlockPlugins(): Boolean;
-var
-  locked: TStringArray;
-  plugin: String;
-begin
-  locked := Self.FindLockedPlugins();
-
-  if locked = [] then
-    Exit(True);
-
-  Self.KillClients();
-
-  for plugin in locked do
-    if Self.IsFileLocked(plugin) then
-      Exit;
-
-  Result := True;
-end;
-
-function TWaspUpdater.DeleteDirectory(path: String; deleteRoot: Boolean = True): Boolean;
-var
-  f, tmp: String;
-begin
-  for f in FindFiles(path, True) do
-  begin
-    if not DeleteFile(f) then
-      Exit;
-    tmp := ExtractFilePath(f);
-    if (FindFiles(tmp, True) = []) and (FindDirectories(tmp, True) = []) then
-      if not System.DeleteDirectory(tmp, False) then
-        Exit;
-  end;
-
-  Result := not deleteRoot or System.DeleteDirectory(path, False);
-end;
-
-procedure TWaspUpdater.MoveFiles(pkg: String);
-var
-  paths, files: TStringArray;
-  path, f, fPath, newPath: String;
-begin
-  paths := GetDirectories(GitHubClient.DownloadPath + pkg + DirectorySeparator);
-  if Length(paths) <> 1 then
-    TerminateScript('The ' + pkg + ' download is empty or has unexpected things inside.');
-
-  newPath := IncludePath + pkg + DirectorySeparator;
-  if not Self.DeleteDirectory(newPath) then
-    TerminateScript('Failed to delete old library: ' + newPath);
-  if not ForceDirectories(newPath) then
-    TerminateScript('Failed to create path: ' + newPath);
-
-  path := GitHubClient.DownloadPath + pkg + DirectorySeparator + paths[0] + DirectorySeparator;
-  files := FindFiles(path, True);
-  for f in files do
-  begin
-    fPath := f.After(path);
-    if fPath.Contains('.git') then
-      Continue;
-    if not ForceDirectories(newPath + ExtractFilePath(fPath)) then
-      TerminateScript('Failed to create path: ' + newPath + ExtractFilePath(fPath));
-
-    if not CopyFile(f, newPath + fPath, False) then
-      TerminateScript('Failed to copy file: ' + fPath);
-    DeleteFile(f);
-    if (FindFiles(ExtractFilePath(f), True) = []) and (FindDirectories(ExtractFilePath(f), True) = []) then
-      System.DeleteDirectory(ExtractFilePath(f), False);
-  end;
-
-  Self.DeleteDirectory(GitHubClient.DownloadPath + pkg);
-end;
-
-procedure TWaspUpdater.Update(pkg: String);
-begin
-  GitHubClient.Download(pkg);
-  DebugLn(Self.Name, 'Unzipping ' + pkg + ' this might take a while.');
-
-  try
-    UnZipFile(GitHubClient.DownloadPath + pkg + '.zip', GitHubClient.DownloadPath + pkg);
-    DeleteFile(GitHubClient.DownloadPath + pkg + '.zip');
-  except
-    TerminateScript(GetExceptionMessage());
-  end;
-
-  case LowerCase(pkg) of
-    'srl-t', 'srlt', 'srl':
-    if not Self.UnlockPlugins() then
-      TerminateScript('Failed to unlock Simba plugins. Close all RuneScape clients, any other Jagex software, any other bots and try again.');
-  end;
-
-  Self.MoveFiles(pkg);
-end;
-
-var
-  WaspUpdater: TWaspUpdater;
-
-
-{$IFNDEF WS_FORMUTILS_INCLUDED} 
+{$IFNDEF WS_FORMUTILS_INCLUDED}    
 {$DEFINE WS_FORMUTILS_INCLUDED}
 
 
@@ -1256,84 +2995,129 @@ begin
   Result := Round(n * TControl.GetDPI() / 96);
 end;
 
-function TComponent.NameMatch(name: TComponentName): Boolean;
-begin
-  Result := (Self <> nil) and (Self.GetName() = name);
-end;
 
-function TComponent.GetChild(name: TComponentName): TComponent;
-var
-  i, hi: Int32;
-  child: TComponent;
-begin
-  if Self = nil then
-    Exit;
-
-  if Self.NameMatch(name) then
-    Exit(Self);
-
-  hi := Self.getComponentCount();
-
-  if hi >= 0 then
-    for i := 0 to hi - 1 do
-    begin
-      child := Self.GetComponent(i);
-
-      if child.NameMatch(name) then
-        Exit(child);
-
-      Result := child.GetChild(name);
-      if Result <> nil then
-        Exit;
-    end;
-
-  Result := nil;
-end;
-const
-  CHECKBOX_LABEL_SPACING: Int32 = 18;
-
-
-
-{$IFNDEF WS_FORM_INCLUDED}      
-{$DEFINE WS_FORM_INCLUDED}
-
-
-(*
-# WaspForm
-Frontend form for the {ref}`WaspClient`.
-*)
-type
-  TWaspForm = record
-    Form: TForm;
-    Size: TPoint;
-  end;
-
-procedure TPanel.Create(owner: TControl; name: String);
+procedure TPanel.Create(owner: TControl);
 begin
   Self.Init(owner);
-  Self.setParent(owner);
-  Self.setName(name + '_panel');
-  Self.setCaption('');
-  Self.setAlign(TAlign.alCustom);
-  Self.setBorderStyle(TFormBorderStyle.bsNone);
-  Self.setBevelWidth(0);
+  Self.SetParent(owner);
 end;
 
-procedure TLabel.Create(owner: TControl; caption: String; name: String = '');
+procedure TPageControl.Create(owner: TControl);
 begin
   Self.Init(owner);
-  Self.setParent(owner);
-  Self.setCaption(caption);
-  if name <> '' then
-    Self.SetName(name + '_label');
+  Self.SetParent(owner);
 end;
 
-procedure TCheckbox.Create(owner: TControl; name: String);
+procedure TTabSheet.Create(owner: TControl);
 begin
   Self.Init(owner);
-  Self.setParent(owner);
-  Self.SetName(name + '_checkbox');
-  Self.setCaption('');
+  Self.SetParent(owner);
+end;
+
+procedure TImage.Create(owner: TControl);
+begin
+  Self.Init(owner);
+  Self.SetParent(owner);
+end;
+
+procedure TLabel.Create(owner: TControl);
+begin
+  Self.Init(owner);
+  Self.SetParent(owner);
+end;
+
+procedure TEdit.Create(owner: TControl);
+begin
+  Self.Init(owner);
+  Self.SetParent(owner);
+end;
+
+procedure TButton.Create(owner: TControl);
+begin
+  Self.Init(owner);
+  Self.SetParent(owner);
+end;
+
+procedure TCheckBox.Create(owner: TControl);
+begin
+  Self.Init(owner);
+  Self.SetParent(owner);
+end;
+
+procedure TRadioButton.Create(owner: TControl);
+begin
+  Self.Init(owner);
+  Self.SetParent(owner);
+end;
+
+procedure TComboBox.Create(owner: TControl);
+begin
+  Self.Init(owner);
+  Self.SetParent(owner);
+end;
+
+procedure TListBox.Create(owner: TControl);
+begin
+  Self.Init(owner);
+  Self.SetParent(owner);
+end;
+
+procedure TMemo.Create(owner: TControl);
+begin
+  Self.Init(owner);
+  Self.SetParent(owner);
+end;
+
+
+procedure TControl.SetFontColor(color: TColor);
+begin
+  Self.GetFont().setColor(color);
+end;
+
+procedure TControl.SetFontSize(size: Int32);
+begin
+  Self.GetFont().setSize(size);
+end;
+
+procedure TControl.SetFontQuality(quality: TFontQuality);
+begin
+  Self.GetFont().setQuality(quality);
+end;
+
+procedure TControl.SetFontStyle(qualities: TFontStyles);
+begin
+  Self.GetFont().setStyle(qualities);
+end;
+
+
+procedure TControl.SetTop(const value: Integer); constref; override;
+begin
+  inherited(TControl.AdjustToDPI(value));
+end;
+
+procedure TControl.SetLeft(const value: Integer); constref; override;
+begin
+  inherited(TControl.AdjustToDPI(value));
+end;
+
+procedure TControl.SetWidth(const value: Integer); constref; override;
+begin
+  inherited(TControl.AdjustToDPI(value));
+end;
+
+procedure TControl.SetLeft(const value: Integer); constref; override;
+begin
+  inherited(TControl.AdjustToDPI(value));
+end;
+
+
+
+procedure TCheckBox.SetChecked(value: Boolean);
+begin
+  if value then
+    Self.setState(cbChecked)
+  else
+    Self.setState(cbUnchecked);
 end;
 
 function TCheckBox.IsChecked(): Boolean;
@@ -1350,143 +3134,1211 @@ begin
 end;
 
 
-procedure TEdit.Create(owner: TControl; top: Int32; title: String; text: String = '');
+function TControl.GetTrueWidth(): Int32;
 var
-  caption: TLabel;
+  bmp: TBitmap;
+  canvas: TCanvas;
+  font: TFont;
 begin
-  caption.Create(owner, title + ':');
-  caption.SetLeft(Self.AdjustToDPI(5));
-  caption.SetTop(Self.AdjustToDPI(top));
+  if Self = nil then
+    Exit;
 
-  title := LowerCase(title);
+  bmp.Init();
+  try
+    canvas := bmp.getCanvas();
+    font := Self.getFont();
 
-  Self.Init(owner);
-  Self.setParent(owner);
-  Self.setName(title + '_edit');
-  Self.SetLeft(Self.AdjustToDPI(5));
-  Self.SetTop(Self.AdjustToDPI(top + 18));
+    if font <> nil then
+    begin
+      canvas.setFont(font);
+      Result := canvas.TextWidth(Self.getCaption());
+    end;
+  finally
+    bmp.Free();
+  end;
+end;
 
-  Self.setWidth(owner.getWidth() - Self.AdjustToDPI(10));
-  Self.SetCaption(text);
-  Self.getFont().setStyle([fsBold]);
+function TControl.GetTrueHeight(): Int32;
+var
+  bmp: TBitmap;
+  canvas: TCanvas;
+  font: TFont;
+begin
+  if Self = nil then
+    Exit;
+
+  bmp.Init();
+  try
+    canvas := bmp.getCanvas();
+    font := Self.getFont();
+    if font <> nil then
+    begin
+      canvas.setFont(font);
+      Result := canvas.TextHeight(Self.getCaption());
+    end;
+  finally
+    bmp.Free();
+  end;
 end;
 
 
-procedure TWaspForm.OnClose({$H-}sender: TObject; var closeAction: TCloseAction);{$H+}
+function TComponent.NameMatch(name: TComponentName): Boolean;
 begin
-  TerminateScript();
+  Result := (Self <> nil) and (Self.GetName() = name);
 end;
+
+function TComponent.GetChild(name: TComponentName): TComponent;
+var
+  i: Int32;
+  child: TComponent;
+begin
+  if Self = nil then
+    Exit;
+
+  if Self.GetName() = name then
+    Exit(Self);
+
+  for i := 0 to Self.getComponentCount() - 1 do
+  begin
+    child := Self.GetComponent(i);
+    Result := child.GetChild(name);
+    if Result <> nil then
+      Exit;
+  end;
+end;
+
+type
+  TDarkListBox = record
+    OutterPanel: TPanel;
+    InnerPanel: TPanel;
+    ListBox: TListBox;
+  end;
+
+procedure TDarkListBox.Create(owner: TControl);
+begin
+  Self.OutterPanel.Create(owner);
+  Self.OutterPanel.setBevelWidth(0);
+  Self.OutterPanel.setColor($505050);
+
+  Self.InnerPanel.Create(Self.OutterPanel);
+  Self.InnerPanel.SetTop(2);
+  Self.InnerPanel.SetLeft(2);
+  Self.InnerPanel.setWidth(Self.OutterPanel.getWidth() - 4);
+  Self.InnerPanel.setHeight(Self.OutterPanel.getHeight() - 4);
+  Self.InnerPanel.setBevelWidth(0);
+  Self.InnerPanel.setColor($303030);
+
+  Self.ListBox.Create(Self.InnerPanel);
+  Self.ListBox.setLeft(-2);
+  Self.ListBox.SetTop(-2);
+  Self.ListBox.setWidth(Self.OutterPanel.getWidth());
+  Self.ListBox.setHeight(Self.OutterPanel.getHeight());
+  Self.ListBox.setColor($303030);
+  Self.ListBox.SetFontColor($D5D5D5);
+end;
+
+
+function TDarkListBox.GetLeft(): Integer;
+begin
+  Result := Self.OutterPanel.GetLeft();
+end;
+
+function TDarkListBox.GetTop(): Integer;
+begin
+  Result := Self.OutterPanel.getTop();
+end;
+
+function TDarkListBox.GetWidth(): Integer;
+begin
+  Result := Self.OutterPanel.getWidth();
+end;
+
+function TDarkListBox.GetHeight(): Integer;
+begin
+  Result := Self.OutterPanel.getHeight();
+end;
+
+
+procedure TDarkListBox.SetLeft(value: Integer);
+begin
+  Self.OutterPanel.SetLeft(value);
+end;
+
+procedure TDarkListBox.SetTop(value: Integer);
+begin
+  Self.OutterPanel.SetTop(value);
+end;
+
+procedure TDarkListBox.SetWidth(value: Integer);
+begin
+  Self.OutterPanel.setWidth(value);
+  Self.InnerPanel.setWidth(value - 4);
+  Self.ListBox.setWidth(value);
+end;
+
+procedure TDarkListBox.SetHeight(value: Integer);
+begin
+  Self.OutterPanel.setHeight(value);
+  Self.InnerPanel.setHeight(value - 4);
+  Self.ListBox.setHeight(value);
+end;
+
+
+function TDarkListBox.GetAlign(): TAlign;
+begin
+  Result := Self.OutterPanel.getAlign();
+end;
+
+procedure TDarkListBox.SetAlign(value: TAlign);
+var
+  w, h: Int32;
+begin
+  Self.OutterPanel.setAlign(value);
+  with TPanel(Self.OutterPanel.getOwner()) do
+  begin
+    w := GetWidth();
+    h := getHeight();
+  end;
+
+  h -= 15;
+
+  Self.InnerPanel.setWidth(w-4);
+  Self.InnerPanel.setHeight(h-4);
+
+  Self.ListBox.setWidth(w);
+  Self.ListBox.setHeight(h);
+end;
+
+
+
+type
+  TLabeledControl  = record Panel: TPanel; Caption: TLabel; Control: TControl; end;
+  TLabeledEdit     = record(TLabeledControl) Edit: TEdit; end;
+  TLabeledCheckBox = record(TLabeledControl) CheckBox: TCheckBox; end;
+  TLabeledComboBox = record(TLabeledControl) ComboBox: TComboBox; end;
+  TLabeledListBox  = record(TLabeledControl) ListBox: TListBox; end;
+  TLabeledDarkListBox  = record(TLabeledControl) ListBox: TDarkListBox; end;
+
+procedure TLabeledControl.Create(owner: TControl);
+begin
+  Self.Panel.Create(owner);
+  Self.Panel.setBevelWidth(0);
+
+  Self.Caption.Create(Self.Panel);
+  Self.Caption.setAlign(alTop);
+end;
+
+procedure TLabeledEdit.Create(owner: TControl); override;
+begin
+  inherited;
+
+  Self.Edit.Create(Self.Panel);
+  Self.Edit.setAlign(alClient);
+  Self.Control := Self.Edit;
+
+  Self.Panel.setHeight(Self.Caption.getHeight() + Self.Edit.getHeight());
+end;
+
+procedure TLabeledCheckBox.Create(owner: TControl); override;
+  type TLabeledCheckBox = TLabeledCheckBox;
+  procedure TLabeledCheckBox._PanelToggle(sender: TObject);
+  var
+    check: TCheckBox;
+    event: TNotifyEvent;
+  begin
+    check := TPanel(sender).GetComponent(1);
+    check.Toggle();
+
+    event := check.GetOnChange();
+    if event <> nil then
+      Lapify(event)(check);
+  end;
+
+  procedure TLabeledCheckBox._LabelToggle(sender: TObject);
+  begin
+    Self._PanelToggle(TControl(sender).getParent());
+  end;
+
+begin
+  Self.Panel.Create(owner);
+  Self.Panel.setBevelWidth(0);
+  Self.Panel.setOnClick(@Self._PanelToggle);
+
+  Self.Caption.Create(Self.Panel);
+  Self.Caption.setAlign(alLeft);
+  Self.Caption.setOnClick(@Self._LabelToggle);
+
+  Self.CheckBox.Create(Self.Panel);
+  Self.CheckBox.setAlign(alLeft);
+  Self.Control := Self.CheckBox;
+
+  Self.Panel.setHeight(Self.Caption.GetTrueHeight());
+  Self.Panel.setWidth(22 + Self.Caption.GetTrueWidth());
+end;
+
+procedure TLabeledComboBox.Create(owner: TControl); override;
+begin
+  inherited;
+
+  Self.ComboBox.Create(Self.Panel);
+  Self.ComboBox.setAlign(alClient);
+  Self.Control := Self.ComboBox;
+
+  Self.Panel.setHeight(Self.Caption.getHeight() + Self.ComboBox.getHeight());
+end;
+
+procedure TLabeledListBox.Create(owner: TControl); override;
+begin
+  inherited;
+
+  Self.ListBox.Create(Self.Panel);
+  Self.ListBox.setAlign(alClient);
+  Self.Control := Self.ListBox;
+
+  Self.Panel.setHeight(Self.Caption.getHeight() + Self.ListBox.getHeight());
+end;
+
+procedure TLabeledDarkListBox.Create(owner: TControl); override;
+begin
+  inherited;
+
+  Self.ListBox.Create(Self.Panel);
+  Self.ListBox.setAlign(alClient);
+  Self.Control := Self.ListBox.ListBox;
+
+  Self.Panel.setHeight(Self.Caption.getHeight() + Self.ListBox.getHeight());
+end;
+
+
+procedure TLabeledControl.SetCaption(value: String);
+begin
+  Self.Caption.setCaption(value);
+end;
+
+procedure TLabeledCheckBox.SetCaption(value: String); override;
+begin
+  Self.Caption.setCaption(value);
+  Self.Panel.setHeight(Self.Caption.GetTrueHeight());
+  Self.Panel.setWidth(22 + Self.Caption.GetTrueWidth());
+end;
+
+
+procedure TLabeledControl.SetColor(color: TColor);
+begin
+  Self.Panel.setColor(color);
+end;
+
+procedure TLabeledControl.SetControlColor(color: TColor);
+begin
+  Self.Control.setColor(color);
+end;
+
+
+procedure TLabeledControl.SetFontColor(color: TColor);
+begin
+  Self.Caption.SetFontColor(color);
+end;
+
+procedure TLabeledControl.SetControlFontColor(color: TColor);
+begin
+  Self.Control.SetFontColor(color);
+end;
+
+procedure TLabeledControl.SetFontSize(size: Int32);
+begin
+  Self.Caption.SetFontSize(size);
+end;
+
+
+procedure TLabeledControl.SetName(value: String);
+var
+  caption: String;
+begin
+  caption := Self.Panel.getCaption();
+  Self.Panel.setName(value + '_panel');
+  Self.Panel.setCaption(caption);
+
+  caption := Self.Caption.getCaption();
+  Self.Caption.setName(value + '_label');
+  Self.Caption.setCaption(caption);
+end;
+
+
+procedure TLabeledEdit.SetName(value: String); override;
+var
+  caption: String;
+begin
+  value := LowerCase(StringReplace(LowerCase(value), ' ', '_', [rfReplaceAll]));
+
+  inherited(value);
+  caption := Self.Edit.getCaption();
+  Self.Edit.setName(value + '_edit');
+  Self.Edit.setCaption(caption);
+end;
+
+procedure TLabeledCheckBox.SetName(value: String); override;
+var
+  caption: String;
+begin
+  value := StringReplace(LowerCase(value), ' ', '_', [rfReplaceAll]);
+
+  inherited(value);
+  caption := Self.CheckBox.getCaption();
+  Self.CheckBox.setName(value + '_checkbox');
+  Self.CheckBox.setCaption(caption);
+end;
+
+procedure TLabeledComboBox.SetName(value: String); override;
+var
+  caption: String;
+begin
+  value := StringReplace(LowerCase(value), ' ', '_', [rfReplaceAll]);
+
+  inherited(value);
+  caption := Self.ComboBox.getCaption();
+  Self.ComboBox.setName(value + '_combobox');
+  Self.ComboBox.setCaption(caption);
+end;
+
+procedure TLabeledListBox.SetName(value: String); override;
+var
+  caption: String;
+begin
+  value := StringReplace(LowerCase(value), ' ', '_', [rfReplaceAll]);
+
+  inherited(value);
+  caption := Self.ListBox.getCaption();
+  Self.ListBox.setName(value + '_listbox');
+  Self.ListBox.setCaption(caption);
+end;
+
+procedure TLabeledDarkListBox.SetName(value: String); override;
+var
+  caption: String;
+begin
+  value := StringReplace(LowerCase(value), ' ', '_', [rfReplaceAll]);
+
+  inherited(value);
+  caption := Self.ListBox.ListBox.getCaption();
+  Self.ListBox.ListBox.setName(value + '_listbox');
+  Self.ListBox.ListBox.setCaption(caption);
+end;
+
+
+procedure TLabeledControl.SetLeft(value: Int32);
+begin
+  Self.Panel.setLeft(value);
+end;
+
+procedure TLabeledControl.SetTop(value: Int32);
+begin
+  Self.Panel.SetTop(value);
+end;
+
+
+procedure TLabeledControl.SetWidth(value: Int32);
+begin
+  Self.Panel.setWidth(value);
+end;
+
+procedure TLabeledDarkListBox.SetWidth(value: Int32); override;
+begin
+  Self.Panel.setWidth(value);
+  Self.ListBox.SetAlign(Self.ListBox.GetAlign());
+end;
+
+
+procedure TLabeledControl.SetHeight(value: Int32);
+begin
+  Self.Panel.setHeight(value);
+end;
+
+procedure TLabeledDarkListBox.SetHeight(value: Int32); override;
+begin
+  Self.Panel.setHeight(value);
+  Self.ListBox.SetAlign(Self.ListBox.GetAlign());
+end;
+
+
+procedure TLabeledControl.SetAlign(value: TAlign);
+begin
+  Self.Panel.setAlign(value);
+end;
+
+procedure TLabeledCheckBox.SetAlign(value: TAlign); override;
+begin
+  Self.Panel.setAlign(value);
+end;
+
+
+procedure TLabeledControl.SetVisible(value: Boolean);
+begin
+  Self.Panel.setVisible(value);
+end;
+
+
+function TLabeledControl.GetLeft(): Int32;
+begin
+  Result := Self.Panel.getLeft();
+end;
+
+function TLabeledControl.GetTop(): Int32;
+begin
+  Result := Self.Panel.getTop();
+end;
+
+function TLabeledControl.GetRight(): Int32;
+begin
+  Result := Self.Panel.getBoundsRect().Right;
+end;
+
+function TLabeledControl.GetBottom(): Int32;
+begin
+  Result := Self.Panel.getBoundsRect().Bottom;
+end;
+
+
+function TLabeledControl.GetWidth(): Int32;
+begin
+  Result := Self.Panel.getWidth();
+end;
+
+function TLabeledControl.GetHeight(): Int32;
+begin
+  Result := Self.Panel.getHeight();
+end;
+
+
+function TLabeledControl.GetVisible(): Boolean;
+begin
+  Result := Self.Panel.GetVisible();
+end;
+
+
+procedure TLabeledEdit.SetText(value: String);
+begin
+  Self.Edit.setText(value);
+end;
+
+procedure TLabeledComboBox.SetText(value: String);
+begin
+  Self.ComboBox.setText(value);
+end;
+
+
+function TLabeledEdit.GetText(): String;
+begin
+  Result := Self.Edit.GetText();
+end;
+
+function TLabeledComboBox.GetText(): String;
+begin
+  Result := Self.ComboBox.GetText();
+end;
+
+function TLabeledListBox.GetText(): String;
+begin
+  Result := Self.ListBox.GetSelectedText();
+end;
+
+
+procedure TLabeledEdit.Clear();
+begin
+  Self.Edit.Clear();
+end;
+
+procedure TLabeledComboBox.Clear();
+begin
+  Self.ComboBox.Clear();
+end;
+
+procedure TLabeledListBox.Clear();
+begin
+  Self.ListBox.Clear();
+end;
+
+
+procedure TLabeledCheckBox.SetChecked(value: Boolean);
+begin
+  Self.CheckBox.SetChecked(value);
+end;
+
+
+function TLabeledCheckBox.IsChecked(): Boolean;
+begin
+  Result := Self.CheckBox.IsChecked();
+end;
+
+function TLabeledCheckBox.GetState(): TCheckBoxState;
+begin
+  Result := Self.CheckBox.getState();
+end;
+
+procedure TLabeledEdit.SetEnabled(value: Boolean);
+begin
+  Self.Edit.setEnabled(value);
+end;
+
+procedure TLabeledCheckBox.SetEnabled(value: Boolean);
+begin
+  Self.Panel.setEnabled(value);
+  Self.Caption.setEnabled(value);
+  Self.CheckBox.setEnabled(value);
+end;
+
+procedure TLabeledComboBox.SetEnabled(value: Boolean);
+begin
+  Self.ComboBox.setEnabled(value);
+end;
+
+procedure TLabeledListBox.SetEnabled(value: Boolean);
+begin
+  Self.ListBox.setEnabled(value);
+end;
+
+
+procedure TLabeledEdit.SetPasswordChar(value: Char = '*');
+begin
+  Self.Edit.setPasswordChar(value);
+end;
+
+
+procedure TLabeledComboBox.SetStyle(value: TComboBoxStyle);
+begin
+  Self.ComboBox.setStyle(value);
+end;
+
+procedure TLabeledListBox.SetStyle(value: TListBoxStyle);
+begin
+  Self.ListBox.setStyle(value);
+end;
+
+
+procedure TLabeledCombobox.AddItem(value: String);
+begin
+  Self.ComboBox.getItems().Add(value);
+end;
+
+procedure TLabeledListBox.AddItem(value: String);
+begin
+  Self.ListBox.getItems().Add(value);
+end;
+
+
+procedure TLabeledCombobox.AddItemArray(valueArray: TStringArray);
+var
+  value: String;
+begin
+  for value in valueArray do
+    Self.AddItem(value);
+end;
+
+procedure TLabeledListBox.AddItemArray(valueArray: TStringArray);
+var
+  value: String;
+begin
+  for value in valueArray do
+    Self.AddItem(value);
+end;
+
+
+procedure TLabeledCombobox.SetItemIndex(value: Int32);
+begin
+  Self.ComboBox.setItemIndex(value);
+end;
+
+procedure TLabeledListBox.SetItemIndex(value: Int32);
+begin
+  Self.ListBox.setItemIndex(value);
+end;
+
+
+function TLabeledCombobox.GetItemIndex(): Int32;
+begin
+  Result := Self.ComboBox.getItemIndex();
+end;
+
+function TLabeledListBox.GetItemIndex(): Int32;
+begin
+  Result := Self.ListBox.getItemIndex();
+end;
+
+
+
+{$IFNDEF WS_UPDATER_INCLUDED}      
+{$DEFINE WS_UPDATER_INCLUDED}
+
+
+type
+  TScriptFile = record
+    ID: String;
+    Revision: Int32;
+    Path: String;
+  end;
+
+  TScriptFileArray = array of TScriptFile;
+
+  EUpdaterState = (NONE, DOWNLOAD, UNZIP, CLEAN);
+
+  PWaspUpdater = ^TWaspUpdater;
+
+  TMonitor = record
+    Index: Int32;
+    Package: String;
+    Timer: TTimer;
+    State: EUpdaterState;
+    Caption: TLabel;
+    Parent: PWaspUpdater;
+    CurrentFile: String;
+  end;
+
+  TWaspUpdater = record
+    Name: String;
+    Launcher: TScriptFile;
+
+    Scripts: TScriptFileArray;
+    ScriptsPath: String;
+    Monitors: array of ^TMonitor;
+  end;
+
+
+procedure TMonitor.Free();
+var
+  i: Int32;
+begin
+  for i := High(Self.Parent^.Monitors) to Self.Index do
+    Self.Parent^.Monitors[i]^.Index -= 1;
+  Delete(Self.Parent^.Monitors, Self.Index, 1);
+  Self.Timer.Free();
+  Self.Timer := nil;
+  Self := [];
+end;
+
+procedure TMonitor.NextState();
+var
+  params: TStringArray;
+begin
+  Self.State := EUpdaterState(Ord(Self.State) + 1);
+  if Self.State > High(EUpdaterState) then
+    Self.State := EUpdaterState.NONE;
+
+  case Self.State of
+    EUpdaterState.DOWNLOAD:
+    begin
+      Self.CurrentFile := Self.Package + '-downloader.simba';
+      GitHubClient.Download(Self.Package);
+
+      Self.Caption.setCaption('Downloading');
+      Self.Caption.SetFontColor($00CCFF);
+      Self.Caption.Repaint();
+
+      Self.Timer.SetEnabled(True);
+    end;
+
+    EUpdaterState.UNZIP:
+    begin
+      Self.CurrentFile := Self.Package + '-unzipper.simba';
+
+      WriteAsyncFile(Self.CurrentFile, Parent^.GetUnzipperContent());
+      params := ['path=' + GitHubClient.DownloadPath, 'name=' + Self.Package];
+      RunAsyncFile(Self.CurrentFile, params);
+
+      Self.Caption.setCaption('Unzipping');
+      Self.Caption.SetFontColor($00CCAA);
+      Self.Caption.Repaint();
+
+      Self.Timer.SetEnabled(True);
+    end;
+
+    EUpdaterState.CLEAN:
+    begin
+      Self.CurrentFile := Self.Package + '-mover.simba';
+
+      WriteAsyncFile(Self.CurrentFile, Parent^.GetMoverContent());
+      params := ['origin=' + GitHubClient.DownloadPath, 'pkg=' + Self.Package];
+      RunAsyncFile(Self.CurrentFile, params);
+
+      Self.Caption.setCaption('Cleaning');
+      Self.Caption.SetFontColor($00CCAA);
+      Self.Caption.Repaint();
+
+      Self.Timer.SetEnabled(True);
+    end;
+
+    EUpdaterState.NONE:
+    begin
+      Self.CurrentFile := '';
+
+      case LowerCase(Self.Package) of
+        'srl-t', 'srlt':
+        begin
+          GitHubClient.Packages.Current.SRLT := GitHubClient.GetCurrentPackageVersion('srl-t');
+          if GitHubClient.Packages.Current.SRLT = '' then
+            Self.Caption.setCaption('Missing')
+          else
+            Self.Caption.setCaption('v.' + GitHubClient.Packages.Current.SRLT);
+
+          if GitHubClient.Packages.Current.SRLT <> GitHubClient.Packages.Latest.SRLT then
+            Self.Caption.SetFontColor($1800E9)
+          else
+            Self.Caption.SetFontColor($18E982);
+          Self.Caption.Repaint();
+        end;
+        'wasplib', 'wl':
+        begin
+          GitHubClient.Packages.Current.WaspLib := GitHubClient.GetCurrentPackageVersion('wasplib');
+          if GitHubClient.Packages.Current.WaspLib = '' then
+            Self.Caption.setCaption('Missing')
+          else
+            Self.Caption.setCaption('v.' + GitHubClient.Packages.Current.WaspLib);
+
+          if GitHubClient.Packages.Current.WaspLib <> GitHubClient.Packages.Latest.WaspLib then
+            Self.Caption.SetFontColor($1800E9)
+          else
+            Self.Caption.SetFontColor($18E982);
+          Self.Caption.Repaint();
+        end;
+      end;
+
+      Self.Caption.Repaint();
+      Self.Free();
+    end;
+  end;
+end;
+
+procedure TMonitor._OnTimer(sender: TObject);
+begin
+  if not FileExists(LAUNCHER_DATA + 'async' + DirectorySeparator + Self.CurrentFile) then
+  begin
+    TTimer(sender).SetEnabled(False);
+    Self.NextState();
+  end;
+end;
+
+
+function TWaspUpdater.GetUnzipperContent(): String;
+begin
+  Result += "var path, name: String;" + LineEnding;
+  Result += "begin" + LineEnding;
+  Result += "  path := GetProcessParameter('path');" + LineEnding;
+  Result += "  name := GetProcessParameter('name');" + LineEnding;
+  Result += "  WriteLn('[AsyncUnzipper]: Unzipping ', name, ', this might take a while.');" + LineEnding;
+  Result += "  try" + LineEnding;
+  Result += "    UnZipFile(path + name + '.zip', path + name);" + LineEnding;
+  Result += "    DeleteFile(path + name + '.zip');" + LineEnding;
+  Result += "  except" + LineEnding;
+  Result += "    WriteLn(GetExceptionMessage());" + LineEnding;
+  Result += "  end;" + LineEnding;
+  Result += "end;";
+end;
+
+function TWaspUpdater.GetMoverContent(): String;
+begin
+  Result += "const SEP = DirectorySeparator;" + LineEnding;
+  Result += "" + LineEnding;
+  Result += "procedure TerminateScript(reason: String); overload;" + LineEnding;
+  Result += "begin" + LineEnding;
+  Result += "  WriteLn('Terminating: ' + reason);" + LineEnding;
+  Result += "  TerminateScript();" + LineEnding;
+  Result += "end;" + LineEnding;
+  Result += "" + LineEnding;
+  Result += "function BackupFile(filePath: String): Boolean;" + LineEnding;
+  Result += "var" + LineEnding;
+  Result += "  f: Int32;" + LineEnding;
+  Result += "  str: String;" + LineEnding;
+  Result += "begin" + LineEnding;
+  Result += "  f := OpenFile(filePath, False);" + LineEnding;
+  Result += "" + LineEnding;
+  Result += "  if not ReadFileString(f, str, FileSize(f)) then" + LineEnding;
+  Result += "    Exit;" + LineEnding;
+  Result += "" + LineEnding;
+  Result += "  CloseFile(f);" + LineEnding;
+  Result += "  Result := WriteFileContents(filePath + '.bak', str, False);" + LineEnding;
+  Result += "end;" + LineEnding;
+  Result += "" + LineEnding;
+  Result += "function RestoreFile(filePath: String): Boolean;" + LineEnding;
+  Result += "var" + LineEnding;
+  Result += "  f: Int32;" + LineEnding;
+  Result += "  str: String;" + LineEnding;
+  Result += "begin" + LineEnding;
+  Result += "  f := OpenFile(filePath + '.bak', False);" + LineEnding;
+  Result += "  if not ReadFileString(f, str, FileSize(f)) then" + LineEnding;
+  Result += "    Exit;" + LineEnding;
+  Result += "" + LineEnding;
+  Result += "  CloseFile(f);" + LineEnding;
+  Result += "  Result := WriteFileContents(filePath, str, False);" + LineEnding;
+  Result += "  DeleteFile(filePath + '.bak');" + LineEnding;
+  Result += "end;" + LineEnding;
+  Result += "" + LineEnding;
+  Result += "" + LineEnding;
+  Result += "function IsFileLocked(path: String): Boolean;" + LineEnding;
+  Result += "begin" + LineEnding;
+  Result += "  if not FileExists(path) then" + LineEnding;
+  Result += "    Exit;" + LineEnding;
+  Result += "  if not BackupFile(path) then" + LineEnding;
+  Result += "    TerminateScript('Failed to backup file: ' + path);" + LineEnding;
+  Result += "" + LineEnding;
+  Result += "  Result := not DeleteFile(path);" + LineEnding;
+  Result += "  if not Result and not RestoreFile(path) then" + LineEnding;
+  Result += "    TerminateScript('Failed to restore file: ' + path);" + LineEnding;
+  Result += "end;" + LineEnding;
+  Result += "" + LineEnding;
+  Result += "function FindLockedPlugins(): TStringArray;" + LineEnding;
+  Result += "const" + LineEnding;
+  Result += "  PATHS = [" + LineEnding;
+  Result += "    IncludePath + 'SRL'   + SEP + 'plugins' + SEP + 'libremoteinput' + SEP," + LineEnding;
+  Result += "    IncludePath + 'SRL-T' + SEP + 'plugins' + SEP + 'libremoteinput' + SEP" + LineEnding;
+  Result += "  ];" + LineEnding;
+  Result += "var" + LineEnding;
+  Result += "  path, plugin: String;" + LineEnding;
+  Result += "begin" + LineEnding;
+  Result += "  for path in PATHS do" + LineEnding;
+  Result += "    for plugin in FindFiles(path, False) do" + LineEnding;
+  Result += "      if IsFileLocked(plugin) then" + LineEnding;
+  Result += "        Result += plugin;" + LineEnding;
+  Result += "end;" + LineEnding;
+  Result += "" + LineEnding;
+  Result += "procedure KillClients();" + LineEnding;
+  Result += "var" + LineEnding;
+  Result += "  window: TOSWindow;" + LineEnding;
+  Result += "begin" + LineEnding;
+  Result += "  for window in GetWindows().GetByClass('SunAwtCanvas') do" + LineEnding;
+  Result += "    window.Kill();" + LineEnding;
+  Result += "end;" + LineEnding;
+  Result += "" + LineEnding;
+  Result += "procedure UnlockPlugins();" + LineEnding;
+  Result += "var" + LineEnding;
+  Result += "  locked: TStringArray;" + LineEnding;
+  Result += "  plugin: String;" + LineEnding;
+  Result += "begin" + LineEnding;
+  Result += "  locked := FindLockedPlugins();" + LineEnding;
+  Result += "  if locked = [] then" + LineEnding;
+  Result += "    Exit;" + LineEnding;
+  Result += "" + LineEnding;
+  Result += "  if MessageDlg('Close RuneScape', 'RS Clients need to be closed to update this package.'," + LineEnding;
+  Result += "     TMsgDlgType.mtConfirmation, [mbOK, mbAbort]) = 3 then" + LineEnding;
+  Result += "    TerminateScript();" + LineEnding;
+  Result += "" + LineEnding;
+  Result += "  KillClients();" + LineEnding;
+  Result += "  for plugin in locked do if IsFileLocked(plugin) then" + LineEnding;
+  Result += "    TerminateScript('Failed to unlock: ' + plugin);" + LineEnding;
+  Result += "end;" + LineEnding;
+  Result += "" + LineEnding;
+  Result += "function DelDirectory(path: String; deleteRoot: Boolean = True): Boolean;" + LineEnding;
+  Result += "var" + LineEnding;
+  Result += "  f, tmp: String;" + LineEnding;
+  Result += "begin" + LineEnding;
+  Result += "  for f in FindFiles(path, True) do" + LineEnding;
+  Result += "  begin" + LineEnding;
+  Result += "    if Pos('.git', f) > -1 then" + LineEnding;
+  Result += "    begin" + LineEnding;
+  Result += "      deleteRoot := False;" + LineEnding;
+  Result += "      Continue;" + LineEnding;
+  Result += "    end;" + LineEnding;
+  Result += "" + LineEnding;
+  Result += "    if not DeleteFile(f) then" + LineEnding;
+  Result += "      Exit;" + LineEnding;
+  Result += "" + LineEnding;
+  Result += "    tmp := ExtractFilePath(f);" + LineEnding;
+  Result += "    if (FindFiles(tmp, True) = []) and (FindDirectories(tmp, True) = []) then" + LineEnding;
+  Result += "      if not DeleteDirectory(tmp, False) then" + LineEnding;
+  Result += "        Exit;" + LineEnding;
+  Result += "  end;" + LineEnding;
+  Result += "" + LineEnding;
+  Result += "  Result := not deleteRoot or DeleteDirectory(path, False);" + LineEnding;
+  Result += "end;" + LineEnding;
+  Result += "" + LineEnding;
+  Result += "procedure MoveFiles(origin, pkg: String);" + LineEnding;
+  Result += "var" + LineEnding;
+  Result += "  paths, files: TStringArray;" + LineEnding;
+  Result += "  path, f, fPath, destination: String;" + LineEnding;
+  Result += "begin" + LineEnding;
+  Result += "  paths := GetDirectories(origin + pkg + SEP);" + LineEnding;
+  Result += "  if Length(paths) <> 1 then" + LineEnding;
+  Result += "    TerminateScript('The ' + pkg + ' download is empty or has unexpected things inside.');" + LineEnding;
+  Result += "" + LineEnding;
+  Result += "  destination := IncludePath + pkg + SEP;" + LineEnding;
+  Result += "  if DirectoryExists(destination) and not DelDirectory(destination) then" + LineEnding;
+  Result += "    TerminateScript('Failed to delete old ' + pkg + ' library');" + LineEnding;
+  Result += "  if not ForceDirectories(destination) then" + LineEnding;
+  Result += "    TerminateScript('Failed to create path: ' + destination);" + LineEnding;
+  Result += "" + LineEnding;
+  Result += "  path := origin + pkg + SEP + paths[0] + SEP;" + LineEnding;
+  Result += "  files := FindFiles(path, True);" + LineEnding;
+  Result += "" + LineEnding;
+  Result += "  for f in files do" + LineEnding;
+  Result += "  begin" + LineEnding;
+  Result += "    fPath := Replace(f, path, '', [rfReplaceAll]);" + LineEnding;
+  Result += "    if Pos('.git', fPath) > -1 then" + LineEnding;
+  Result += "      Continue;" + LineEnding;
+  Result += "" + LineEnding;
+  Result += "    if not ForceDirectories(destination + ExtractFilePath(fPath)) then" + LineEnding;
+  Result += "      TerminateScript('Failed to create path: ' + destination + ExtractFilePath(fPath));" + LineEnding;
+  Result += "" + LineEnding;
+  Result += "    if not CopyFile(f, destination + fPath, False) then" + LineEnding;
+  Result += "      TerminateScript('Failed to copy file: ' + fPath);" + LineEnding;
+  Result += "" + LineEnding;
+  Result += "    DeleteFile(f);" + LineEnding;
+  Result += "    if (FindFiles(ExtractFilePath(f), True) = []) and (FindDirectories(ExtractFilePath(f), True) = []) then" + LineEnding;
+  Result += "      DeleteDirectory(ExtractFilePath(f), False);" + LineEnding;
+  Result += "  end;" + LineEnding;
+  Result += "" + LineEnding;
+  Result += "  DelDirectory(origin + pkg);" + LineEnding;
+  Result += "end;" + LineEnding;
+  Result += "" + LineEnding;
+  Result += "begin" + LineEnding;
+  Result += "  WriteLn('[AsyncMover]: Moving ', name, ' files, this will take a few seconds.');" + LineEnding;
+  Result += "  MoveFiles(GetProcessParameter('origin'), GetProcessParameter('pkg'));" + LineEnding;
+  Result += "end;" + LineEnding;
+end;
+
+function TWaspUpdater.MonitorRunning(pkg: String): Boolean;
+var
+  i: Int32;
+begin
+  for i := 0 to High(Self.Monitors) do
+    if Self.Monitors[i]^.Package = pkg then
+      Exit(True);
+end;
+
+procedure TWaspUpdater.RunMonitor(pkg: String; caption: TLabel);
+var
+  monitor: TMonitor;
+begin
+  Self.Monitors += @monitor;
+  monitor.Parent := @Self;
+  monitor.Index := High(Self.Monitors);
+  monitor.Package := pkg;
+  monitor.Caption := caption;
+
+  monitor.Timer.Init(nil);
+  monitor.Timer.setName(LowerCase(pkg) + '_update_monitor');
+  monitor.Timer.setInterval(200);
+  monitor.Timer.setOnTimer(@monitor._OnTimer);
+
+  monitor.NextState();
+end;
+
+
+
+procedure TWaspUpdater.Update(pkg: String; caption: TLabel);
+begin
+  if Self.MonitorRunning(pkg) then
+    Exit;
+  Self.RunMonitor(pkg, caption);
+end;
+
+
+function TWaspUpdater.GetScriptFileEx(filepath: String): TScriptFile;
+var
+  id, fileContent: String;
+begin
+  id := ExtractFileName(filepath).Before('.simba');
+  if not id.IsUUID() then
+    Exit;
+  Result.ID := id;
+  Result.Path := filepath;
+  fileContent := ReadFileContents(filepath);
+  Result.Revision := StrToIntDef(fileContent.After('SCRIPT_REVISION := ''').Before('''}'), 0);
+end;
+
+function TWaspUpdater.GetScriptFiles(): TScriptFileArray;
+var
+  files: TStringArray;
+  i: Int32;
+  script: TScriptFile;
+begin
+  if Self.Scripts <> [] then
+    Exit(Self.Scripts);
+
+  files := GetFiles(Self.ScriptsPath, 'simba');
+  for i := 0 to High(files) do
+  begin
+    script := GetScriptFileEx(Self.ScriptsPath + files[i]);
+    if script <> [] then
+      Result += script;
+  end;
+
+  Self.Scripts := Result;
+end;
+
+function TWaspUpdater.GetScriptFile(id: String): TScriptFile;
+var
+  i: Int32;
+  scripts: TScriptFileArray;
+begin
+  scripts := Self.GetScriptFiles();
+  for i := 0 to High(scripts) do
+    if id = scripts[i].ID then
+      Exit(scripts[i]);
+end;
+
+procedure TWaspUpdater.UpdateScriptFileRevision(script: TScriptFile);
+var
+  i: Int32;
+begin
+  for i := 0 to High(Self.Scripts) do
+    if Self.Scripts[i].ID = script.ID then
+    begin
+      Self.Scripts[i] := script;
+      Exit;
+    end;
+
+  Self.Scripts += script;
+end;
+
+procedure TWaspUpdater.UpdateScript(script: TScriptData);
+var
+  files: TStringArray;
+  fileName, path: String;
+begin
+  files := GetFiles(WaspClient.DownloadPath, 'simba');
+  for fileName in files do
+    DeleteFile(WaspClient.DownloadPath + fileName);
+
+  WaspClient.Download(script.ID, script.Revision);
+
+  files := GetFiles(WaspClient.DownloadPath, 'simba');
+  if Length(files) <> 1 then
+    Exit;
+
+  fileName := files[0];
+  path := Self.ScriptsPath + fileName;
+  if FileExists(path) and not DeleteFile(path) then
+    TerminateScript('Failed to delete old script: ' + fileName);
+
+  if not RenameFile(WaspClient.DownloadPath + fileName, path) then
+  begin
+    DeleteFile(WaspClient.DownloadPath + fileName);
+    TerminateScript('Failed to move script: ' + fileName);
+  end;
+
+  Self.UpdateScriptFileRevision(Self.GetScriptFileEx(path));
+end;
+
+
+procedure TWaspUpdater.SelfUpdate();
+begin
+  Self.UpdateScript(WaspClient.Cache.Launcher);
+
+  if FileExists(Self.Launcher.Path) and not DeleteFile(Self.Launcher.Path) then
+    TerminateScript('Failed to delete old launcher.');
+
+  if not CopyFile(Self.ScriptsPath + Self.Launcher.ID + '.simba', Self.Launcher.Path) then
+    TerminateScript('Failed to copy updated launcher to it''s directory.');
+end;
+
+procedure TWaspUpdater.Setup();
+begin
+  Self.Name := 'WaspUpdater';
+  Self.Launcher.ID := {$macro SCRIPT_ID};
+  Self.Launcher.Revision := StrToIntDef({$macro SCRIPT_REVISION}, 1);
+
+  Self.Launcher.Path := AppPath + 'Data' + DirectorySeparator + 'default.simba';
+
+  Self.ScriptsPath := ScriptPath + 'waspscripts.com' + DirectorySeparator;
+
+  ForceDirectories(Self.ScriptsPath);
+end;
+
+var
+  WaspUpdater: TWaspUpdater;
+
+
+{$IFNDEF WS_FORM_INCLUDED}         
+{$DEFINE WS_FORM_INCLUDED}
+
+
+(*
+# WaspForm
+Frontend form for the {ref}`WaspClient`.
+*)
+type
+  TWaspForm = record
+    Form: TForm;
+    Size: TPoint;
+    TokenTimer: TTimer;
+
+    Updating: record
+      SRL: Boolean;
+      WaspLib: Boolean;
+      Script: Boolean;
+    end;
+  end;
 
 procedure TWaspForm.StartScript({$H-}sender: TObject);{$H+}
 begin
+  if Length(WaspUpdater.Monitors) > 0 then
+    Exit;
   Self.Form.SetOnClose(nil);
   Self.Form.Close();
 end;
 
 
-procedure TWaspForm.Validate(edit: TEdit);
+procedure TWaspForm.HandleLogin(loginPanel: TPanel);
 var
-  panel: TPanel;
-  email, password: TEdit;
-  strMail: String;
-begin
-  panel := edit.getOwner();
-
-  case edit.getName() of
-    'email_edit':
-    begin
-      email := edit;
-      password := panel.GetChild('password_edit');
-    end;
-    'password_edit':
-    begin
-      email := panel.GetChild('email_edit');
-      password := edit;
-    end;
-    else
-      TerminateScript('TWaspForm.Validate(), unknown control.');
-  end;
-
-  with email.getFont() do
-  begin
-    setStyle([fsBold]);
-    setColor($F0F0F0);
-  end;
-
-  with password.getFont() do
-  begin
-    setStyle([fsBold]);
-    setColor($F0F0F0);
-  end;
-
-  strMail := email.getText();
-  TButton(panel.GetChild('login_button')).setEnabled(strMail.IsEmail() and (password.GetTextLen() > 4));
-end;
-
-procedure TWaspForm.MailField(sender: TObject; var key: char);
-begin
-  case key of
-    ' ': key := #0;
-    #13:
-    begin
-      Self.Validate(sender);
-      TEdit(sender).PerformTab(True);
-      Exit;
-    end;
-  end;
-  Self.Validate(sender);
-end;
-
-
-procedure TWaspForm.HandleLogin();
-var
-  loginPanel, msPanel: TPanel;
+  msPanel, dPanel: TPanel;
+  id, user: TLabel;
   scripts: TScriptDataArray;
   listBox: TListBox;
   i: Int32;
 begin
-  loginPanel := Self.Form.GetChild('login_panel');
+  if WaspUpdater.Launcher.Revision < WaspClient.Cache.Launcher.Revision then
+  begin
+    WaspUpdater.SelfUpdate();
+    CloseScriptTab();
+    Self.Form.Close();
+  end;
+
+  Self.TokenTimer.setEnabled(False);
   msPanel := Self.Form.GetChild('main_panel');
-  TLabel(msPanel.GetChild('user_label')).setCaption('Logged as: ' + WaspClient.Cache.User.Username);
-  TLabel(msPanel.GetChild('id_label')).setCaption('ID: ' + WaspClient.Cache.User.Id);
-  scripts := WaspClient.GetSubscribbedScripts();
+  dPanel := Self.Form.GetChild('discord_panel');
+
+  user := msPanel.GetChild('user_label');
+  id := msPanel.GetChild('id_label');
+
+  user.setCaption('Logged as: ' + WaspClient.Cache.User.Username);
+  id.setCaption('ID: ' + WaspClient.Cache.User.Id);
+
+  scripts := WaspClient.GetAllUserScripts();
 
   listBox := msPanel.GetChild('scripts_listbox');
+
   listBox.Clear();
   for i := 0 to High(scripts) do
     listBox.getItems().Add(scripts[i].Name);
 
-  scripts := WaspClient.GetFreeScripts();
-  for i := 0 to High(scripts) do
-    listBox.getItems().Add(scripts[i].Name);
+  listbox.setItemIndex(0);
 
   msPanel.Show();
   loginPanel.Hide();
+  dPanel.Hide();
+  Self._OnScriptChange(listBox);
 end;
 
-procedure TWaspForm.HandleLogout();
+procedure TWaspForm.HandleLogout(msPanel: TPanel);
 var
-  loginPanel, msPanel: TPanel;
+  loginPanel: TPanel;
 begin
   loginPanel := Self.Form.GetChild('login_panel');
-  msPanel := Self.Form.GetChild('main_panel');
   loginPanel.Show();
   msPanel.Hide();
 end;
 
 
-procedure TWaspForm.Login({$H-}sender: TObject);{$H+}
+procedure TWaspForm._LoginButton(sender: TObject);
 var
   loginPanel, msPanel: TPanel;
   email, password: TEdit;
-  {$IFDEF DEBUG_TIME}
+  {$IFDEF DEVELOPER_MODE}
   t: Double;
   {$ENDIF}
 begin
-  {$IFDEF DEBUG_TIME}
+  {$IFDEF DEVELOPER_MODE}
   t := PerformanceTimer();
   {$ENDIF}
-  loginPanel := Self.Form.GetChild('login_panel');
+
+  loginPanel := TComponent(sender).getOwner();
   msPanel := Self.Form.GetChild('main_panel');
 
   email := loginPanel.GetChild('email_edit');
@@ -1494,8 +4346,8 @@ begin
 
   if WaspClient.Login(email.getText(), password.getText()) then
   begin
-    Self.HandleLogin();
-    {$IFDEF DEBUG_TIME}
+    Self.HandleLogin(loginPanel);
+    {$IFDEF DEVELOPER_MODE}
     WriteLn('Full login took: ', Round(PerformanceTimer()-t, 4), 'ms.');
     {$ENDIF}
     Exit;
@@ -1514,431 +4366,912 @@ begin
   end;
 end;
 
-procedure TWaspForm.Logout({$H-}sender: TObject);{$H+}
-var
-  loginPanel, msPanel: TPanel;
+procedure TWaspForm._LogoutButton(sender: TObject);
 begin
-  loginPanel := Self.Form.GetChild('login_panel');
-  msPanel := Self.Form.GetChild('main_panel');
-
   if WaspClient.Logout() then
-    Self.HandleLogout();
+    Self.HandleLogout(TButton(sender).getOwner());
+end;
+
+procedure TWaspForm._RunScript(sender: TObject);
+var
+  panel: TPanel;
+  list: TListBox;
+  script: TScriptData;
+  scriptFile: TScriptFile;
+  proc: TSysProc;
+begin
+  panel := TButton(sender).getOwner();
+  list := panel.GetChild('scripts_listbox');
+  script := WaspClient.GetAllUserScripts()[list.getItemIndex()];
+  scriptFile := WaspUpdater.GetScriptFile(script.ID);
+  RunScriptInTab(scriptFile.Path);
+
+  Self.Form.Close();
+
+  for proc in {$H-}GetProcesses(){$H+} do
+    if proc.PID = GetSimbaPID() then
+    begin
+      ShowWindow(proc.Handle, 6); //6 = SW_MINIMIZE https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-showwindow
+      Break;
+    end;
 end;
 
 
-procedure TWaspForm.PasswordEdit(sender: TObject; var key: char);
+procedure TWaspForm._Validate(edit: TEdit);
+var
+  panel: TPanel;
+  email, password: TEdit;
+  strMail: String;
+  button: TButton;
 begin
+  panel := edit.getOwner().getOwner();
+
+  case edit.getName() of
+    'email_edit':
+    begin
+      email := edit;
+      password := panel.GetChild('password_edit');
+    end;
+    'password_edit':
+    begin
+      email := panel.GetChild('email_edit');
+      password := edit;
+    end;
+    else
+      TerminateScript('TWaspForm._Validate(), unknown control.');
+  end;
+
+  with email.getFont() do
+  begin
+    setStyle([fsBold]);
+    setColor($F0F0F0);
+  end;
+
+  with password.getFont() do
+  begin
+    setStyle([fsBold]);
+    setColor($F0F0F0);
+  end;
+
+  strMail := email.getText();
+  button := TButton(panel.GetChild('login_button'));
+  button.setEnabled(strMail.IsEmail() and (password.GetTextLen() > 4));
+
+  if button.IsEnabled() then
+    Self._LoginButton(button);
+end;
+
+procedure TWaspForm._MailField(sender: TObject; var key: char);
+var
+  panel: TPanel;
+  email, password: TEdit;
+  button: TButton;
+  strMail: String;
+begin
+  email := sender;
+  panel := email.getOwner().getOwner();
+  button := panel.GetChild('login_button');
+  password := panel.GetChild('password_edit');
+  strMail := email.getText();
+  button.setEnabled(strMail.IsEmail() and (password.GetTextLen() > 4));
+
   case key of
     ' ': key := #0;
-    #13:
-    begin
-      Self.Validate(sender);
-      if TButton(Self.Form.GetChild('login_button')).IsEnabled() then
-        Self.Login(sender);
-      Exit;
-    end;
+    #13: TEdit(sender).PerformTab(True);
   end;
-  if (key in [' ']) then
-    key := #0;
-  Self.Validate(sender);
 end;
+
+procedure TWaspForm._PasswordField(sender: TObject; var key: char); overload;
+var
+  panel: TPanel;
+  email: TEdit;
+  button: TButton;
+  strMail: String;
+begin
+  panel := TEdit(sender).getOwner().getOwner();
+  button := panel.GetChild('login_button');
+  email := panel.GetChild('email_edit');
+  strMail := email.getText();
+  button.setEnabled(strMail.IsEmail() and (TEdit(sender).GetTextLen() > 4));
+
+  case key of
+    ' ': key := #0;
+    #13: TEdit(sender).PerformTab(True);
+  end;
+end;
+
+
+procedure TWaspForm._AutoUpdateToggle(sender: TObject);
+var
+  list: TListBox;
+  script: TScriptData;
+begin
+  with TCheckBox(sender) do
+    case GetName() of
+      'update_script_checkbox':
+      begin
+        list := Self.Form.GetChild('scripts_listbox');
+        script := WaspClient.GetAllUserScripts()[list.getItemIndex()];
+        WaspConfig.Put('update_' + script.ID, IsChecked());
+      end;
+      else WaspConfig.Put(GetName(), IsChecked());
+    end;
+end;
+
+
+procedure TWaspForm._UpdateSRL();
+var
+  panel: TPanel;
+  caption: TLabel;
+begin
+  panel := Self.Form.GetChild('current_version_panel');
+  caption := panel.GetChild('current_srl_label');
+  WaspUpdater.Update('SRL-T', caption);
+end;
+
+procedure TWaspForm._UpdateWL();
+var
+  panel: TPanel;
+  caption: TLabel;
+begin
+  panel := Self.Form.GetChild('current_version_panel');
+  caption := panel.GetChild('current_wl_label');
+  WaspUpdater.Update('WaspLib', caption);
+end;
+
+procedure TWaspForm._UpdateScript();
+var
+  list: TListBox;
+  script: TScriptData;
+begin
+  try
+    Self.Updating.Script := True;
+    list := Self.Form.GetChild('scripts_listbox');
+    script := WaspClient.GetAllUserScripts()[list.getItemIndex()];
+    WaspUpdater.UpdateScript(script);
+    Self._OnScriptChange(list);
+  finally
+    Self.Updating.Script := False;
+  end;
+end;
+
+
+procedure TWaspForm._UpdateButton(sender: TObject);
+begin
+  case TButton(sender).getName() of
+    'update_srl_button':    {$IFNDEF DEVELOPER_MODE}Self._UpdateSRL{$ENDIF};
+    'update_wl_button':     {$IFNDEF DEVELOPER_MODE}Self._UpdateWL{$ENDIF};
+    'update_script_button': Self._UpdateScript;
+  end;
+end;
+
 
 procedure TWaspForm._OnEmailDone(sender: TObject);
 var
   email: TEdit;
   str: String;
 begin
-  Self.Validate(sender);
+  Self._Validate(sender);
   email := sender;
   str := LowerCase(Trim(email.getText()));
   if str.IsEmail() then
     WaspConfig.Put('email', LowerCase(Trim(email.getText())));
 end;
 
-procedure TWaspForm._OnPAssDone(sender: TObject);
+procedure TWaspForm._OnPassDone(sender: TObject);
 begin
-  Self.Validate(sender);
+  Self._Validate(sender);
 end;
 
 procedure TWaspForm._OnTogglePass(sender: TObject);
 var
-  name: String;
   panel: TPanel;
   edit: TEdit;
   caption: TLabel;
   checkbox: TCheckBox;
 begin
-  panel := Self.Form.GetChild('login_panel');
-  edit := panel.GetChild('password_edit');
+  checkbox := sender;
+  panel   := checkbox.getParent();
+  caption := panel.GetComponent(0);
+  panel := panel.getParent();
+  edit    := panel.GetChild('password_edit');
 
-  name := TControl(sender).GetName();
-  if name.Contains('label') then
+  if checkbox.IsChecked() then
   begin
-    caption := sender;
-    checkbox := panel.GetChild('viewpass_checkbox');
-    checkbox.Toggle();
-    if checkbox.IsChecked() then
-    begin
-      caption.setCaption('Hide password');
-      edit.setPasswordChar(#0);
-    end
-    else
-    begin
-      caption.setCaption('Show password');
-      edit.setPasswordChar('*');
-    end;
+    caption.setCaption('Hide password');
+    edit.setPasswordChar(#0);
     Exit;
   end;
 
-  checkbox := sender;
-  caption := panel.GetChild('viewpass_label');
-
-  if checkbox.IsChecked() then
-    begin
-      caption.setCaption('Hide password');
-      edit.setPasswordChar(#0);
-    end
-    else
-    begin
-      caption.setCaption('Show password');
-      edit.setPasswordChar('*');
-    end;
+  caption.setCaption('Show password');
+  edit.setPasswordChar('*');
 end;
 
 
+procedure TWaspForm._OnScriptChange(sender: TObject);
+var
+  list: TListBox;
+  main, panel: TPanel;
+  text: TLabel;
+  memo: TMemo;
+  button: TButton;
+  checkbox: TCheckBox;
+  scriptData: TScriptData;
+  scriptFile: TScriptFile;
+begin
+  list := sender;
+  scriptData := WaspClient.GetAllUserScripts()[list.getItemIndex()];
+  scriptFile := WaspUpdater.GetScriptFile(scriptData.ID);
 
+  main := list.getOwner().getOwner().getOwner().getOwner();
+
+  panel := main.GetChild('version_panel');
+
+  text := panel.GetChild('current_script_label');
+  if scriptFile.Revision = 0 then
+    text.setCaption('')
+  else
+    text.setCaption('rev.' + ToStr(scriptFile.Revision));
+
+  if scriptFile.Revision <> scriptData.Revision then
+    text.SetFontColor($1800E9)
+  else
+    text.SetFontColor($18E982);
+
+  text := panel.GetChild('latest_script_label');
+  text.setCaption('rev.' + ToStr(scriptData.Revision));
+
+  if scriptFile.Revision <> scriptData.Revision then
+    text.SetFontColor($1800E9)
+  else
+    text.SetFontColor($18E982);
+
+  button := panel.GetChild('update_script_button');
+  if scriptFile.Revision = 0 then
+    button.setCaption('Install')
+  else if scriptFile.Revision <> scriptData.Revision then
+    button.setCaption('Update')
+  else
+    button.setCaption('Re-install');
+
+  checkbox := panel.GetChild('update_script_checkbox');
+  if WaspConfig.GetBoolean('update_' + scriptData.ID) then
+  begin
+    checkbox.SetChecked(True);
+    if scriptFile.Revision <> scriptData.Revision then
+    begin
+      WaspUpdater.UpdateScript(scriptData);
+      Self._OnScriptChange(sender);
+      Exit;
+    end;
+  end
+  else
+    checkbox.SetChecked(False);
+
+  panel := main.GetChild('script_panel');
+  text := panel.GetChild('script_name_label');
+  text.setCaption(scriptData.Name);
+
+  text := panel.GetChild('script_category_label');
+  if scriptData.Categories.Contains('Premium') then
+  begin
+    text.setCaption('Premium');
+    text.SetFontColor($4DB5FF);
+  end
+  else
+  begin
+    text.setCaption('Free');
+    text.SetFontColor($F0F0F0);
+  end;
+  text.setLeft(panel.getWidth() - text.GetTrueWidth());
+
+  text := panel.GetChild('script_description_label');
+  text.setCaption(scriptData.Description);
+
+  memo := panel.GetChild('script_content_memo');
+  memo.setText(scriptData.Content);
+end;
+
+
+procedure TWaspForm.SetDarkTheme(sender: TWinControl);
+var
+  name: String;
+begin
+  name := sender.getName();
+  if (name = '') or name.Contains('label') then Exit;
+
+  if name.Contains('edit') then
+    SetWindowTheme(sender.getHandle(), 'DarkMode_CFD')
+  else
+    SetWindowTheme(sender.getHandle(), 'DarkMode_Explorer');
+
+  AllowDarkModeForWindow(sender.getHandle(), True);
+end;
 
 procedure TWaspForm.SetChildsDarkTheme(sender: TWinControl);
 var
-  i, hi: Int32;
-  child: TControl;
-  theme: WideString;
-  name: String;
+  i: Int32;
 begin
-  hi := sender.getComponentCount();
-
-  if hi > 0 then
-    for i := 0 to hi - 1 do
-    begin
-      child := sender.GetComponent(i);
-      Self.SetChildsDarkTheme(child);
-    end;
-
-  name := sender.getName();
-  if name = '' then Exit;
-
-  if name.Contains('label') then
-    Exit;
-
-  if name.Contains('edit') or name.Contains('button') or name.Contains('listbox') then
-  begin
-    theme := 'DarkMode_CFD';
-    sender.setColor($303030);
-    sender.getFont().setColor($F0F0F0);
-  end
-  else
-    theme := 'DarkMode_Explorer';
-
-  SetWindowTheme(sender.getHandle(), @theme, nil);
+  for i := 0 to sender.getComponentCount() - 1 do
+    Self.SetChildsDarkTheme(sender.GetComponent(i));
+  Self.SetDarkTheme(sender);
 end;
 
 procedure TWaspForm.SetAllChildsDarkTheme();
 var
-  i, hi: Int32;
+  i: Int32;
   child: TControl;
-  theme: WideString;
 begin
-  hi := Self.Form.getComponentCount();
+  for i := 0 to Self.Form.getComponentCount() - 1 do
+  begin
+    child := Self.Form.GetComponent(i);
+    Self.SetChildsDarkTheme(child);
+  end;
 
-  if hi > 0 then
-    for i := 0 to hi - 1 do
-    begin
-      child := Self.Form.GetComponent(i);
-      Self.SetChildsDarkTheme(child);
-    end;
-
-  theme := 'DarkMode_Explorer';
-  SetWindowTheme(Self.Form.getHandle(), @theme, nil);
+  SetWindowTheme(Self.Form.getHandle(), 'DarkMode_Explorer');
+  AllowDarkModeForWindow(Self.Form.getHandle(), True);
+  RefreshImmersiveColorPolicyState();
+  FlushMenuThemes();
 end;
 
 
-procedure TWaspForm.SetupLoginPanel(form: TForm);
+procedure TWaspForm.SetupDiscordPanel(form: TForm);
+  type TWaspForm = TWaspForm;
+  procedure TWaspForm._CancelButton(sender: TObject);
+  var
+    lPanel, dPanel: TPanel;
+  begin
+    dPanel := TButton(sender).getOwner();
+    lPanel := Self.Form.GetChild('login_panel');
+    lPanel.Show();
+    dPanel.Hide();
+    Self.TokenTimer.setEnabled(False);
+  end;
+
 var
   panel: TPanel;
-  edit: TEdit;
-  button: TButton;
-  email: String;
-  viewPass: TCheckBox;
-  viewPassLabel: TLabel;
+  tokenEdit: TLabeledEdit;
+  cancel: TButton;
+  caption: TLabel;
 begin
-  panel.Create(form, 'login');
+  panel.Create(form);
+  panel.setName('discord_panel');
+  panel.setCaption('');
+  panel.setWidth(400);
+  panel.setHeight(140);
+  panel.SetLeft(Self.Size.X div 2 - panel.getWidth() div 2);
+  panel.SetTop(Self.Size.Y div 2 - (panel.getHeight() - (panel.getHeight() div 10)));
+  panel.setBevelWidth(0);
+  panel.Hide();
 
-  panel.setWidth(TControl.AdjustToDPI(300));
-  panel.setHeight(TControl.AdjustToDPI(180));
-  panel.SetLeft(Self.Size.X div 2 - 300 div 2);
-  panel.SetTop(Self.Size.Y div 2 - 150);
+  tokenEdit.Create(panel);
+  tokenEdit.SetName('discord_token');
+  tokenEdit.SetCaption('Token:');
+  tokenEdit.SetWidth(panel.getWidth());
+  tokenEdit.SetControlColor($303030);
+  tokenEdit.setControlFontColor($F0F0F0);
 
-  email := WaspConfig.Get('email');
+  caption.Create(panel);
+  caption.SetName('discord_label');
+  caption.SetTop(tokenEdit.GetBottom() + 20);
+  caption.SetCaption('Waiting for login');
+  caption.SetLeft(panel.getWidth() div 2 - caption.GetTrueWidth() div 2);
+
+  cancel.Create(panel);
+  cancel.SetName('cancel_button');
+  cancel.SetCaption('Cancel');
+  cancel.setWidth(panel.getWidth() div 3);
+  cancel.SetLeft(panel.getWidth() div 2 - cancel.getWidth() div 2);
+  cancel.SetTop(panel.getHeight() - 40);
+  cancel.setOnClick(@Self._CancelButton);
+
+  (*
+  speedButton.Init(panel);
+  speedButton.setParent(panel);
+  speedButton.SetCaption('Login');
+
+  speedButton.setWidth(150);
+  speedButton.SetLeft(speedButton.getParent().getWidth() div 2 - 150 div 2);
+  speedButton.SetTop(speedButton.getParent().getHeight() - 40);
+  //speedButton.setEnabled(False);
+  speedButton.setOnClick(@Self._LoginButton);
+  speedButton.setFlat(True);
+  speedButton.setTransparent(False);
+  speedButton.setColor($00DDFF);
+  speedButton.getFont().setColor(0);
+  *)
+end;
+
+procedure TWaspForm._OnTimer({$H-}sender: TObject);{$H+}
+var
+  panel: TPanel;
+  caption: TLabel;
+  clipboard: String;
+  i: Int32;
+  {$IFDEF DEVELOPER_MODE}t: Double;{$ENDIF}
+begin
+  {$IFDEF DEVELOPER_MODE}t := PerformanceTimer();{$ENDIF}
+  clipboard := GetClipBoard();
+
+  if clipboard.IsRefreshToken() and WaspClient.Login(clipboard) then
+  begin
+    Self.HandleLogin(Self.Form.GetChild('login_panel'));
+    {$IFDEF DEVELOPER_MODE}
+    WriteLn('Full login took: ', Round(PerformanceTimer()-t, 4), 'ms.');
+    {$ENDIF}
+    Exit;
+  end;
+
+  panel := Self.Form.GetChild('discord_panel');
+  caption := panel.GetChild('discord_label');
+
+  i := caption.GetTextLen() - 17 + 1;
+  if i > 3 then i := 0;
+
+  caption.SetCaption('Waiting for login' + '.' * i);
+  caption.SetLeft(panel.getWidth() div 2 - caption.GetTrueWidth() div 2);
+end;
+
+procedure TWaspForm.RunTimer();
+begin
+  Self.TokenTimer.setOnTimer(@Self._OnTimer);
+  Self.TokenTimer.setEnabled(True);
+end;
+
+procedure TWaspForm.SetupLoginPanel(form: TForm);
+  type TWaspForm = TWaspForm;
+  procedure TWaspForm._DiscordButton(sender: TObject);
+  var
+    lPanel, dPanel: TPanel;
+  begin
+    lPanel := TButton(sender).getOwner();
+    dPanel := Self.Form.GetChild('discord_panel');
+    dPanel.Show();
+    lPanel.Hide();
+
+    OpenWebPage('https://waspscripts.com/refresh_token/');
+    Sync(@Self.RunTimer);
+  end;
+var
+  panel: TPanel;
+  mailEdit, passEdit: TLabeledEdit;
+  login, discord: TButton;
+  //speedButton: TSpeedButton;
+  email: String;
+  viewPass: TLabeledCheckBox;
+begin
+  panel.Create(form);
+  panel.setName('login_panel');
+  panel.setCaption('');
+  panel.setWidth(300);
+  panel.setHeight(180);
+  panel.SetLeft(Self.Size.X div 2 - panel.getWidth() div 2);
+  panel.SetTop(Self.Size.Y div 2 - (panel.getHeight() - (panel.getHeight() div 10)));
+  panel.setBevelWidth(0);
+
+  email := WaspConfig.GetString('email');
   if email = '' then
     email := 'email@mail.com';
 
-  edit.Create(panel, 0, 'Email', email);
-  edit.setOnKeyPress(@Self.MailField);
-  edit.setOnEditingDone(@Self._OnEmailDone);
+  mailEdit.Create(panel);
+  mailEdit.SetName('email');
+  mailEdit.SetCaption('Email');
+  mailEdit.SetWidth(panel.getWidth());
+  mailEdit.SetText(email);
+  mailEdit.SetControlColor($303030);
+  mailEdit.setControlFontColor($F0F0F0);
+  mailEdit.Edit.setOnKeyPress(@Self._MailField);
+  mailEdit.Edit.setOnEditingDone(@Self._OnEmailDone);
 
-  edit.Create(panel, 50, 'Password');
-  edit.setPasswordChar('*');
-  edit.setOnKeyPress(@Self.PasswordEdit);
-  edit.setOnEditingDone(@Self._OnPAssDone);
+  passEdit.Create(panel);
+  passEdit.SetName('password');
+  passEdit.SetCaption('Password');
+  passEdit.SetTop(50);
+  passEdit.SetWidth(panel.getWidth());
+  passEdit.SetControlColor($303030);
+  passEdit.setControlFontColor($F0F0F0);
+  passEdit.setPasswordChar('*');
+  passEdit.Edit.setOnKeyPress(@Self._PasswordField);
+  passEdit.Edit.setOnEditingDone(@Self._OnPassDone);
 
-  viewPass.Create(panel, 'viewpass');
-  viewPass.SetLeft(TControl.AdjustToDPI(10));
-  viewPass.SetTop(TControl.AdjustToDPI(100));
-  viewPass.setOnChange(@Self._OnTogglePass);
+  viewPass.Create(panel);
+  viewPass.SetName('viewpass');
+  viewPass.SetCaption('Show password');
+  viewPass.SetLeft(10);
+  viewPass.SetTop(100);
+  viewPass.CheckBox.setOnChange(@Self._OnTogglePass);
+  Self._OnTogglePass(viewPass.CheckBox);
 
-  viewPassLabel.Create(panel, 'Show password', 'viewpass');
-  viewPassLabel.SetLeft(TControl.AdjustToDPI(10 + CHECKBOX_LABEL_SPACING));
-  viewPassLabel.SetTop(TControl.AdjustToDPI(102));
-  viewPassLabel.setOnClick(@Self._OnTogglePass);
-  viewPassLabel.getFont().setPitch(fpFixed);
-  Self._OnTogglePass(viewPass);
+  login.Create(panel);
+  login.SetName('login_button');
+  login.SetCaption('Login');
+  login.setWidth(panel.getWidth() div 3);
+  login.SetTop(panel.getHeight() - (panel.getHeight() div 4));
+  login.setEnabled(False);
+  login.setOnClick(@Self._LoginButton);
 
-  button.Init(panel);
-  button.setParent(panel);
-  button.setName('login_button');
-  button.SetCaption('Login');
-  button.setOnClick(@Self.Login);
+  discord.Create(panel);
+  discord.SetName('discord_button');
+  discord.SetCaption('Discord login');
+  discord.setWidth(login.getWidth());
+  discord.SetLeft(panel.getWidth() - discord.getWidth());
+  discord.SetTop(login.GetTop());
+  discord.setOnClick(@Self._DiscordButton);
 
-  button.setWidth(TControl.AdjustToDPI(150));
-  button.SetLeft(button.getParent().getWidth() div 2 - TControl.AdjustToDPI(150) div 2);
-  button.SetTop(button.getParent().getHeight() - TControl.AdjustToDPI(40));
-  button.setEnabled(False);
+  (*
+  speedButton.Init(panel);
+  speedButton.setParent(panel);
+  speedButton.SetCaption('Login');
+
+  speedButton.setWidth(150);
+  speedButton.SetLeft(speedButton.getParent().getWidth() div 2 - 150 div 2);
+  speedButton.SetTop(speedButton.getParent().getHeight() - 40);
+  //speedButton.setEnabled(False);
+  speedButton.setOnClick(@Self._LoginButton);
+  speedButton.setFlat(True);
+  speedButton.setTransparent(False);
+  speedButton.setColor($00DDFF);
+  speedButton.getFont().setColor(0);
+  *)
 end;
 
 
-procedure TWaspForm._VersionsTitleLabel(parent: TPanel; name: String; left: Int32);
+function TWaspForm._VersionsTitleLabel(parent: TPanel; name: String; left: Int32): TPanel;
 var
-  panel: TPanel;
   textLabel: TLabel;
 begin
-  panel.Create(parent, LowerCase(name) + '_version_title_panel');
+  Result.Create(parent);
+  Result.setName(LowerCase(name) + '_version_title_panel');
+  Result.setCaption('');
+  Result.setWidth(110);
+  Result.setHeight(parent.GetHeight());
+  Result.SetLeft(left);
+  Result.setBevelWidth(0);
 
-  panel.setWidth(TControl.AdjustToDPI(110));
-  panel.setHeight(TControl.AdjustToDPI(50));
-  panel.SetLeft(left);
-  panel.SetTop(0);
-
-  textLabel.Init(panel);
-  textLabel.SetParent(panel);
+  textLabel.Create(Result);
   textLabel.setName(LowerCase(name) + '_srl_title_label');
   textLabel.setCaption(name + ' SRL-T:');
-  textLabel.setLeft(TControl.AdjustToDPI(3));
-  textLabel.SetTop(0);
+  textLabel.setLeft(3);
+  textLabel.SetFontSize(10);
+  textLabel.SetFontQuality(TFontQuality.fqCleartype);
 
-  with textLabel.getFont() do
-  begin
-    setSize(TControl.AdjustToDPI(10));
-    setQuality(TFontQuality.fqCleartype);
-  end;
-
-  textLabel.Init(panel);
-  textLabel.SetParent(panel);
+  textLabel.Create(Result);
   textLabel.setName(LowerCase(name) + '_wl_title_label');
   textLabel.setCaption(name + ' WaspLib:');
-  textLabel.setLeft(TControl.AdjustToDPI(3));
-  textLabel.SetTop(TControl.AdjustToDPI(25));
-  with textLabel.getFont() do
-  begin
-    setSize(TControl.AdjustToDPI(10));
-    setQuality(TFontQuality.fqCleartype);
-  end;
+  textLabel.setLeft(3);
+  textLabel.SetTop(23);
+  textLabel.SetFontSize(10);
+  textLabel.SetFontQuality(TFontQuality.fqCleartype);
+
+  textLabel.Create(Result);
+  textLabel.setName(LowerCase(name) + '_script_title_label');
+  textLabel.setCaption(name + ' Script:');
+  textLabel.setLeft(3);
+  textLabel.SetTop(46);
+  textLabel.SetFontSize(10);
+  textLabel.SetFontQuality(TFontQuality.fqCleartype);
 end;
 
-procedure TWaspForm._VersionsLabel(parent: TPanel; name, srlt, wl: String; left: Int32);
+function TWaspForm._VersionsLabel(parent: TPanel; name, srlt, wl: String; left: Int32): TPanel;
 var
-  panel: TPanel;
   textLabel: TLabel;
 begin
-  panel.Create(parent, name + '_version_panel');
+  Result.Create(parent);
+  Result.setName(name + '_version_panel');
+  Result.setCaption('');
+  if name = 'current' then
+    Result.setWidth(90)
+  else
+    Result.setWidth(70);
+  Result.setHeight(parent.GetHeight());
+  Result.SetLeft(left);
+  Result.setBevelWidth(0);
 
-  panel.setWidth(TControl.AdjustToDPI(70));
-  panel.setHeight(TControl.AdjustToDPI(50));
-  panel.SetLeft(left);
-  panel.SetTop(0);
-
-  textLabel.Init(panel);
-  textLabel.SetParent(panel);
+  textLabel.Create(Result);
   textLabel.setName(name + '_srl_label');
-  textLabel.setCaption('v.' + srlt);
-  textLabel.setLeft(TControl.AdjustToDPI(3));
-  textLabel.SetTop(0);
+  if srlt = '' then
+    textLabel.setCaption('Missing')
+  else
+    textLabel.setCaption('v.' + srlt);
+  textLabel.setLeft(3);
+  textLabel.SetFontSize(10);
+  if srlt <> GitHubClient.Packages.Latest.SRLT then
+    textLabel.SetFontColor($1800E9)
+  else
+    textLabel.SetFontColor($18E982);
 
-  with textLabel.getFont() do
-  begin
-    setSize(TControl.AdjustToDPI(10));
-    if GitHubClient.Packages.Current.SRLT <> GitHubClient.Packages.Latest.SRLT then
-      setColor($0000FF)
-    else
-      setColor($00FF00);
-  end;
-
-  textLabel.Init(panel);
-  textLabel.SetParent(panel);
+  textLabel.Create(Result);
   textLabel.setName(name + '_wl_label');
-  textLabel.setCaption('v.' + wl);
-  textLabel.setLeft(TControl.AdjustToDPI(3));
-  textLabel.SetTop(TControl.AdjustToDPI(25));
-  with textLabel.getFont() do
-  begin
-    setSize(TControl.AdjustToDPI(10));
-    if GitHubClient.Packages.Current.WaspLib <> GitHubClient.Packages.Latest.WaspLib then
-      setColor($0000FF)
-    else
-      setColor($00FF00);
-  end;
+
+  if wl = '' then
+    textLabel.setCaption('Missing')
+  else
+    textLabel.setCaption('v.' + wl);
+
+  textLabel.setLeft(3);
+  textLabel.SetTop(23);
+  textLabel.SetFontSize(10);
+  if wl <> GitHubClient.Packages.Latest.WaspLib then
+    textLabel.SetFontColor($1800E9)
+  else
+    textLabel.SetFontColor($18E982);
+
+  textLabel.Create(Result);
+  textLabel.setName(name + '_script_label');
+  textLabel.setLeft(3);
+  textLabel.SetTop(46);
+  textLabel.SetFontSize(10);
 end;
 
-procedure TWaspForm._VersionsControls(parent: TPanel; left: Int32);
+function TWaspForm._VersionsControls(parent: TPanel; left: Int32): TPanel;
 var
-  panel: TPanel;
   button: TButton;
-  check: TCheckBox;
-  checkLabel: TLabel;
+  check: TLabeledCheckBox;
 begin
-  panel.Create(parent, 'version_buttons_panel');
-  panel.setWidth(TControl.AdjustToDPI(180));
-  panel.setHeight(TControl.AdjustToDPI(50));
-  panel.SetLeft(left);
-  panel.SetTop(0);
+  Result.Create(parent);
+  Result.setName('version_buttons_panel');
+  Result.setCaption('');
+  Result.SetLeft(left);
+  Result.setWidth(180);
+  Result.setHeight(parent.GetHeight());
+  Result.setBevelWidth(0);
 
-  button.Init(panel);
-  button.SetParent(panel);
+  button.Create(Result);
   button.setName('update_srl_button');
-  button.setLeft(TControl.AdjustToDPI(3));
-  button.SetTop(0);
-  button.setHeight(TControl.AdjustToDPI(20));
+  button.setLeft(3);
+  button.setHeight(20);
   if GitHubClient.Packages.Current.SRLT <> GitHubClient.Packages.Latest.SRLT then
     button.setCaption('Update')
   else
     button.setCaption('Re-install');
+  button.setOnClick(@Self._UpdateButton);
 
-  button.Init(panel);
-  button.SetParent(panel);
+  button.Create(Result);
   button.setName('update_wl_button');
-  button.setLeft(TControl.AdjustToDPI(3));
-  button.SetTop(TControl.AdjustToDPI(25));
-  button.setHeight(TControl.AdjustToDPI(20));
+  button.setLeft(3);
+  button.SetTop(23);
+  button.setHeight(20);
   if GitHubClient.Packages.Current.WaspLib <> GitHubClient.Packages.Latest.WaspLib then
     button.setCaption('Update')
   else
     button.setCaption('Re-install');
+  button.setOnClick(@Self._UpdateButton);
 
-  check.Create(panel, 'update_srl');
-  check.setLeft(TControl.AdjustToDPI(90));
-  check.SetTop(0);
-  checkLabel.Create(panel, 'Auto-update');
-  checkLabel.setLeft(TControl.AdjustToDPI(90 + CHECKBOX_LABEL_SPACING));
-  checkLabel.SetTop(TControl.AdjustToDPI(2));
+  button.Create(Result);
+  button.setName('update_script_button');
+  button.setLeft(3);
+  button.SetTop(46);
+  button.setHeight(20);
+  if GitHubClient.Packages.Current.WaspLib <> GitHubClient.Packages.Latest.WaspLib then
+    button.setCaption('Update')
+  else
+    button.setCaption('Re-install');
+  button.setOnClick(@Self._UpdateButton);
 
-  check.Create(panel, 'update_wl');
-  check.setLeft(TControl.AdjustToDPI(90));
-  check.SetTop(TControl.AdjustToDPI(25));
-  checkLabel.Create(panel, 'Auto-update');
-  checkLabel.setLeft(TControl.AdjustToDPI(90 + CHECKBOX_LABEL_SPACING));
-  checkLabel.SetTop(TControl.AdjustToDPI(27));
+  check.Create(Result);
+  check.SetName('update_srl');
+  check.SetCaption('Auto-update');
+  check.setLeft(90);
+  check.SetTop(2);
+  if WaspConfig.GetBoolean('update_srl_checkbox') then
+  begin
+    check.SetChecked(True);
+    {$IFNDEF DEVELOPER_MODE}
+    if GitHubClient.Packages.Current.SRLT <> GitHubClient.Packages.Latest.SRLT then
+      Sync(@Self._UpdateSRL);
+    {$ENDIF}
+  end;
+  check.CheckBox.setOnChange(@Self._AutoUpdateToggle);
+
+  check.Create(Result);
+  check.SetName('update_wl');
+  check.SetCaption('Auto-update');
+  check.SetLeft(90);
+  check.SetTop(25);
+  if WaspConfig.GetBoolean('update_wl_checkbox') then
+  begin
+    check.SetChecked(True);
+    {$IFNDEF DEVELOPER_MODE}
+    if GitHubClient.Packages.Current.WaspLib <> GitHubClient.Packages.Latest.WaspLib then
+      Sync(@Self._UpdateWL);
+    {$ENDIF}
+  end;
+  check.CheckBox.setOnChange(@Self._AutoUpdateToggle);
+
+  check.Create(Result);
+  check.SetName('update_script');
+  check.SetCaption('Auto-update');
+  check.SetLeft(90);
+  check.SetTop(48);
+  check.CheckBox.setOnChange(@Self._AutoUpdateToggle);
 end;
 
-procedure TWaspForm.SetupVersionsPanel(parent: TPanel);
+procedure TWaspForm.SetupVersionsPanel(parent: TPanel; p: TPoint);
 var
-  panel: TPanel;
+  panel, tmp: TPanel;
+  w, h: Int32;
 begin
-  panel.Create(parent, 'version');
+  panel.Create(parent);
+  panel.setName('version_panel');
+  panel.setCaption('');
+  panel.setAlign(TAlign.alCustom);
+  panel.setBorderStyle(TFormBorderStyle.bsNone);
+  panel.setBevelWidth(1);
+  panel.SetLeft(p.X);
+  panel.SetTop(p.Y);
+  panel.setHeight(70);
 
-  panel.setWidth(TControl.AdjustToDPI(540));
-  panel.setHeight(TControl.AdjustToDPI(50));
-  panel.SetLeft(TControl.AdjustToDPI(10));
-  panel.SetTop(Round(Self.Size.Y/5) * 4);
+  tmp := Self._VersionsTitleLabel(panel, 'Current', 0);
+  w := tmp.getWidth();
+  h := tmp.getHeight();
+  tmp := Self._VersionsLabel(panel, 'current', GitHubClient.Packages.Current.SRLT, GitHubClient.Packages.Current.WaspLib, w);
+  w += tmp.getWidth();
+  h += tmp.getHeight();
 
-  Self._VersionsTitleLabel(panel, 'Current', 0);
-  Self._VersionsLabel(panel, 'current', GitHubClient.Packages.Current.SRLT, GitHubClient.Packages.Current.WaspLib, TControl.AdjustToDPI(110));
-  Self._VersionsTitleLabel(panel, 'Latest', TControl.AdjustToDPI(180));
-  Self._VersionsLabel(panel, 'latest', GitHubClient.Packages.Latest.SRLT, GitHubClient.Packages.Latest.WaspLib, TControl.AdjustToDPI(290));
-  Self._VersionsControls(panel, TControl.AdjustToDPI(360));
+  tmp := Self._VersionsTitleLabel(panel, 'Latest', w);
+  w += tmp.getWidth();
+  h += tmp.getHeight();
+  tmp := Self._VersionsLabel(panel, 'latest', GitHubClient.Packages.Latest.SRLT, GitHubClient.Packages.Latest.WaspLib, w);
+  w += tmp.getWidth();
+  h += tmp.getHeight();
+
+  tmp := Self._VersionsControls(panel, w);
+  w += tmp.getWidth();
+  h += tmp.getHeight();
+  panel.setWidth(w);
 end;
 
+procedure TWaspForm.SetupScriptPanel(parent: TPanel; topLeft: TPoint);
+var
+  panel, memoInnerPanel, memoOutterPanel: TPanel;
+  text: TLabel;
+  memo: TMemo;
+begin
+  panel.Create(parent);
+  panel.setName('script_panel');
+  panel.setCaption('');
+  panel.SetLeft(topLeft.X);
+  panel.SetTop(topLeft.Y);
+  panel.setWidth(Self.Size.X - topLeft.X - 40);
+  panel.setHeight(Self.Size.Y - topLeft.Y - 100);
+  panel.setBevelWidth(0);
+
+  text.Create(panel);
+  text.setName('script_name_label');
+  text.SetFontSize(10);
+  text.SetFontStyle([TFontStyle.fsBold]);
+
+  text.Create(panel);
+  text.setName('script_category_label');
+
+  text.Create(panel);
+  text.setName('script_description_label');
+  text.SetTop(20);
+
+  memoOutterPanel.Create(panel);
+  memoOutterPanel.setName('script_omemo_panel');
+  memoOutterPanel.setCaption('');
+  memoOutterPanel.SetTop(70);
+  memoOutterPanel.setWidth(panel.getWidth());
+  memoOutterPanel.setHeight(panel.getHeight() - 70);
+  memoOutterPanel.setBevelWidth(0);
+  memoOutterPanel.setColor($505050);
+
+  memoInnerPanel.Create(memoOutterPanel);
+  memoInnerPanel.setName('script_imemo_panel');
+  memoInnerPanel.setCaption('');
+  memoInnerPanel.SetTop(2);
+  memoInnerPanel.SetLeft(2);
+  memoInnerPanel.setWidth(memoOutterPanel.getWidth() - 4);
+  memoInnerPanel.setHeight(memoOutterPanel.getHeight() - 4);
+  memoInnerPanel.setBevelWidth(0);
+  memoInnerPanel.setColor($303030);
+
+  memo.Create(memoInnerPanel);
+  memo.setName('script_content_memo');
+  memo.setLeft(-2);
+  memo.SetTop(-2);
+  memo.setWidth(memoInnerPanel.getWidth()+4);
+  memo.setHeight(memoInnerPanel.getHeight()+4);
+  memo.setColor($303030);
+  memo.SetFontColor($D5D5D5);
+  memo.setScrollBars(TScrollStyle.ssAutoBoth);
+  memo.setReadOnly(True);
+  memo.setHideSelection(True);
+  memo.setWordWrap(True);
+end;
+
+
+procedure TWaspForm._OnUserClick(sender: TObject);
+begin
+  case TLabel(sender).getName() of
+    'user_label': OpenWebPage('https://waspscripts.com/user/' + WaspClient.Cache.User.Id);
+    'id_label': SetClipBoard(WaspClient.Cache.User.Id);
+  end;
+end;
 
 procedure TWaspForm.SetupMainPanel(form: TForm);
 var
   panel: TPanel;
-  textLabel: TLabel;
+  user, id: TLabel;
   button: TButton;
-  scriptsList: TListBox;
+  scriptsList: TLabeledDarkListBox;
 begin
-  panel.Create(form, 'main');
-
+  panel.Create(form);
+  panel.setName('main_panel');
+  panel.setCaption('');
   panel.setWidth(Self.Size.X);
   panel.setHeight(Self.Size.Y);
-  panel.SetLeft(0);
-  panel.SetTop(0);
+  panel.setBevelWidth(0);
 
-  textLabel.Init(panel);
-  textLabel.SetParent(panel);
-  textLabel.setName('user_label');
-  textLabel.setCaption('');
-  textLabel.setLeft(TControl.AdjustToDPI(10));
-  textLabel.SetTop(TControl.AdjustToDPI(10));
-  textLabel.getFont().setSize(15);
+  user.Create(panel);
+  user.setName('user_label');
+  user.setCaption('');
+  user.setLeft(10);
+  user.SetTop(20);
+  user.SetFontSize(12);
+  user.setHint('Click to open your user profile.');
+  user.setShowHint(True);
+  user.setOnClick(@Self._OnUserClick);
 
-  textLabel.Init(panel);
-  textLabel.SetParent(panel);
-  textLabel.setName('id_label');
-  textLabel.setCaption('');
-  textLabel.setLeft(TControl.AdjustToDPI(10));
-  textLabel.SetTop(TControl.AdjustToDPI(50));
-  textLabel.getFont().setSize(15);
+  id.Create(panel);
+  id.setName('id_label');
+  id.setCaption('');
+  id.setLeft(user.getLeft());
+  id.SetTop(user.GetTop() + user.GetHeight() + 5);
+  id.SetFontSize(10);
+  id.setHint('Click to copy the ID to the clipboard.');
+  id.setShowHint(True);
+  id.setOnClick(@Self._OnUserClick);
 
-  scriptsList.Init(panel);
-  scriptsList.setParent(panel);
-  scriptsList.SetName('scripts_listbox');
-  scriptsList.SetLeft(TControl.AdjustToDPI(10));
-  scriptsList.SetTop(TControl.AdjustToDPI(100));
-  scriptsList.setWidth(TControl.AdjustToDPI(250));
-  scriptsList.setHeight(TControl.AdjustToDPI(350));
+  scriptsList.Create(panel);
+  scriptsList.SetName('scripts');
+  scriptsList.SetCaption('Scripts:');
+  scriptsList.SetLeft(id.getLeft());
+  scriptsList.SetTop(id.GetTop() + id.getHeight() + 15);
+  scriptsList.SetWidth(260);
+  scriptsList.setHeight(Self.Size.Y - scriptsList.GetTop() - 100);
+  scriptsList.ListBox.ListBox.setOnClick(@Self._OnScriptChange);
 
   button.Init(panel);
   button.setParent(panel);
   button.setName('logout_button');
   button.SetCaption('Logout');
-  button.setOnClick(@Self.Logout);
+  button.setOnClick(@Self._LogoutButton);
+  button.setWidth(150);
+  button.SetLeft(10);
+  button.SetTop(panel.getHeight() - 40);
 
-  Self.SetupVersionsPanel(panel);
+  button.Init(panel);
+  button.setParent(panel);
+  button.setName('script_start_button');
+  button.SetCaption('Run script');
+  button.setOnClick(@Self._RunScript);
+  button.setWidth(150);
+  button.SetLeft(panel.getWidth() - 10 - button.getWidth());
+  button.SetTop(panel.getHeight() - 40);
 
-  button.setWidth(TControl.AdjustToDPI(150));
-  with button.getParent() do
-  begin
-    button.SetLeft(getWidth() div 2 - TControl.AdjustToDPI(150) div 2);
-    button.SetTop(getHeight() - TControl.AdjustToDPI(40));
-  end;
+  Self.SetupVersionsPanel(panel, [scriptsList.GetRight() + 50, user.GetTop()]);
+  Self.SetupScriptPanel(panel, [scriptsList.GetRight() + 50, scriptsList.GetTop() + 90]);
 end;
 
 
 procedure TWaspForm.OnShow(sender: TObject);
-const
-  ATTRIBUTE: DWORD = 20;
-  DARK: LongBool = True;
 begin
-  SetWindowAttribute(TForm(sender).getHandle(), ATTRIBUTE, @DARK, SizeOf(DARK));
+  {$IFDEF WINDOWS}
+  SetWindowDarkTitleBar(TForm(sender).getHandle());
+  {$ENDIF}
   Self.SetAllChildsDarkTheme();
 
-  if WaspClient.IsLoggedIn() then
-    Self.HandleLogin()
-  else
-    Self.HandleLogout();
+  case WaspClient.IsLoggedIn() of
+    True:  Self.HandleLogin(Self.Form.GetChild('login_panel'));
+    False: Self.HandleLogout(Self.Form.GetChild('main_panel'));
+  end;
 end;
 
 procedure TWaspForm.Setup();
 begin
-  Self.Size := [TControl.AdjustToDPI(900), TControl.AdjustToDPI(600)];
+  Self.Size := [900, 600];
 
   Self.Form.Init(nil);
   Self.Form.SetName('wasp_form');
@@ -1947,7 +5280,7 @@ begin
   Self.Form.setHeight(Self.Size.Y);
   Self.Form.getConstraints().SetInterfaceConstraints(Self.Size.X, Self.Size.Y, Self.Size.X, Self.Size.Y);
   Self.Form.setPosition(TPosition.poScreenCenter);
-  Self.Form.setOnClose(@Self.OnClose);
+  //Self.Form.setOnClose(@Self.OnClose);
   Self.Form.setColor($242322);
   Self.Form.setOnShow(@Self.OnShow);
 
@@ -1958,7 +5291,12 @@ begin
     SetColor($F0F0F0);
   end;
 
+  Self.TokenTimer.Init(nil);
+  Self.TokenTimer.setName('token_timer');
+  Self.TokenTimer.setInterval(1000);
+
   Self.SetupLoginPanel(Self.Form);
+  Self.SetupDiscordPanel(Self.Form);
   Self.SetupMainPanel(Self.Form);
 end;
 
@@ -1970,13 +5308,35 @@ begin
     Writeln(GetExceptionMessage());
   finally
     Self.Form.Free();
+    Self.TokenTimer.setEnabled(False);
+    Self.TokenTimer.Free();
   end;
 end;
 
 procedure TWaspForm.Run();
+var
+  uxtheme: TLibHandle;
 begin
+  uxtheme := LoadLibrary('uxtheme.dll');
+  RefreshImmersiveColorPolicyState := GetProcAddr(uxtheme, PChar(104));
+  ShouldAppUseDarkMode := GetProcAddr(uxtheme, PChar(132));
+  AllowDarkModeForWindow := GetProcAddr(uxtheme, PChar(133));
+  AllowDarkModeForApp := GetProcAddr(uxtheme, PChar(135));
+  SetPreferredAppMode := GetProcAddr(uxtheme, PChar(135));
+  FlushMenuThemes := GetProcAddr(uxtheme, PChar(136));
+
+  AllowDarkModeForApp(True);
+  SetPreferredAppMode(TPreferredAppMode.AllowDark);
+
   Self.Setup();
   Sync(@Self.Show);
+
+  FreeLibrary(uxtheme);
+  AllowDarkModeForWindow := nil;
+  AllowDarkModeForApp := nil;
+  SetPreferredAppMode := nil;
+  FlushMenuThemes := nil;
+  RefreshImmersiveColorPolicyState := nil;
 end;
 
 var
@@ -1984,18 +5344,26 @@ var
 
 
 
-
-{$ELSE}{$ENDIF}
-{$ELSE}{$ENDIF}
-{$ELSE}{$ENDIF}
-{$ELSE}{$ENDIF}
-{$ELSE}{$ENDIF}
-{$ELSE}{$ENDIF}
+{$ENDIF}
+{$ENDIF}
+{$ENDIF}
+{$ENDIF}
+{$ENDIF}
+{$ENDIF}
+{$ENDIF}
+{$ENDIF}
+{$ENDIF}
+{$ENDIF}
 
 
 
 begin
+  WaspConfig.Setup(LAUNCHER_DATA + 'configs' + DirectorySeparator + 'launcher.json');
   WaspClient.Setup();
+  WaspUpdater.Setup();
   GitHubClient.Setup();
+
   WaspForm.Run();
 end;
+
+

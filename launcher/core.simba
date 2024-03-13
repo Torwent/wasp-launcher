@@ -1,16 +1,38 @@
-{$DEFINE WS_LAUNCHER}
-{$DEFINE DEBUG_TIME}
+{$DEFINE WS_LAUNCHER}{$DEFINE WL_UTILS}{$DEFINE SRL_UTILS}
 
-{$IFNDEF WS_UTILS_INCLUDED}     {$I utils.simba}
-{$IFNDEF WS_CONFIG_INCLUDED}    {$I config.simba}
-{$IFNDEF WS_HTTP_INCLUDED}      {$I http.simba}
-{$IFNDEF WS_UPDATER_INCLUDED}   {$I updater.simba}
-{$IFNDEF WS_FORMUTILS_INCLUDED} {$I formutils.simba}
-{$IFNDEF WS_FORM_INCLUDED}      {$I form.simba}
+const
+  SIMBA_DATA_DIR = AppPath + 'Data' + DirectorySeparator;
+  WL_DATAPATH = SIMBA_DATA_DIR + 'WaspLib' + DirectorySeparator;
+  LAUNCHER_DATA = SIMBA_DATA_DIR + 'wasp-launcher' + DirectorySeparator;
 
-{$ELSE}{$ENDIF}
-{$ELSE}{$ENDIF}
-{$ELSE}{$ENDIF}
-{$ELSE}{$ENDIF}
-{$ELSE}{$ENDIF}
-{$ELSE}{$ENDIF}
+type
+  TSRL = record IsSetup: Boolean; end;
+
+var
+  SRL: TSRL;
+  ScriptName: String := ExtractFileName(ScriptFile).Before(ExtractFileExt(ScriptFile));
+
+{$IFNDEF SCRIPT_ID}{$DEFINE SCRIPT_ID := 'd563990c-4d31-4aba-b214-18e69171ed5e'}{$ENDIF}
+{$IFNDEF SCRIPT_REVISION}{$DEFINE SCRIPT_REVISION := '1'}{$ENDIF}
+
+{$IFNDEF SRL_TIME_INCLUDED}        {$I SRL-T/utils/time.simba}
+{$IFNDEF SRL_STRING_INCLUDED}      {$I SRL-T/utils/string.simba}
+{$IFNDEF SRL_STRINGARRAY_INCLUDED} {$I SRL-T/utils/stringarrays.simba}
+{$IFNDEF WL_STRING_INCLUDED}       {$I WaspLib/utils/string.simba}
+{$IFNDEF WS_UTILS_INCLUDED}        {$I utils.simba}
+{$IFNDEF WS_CONFIG_INCLUDED}       {$I WaspLib/utils/config.simba}
+{$IFNDEF WS_HTTP_INCLUDED}         {$I http.simba}
+{$IFNDEF WS_FORMUTILS_INCLUDED}    {$I formutils.simba}
+{$IFNDEF WS_UPDATER_INCLUDED}      {$I updater.simba}
+{$IFNDEF WS_FORM_INCLUDED}         {$I form.simba}
+
+{$ENDIF}
+{$ENDIF}
+{$ENDIF}
+{$ENDIF}
+{$ENDIF}
+{$ENDIF}
+{$ENDIF}
+{$ENDIF}
+{$ENDIF}
+{$ENDIF}

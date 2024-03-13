@@ -1,7 +1,17 @@
+{$DEFINE SCRIPT_ID := 'd563990c-4d31-4aba-b214-18e69171ed5e'}
+{$DEFINE SCRIPT_REVISION := '3'}
+
+{.$DEFINE DEVELOPER_MODE}
+
 {$I core.simba}
 
 begin
+  WaspConfig.Setup(LAUNCHER_DATA + 'configs' + DirectorySeparator + 'launcher.json');
   WaspClient.Setup();
+  WaspUpdater.Setup();
   GitHubClient.Setup();
+
   WaspForm.Run();
 end;
+
+

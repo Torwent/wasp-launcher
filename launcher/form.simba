@@ -1,5 +1,7 @@
 {$DEFINE WS_FORM_INCLUDED}
-{$IFNDEF WS_CORE}{$I core.simba}{$ENDIF}
+{$IFNDEF WS_LAUNCHER}
+  {$I core.simba}
+{$ENDIF}
 
 (*
 # WaspForm
@@ -9,187 +11,88 @@ type
   TWaspForm = record
     Form: TForm;
     Size: TPoint;
+    TokenTimer: TTimer;
+
+    Updating: record
+      SRL: Boolean;
+      WaspLib: Boolean;
+      Script: Boolean;
+    end;
   end;
-
-procedure TPanel.Create(owner: TControl; name: String);
-begin
-  Self.Init(owner);
-  Self.setParent(owner);
-  Self.setName(name + '_panel');
-  Self.setCaption('');
-  Self.setAlign(TAlign.alCustom);
-  Self.setBorderStyle(TFormBorderStyle.bsNone);
-  Self.setBevelWidth(0);
-end;
-
-procedure TLabel.Create(owner: TControl; caption: String; name: String = '');
-begin
-  Self.Init(owner);
-  Self.setParent(owner);
-  Self.setCaption(caption);
-  if name <> '' then
-    Self.SetName(name + '_label');
-end;
-
-procedure TCheckbox.Create(owner: TControl; name: String);
-begin
-  Self.Init(owner);
-  Self.setParent(owner);
-  Self.SetName(name + '_checkbox');
-  Self.setCaption('');
-end;
-
-function TCheckBox.IsChecked(): Boolean;
-begin
-  Result := Self.getState() = cbChecked;
-end;
-
-procedure TCheckBox.Toggle();
-begin
-  case Self.getState() of
-    cbChecked: Self.setState(cbUnchecked);
-    else Self.setState(cbChecked)
-  end;
-end;
-
-
-procedure TEdit.Create(owner: TControl; top: Int32; title: String; text: String = '');
-var
-  caption: TLabel;
-begin
-  caption.Create(owner, title + ':');
-  caption.SetLeft(Self.AdjustToDPI(5));
-  caption.SetTop(Self.AdjustToDPI(top));
-
-  title := LowerCase(title);
-
-  Self.Init(owner);
-  Self.setParent(owner);
-  Self.setName(title + '_edit');
-  Self.SetLeft(Self.AdjustToDPI(5));
-  Self.SetTop(Self.AdjustToDPI(top + 18));
-
-  Self.setWidth(owner.getWidth() - Self.AdjustToDPI(10));
-  Self.SetCaption(text);
-  Self.getFont().setStyle([fsBold]);
-end;
-
-
-procedure TWaspForm.OnClose({$H-}sender: TObject; var closeAction: TCloseAction);{$H+}
-begin
-  TerminateScript();
-end;
 
 procedure TWaspForm.StartScript({$H-}sender: TObject);{$H+}
 begin
+  if Length(WaspUpdater.Monitors) > 0 then
+    Exit;
   Self.Form.SetOnClose(nil);
   Self.Form.Close();
 end;
 
 
-procedure TWaspForm.Validate(edit: TEdit);
+procedure TWaspForm.HandleLogin(loginPanel: TPanel);
 var
-  panel: TPanel;
-  email, password: TEdit;
-  strMail: String;
-begin
-  panel := edit.getOwner();
-
-  case edit.getName() of
-    'email_edit':
-    begin
-      email := edit;
-      password := panel.GetChild('password_edit');
-    end;
-    'password_edit':
-    begin
-      email := panel.GetChild('email_edit');
-      password := edit;
-    end;
-    else
-      TerminateScript('TWaspForm.Validate(), unknown control.');
-  end;
-
-  with email.getFont() do
-  begin
-    setStyle([fsBold]);
-    setColor($F0F0F0);
-  end;
-
-  with password.getFont() do
-  begin
-    setStyle([fsBold]);
-    setColor($F0F0F0);
-  end;
-
-  strMail := email.getText();
-  TButton(panel.GetChild('login_button')).setEnabled(strMail.IsEmail() and (password.GetTextLen() > 4));
-end;
-
-procedure TWaspForm.MailField(sender: TObject; var key: char);
-begin
-  case key of
-    ' ': key := #0;
-    #13:
-    begin
-      Self.Validate(sender);
-      TEdit(sender).PerformTab(True);
-      Exit;
-    end;
-  end;
-  Self.Validate(sender);
-end;
-
-
-procedure TWaspForm.HandleLogin();
-var
-  loginPanel, msPanel: TPanel;
+  msPanel, dPanel: TPanel;
+  id, user: TLabel;
   scripts: TScriptDataArray;
   listBox: TListBox;
   i: Int32;
 begin
-  loginPanel := Self.Form.GetChild('login_panel');
+  if WaspUpdater.Launcher.Revision < WaspClient.Cache.Launcher.Revision then
+  begin
+    WaspUpdater.SelfUpdate();
+    CloseScriptTab();
+    Self.Form.Close();
+  end;
+
+  Self.TokenTimer.setEnabled(False);
   msPanel := Self.Form.GetChild('main_panel');
-  TLabel(msPanel.GetChild('user_label')).setCaption('Logged as: ' + WaspClient.Cache.User.Username);
-  TLabel(msPanel.GetChild('id_label')).setCaption('ID: ' + WaspClient.Cache.User.Id);
-  scripts := WaspClient.GetSubscribbedScripts();
+  dPanel := Self.Form.GetChild('discord_panel');
+
+  user := msPanel.GetChild('user_label');
+  id := msPanel.GetChild('id_label');
+
+  user.setCaption('Logged as: ' + WaspClient.Cache.User.Username);
+  id.setCaption('ID: ' + WaspClient.Cache.User.Id);
+
+  scripts := WaspClient.GetAllUserScripts();
 
   listBox := msPanel.GetChild('scripts_listbox');
+
   listBox.Clear();
   for i := 0 to High(scripts) do
     listBox.getItems().Add(scripts[i].Name);
 
-  scripts := WaspClient.GetFreeScripts();
-  for i := 0 to High(scripts) do
-    listBox.getItems().Add(scripts[i].Name);
+  listbox.setItemIndex(0);
 
   msPanel.Show();
   loginPanel.Hide();
+  dPanel.Hide();
+  Self._OnScriptChange(listBox);
 end;
 
-procedure TWaspForm.HandleLogout();
+procedure TWaspForm.HandleLogout(msPanel: TPanel);
 var
-  loginPanel, msPanel: TPanel;
+  loginPanel: TPanel;
 begin
   loginPanel := Self.Form.GetChild('login_panel');
-  msPanel := Self.Form.GetChild('main_panel');
   loginPanel.Show();
   msPanel.Hide();
 end;
 
 
-procedure TWaspForm.Login({$H-}sender: TObject);{$H+}
+procedure TWaspForm._LoginButton(sender: TObject);
 var
   loginPanel, msPanel: TPanel;
   email, password: TEdit;
-  {$IFDEF DEBUG_TIME}
+  {$IFDEF DEVELOPER_MODE}
   t: Double;
   {$ENDIF}
 begin
-  {$IFDEF DEBUG_TIME}
+  {$IFDEF DEVELOPER_MODE}
   t := PerformanceTimer();
   {$ENDIF}
-  loginPanel := Self.Form.GetChild('login_panel');
+
+  loginPanel := TComponent(sender).getOwner();
   msPanel := Self.Form.GetChild('main_panel');
 
   email := loginPanel.GetChild('email_edit');
@@ -197,8 +100,8 @@ begin
 
   if WaspClient.Login(email.getText(), password.getText()) then
   begin
-    Self.HandleLogin();
-    {$IFDEF DEBUG_TIME}
+    Self.HandleLogin(loginPanel);
+    {$IFDEF DEVELOPER_MODE}
     WriteLn('Full login took: ', Round(PerformanceTimer()-t, 4), 'ms.');
     {$ENDIF}
     Exit;
@@ -217,431 +120,912 @@ begin
   end;
 end;
 
-procedure TWaspForm.Logout({$H-}sender: TObject);{$H+}
-var
-  loginPanel, msPanel: TPanel;
+procedure TWaspForm._LogoutButton(sender: TObject);
 begin
-  loginPanel := Self.Form.GetChild('login_panel');
-  msPanel := Self.Form.GetChild('main_panel');
-
   if WaspClient.Logout() then
-    Self.HandleLogout();
+    Self.HandleLogout(TButton(sender).getOwner());
+end;
+
+procedure TWaspForm._RunScript(sender: TObject);
+var
+  panel: TPanel;
+  list: TListBox;
+  script: TScriptData;
+  scriptFile: TScriptFile;
+  proc: TSysProc;
+begin
+  panel := TButton(sender).getOwner();
+  list := panel.GetChild('scripts_listbox');
+  script := WaspClient.GetAllUserScripts()[list.getItemIndex()];
+  scriptFile := WaspUpdater.GetScriptFile(script.ID);
+  RunScriptInTab(scriptFile.Path);
+
+  Self.Form.Close();
+
+  for proc in {$H-}GetProcesses(){$H+} do
+    if proc.PID = GetSimbaPID() then
+    begin
+      ShowWindow(proc.Handle, 6); //6 = SW_MINIMIZE https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-showwindow
+      Break;
+    end;
 end;
 
 
-procedure TWaspForm.PasswordEdit(sender: TObject; var key: char);
+procedure TWaspForm._Validate(edit: TEdit);
+var
+  panel: TPanel;
+  email, password: TEdit;
+  strMail: String;
+  button: TButton;
 begin
+  panel := edit.getOwner().getOwner();
+
+  case edit.getName() of
+    'email_edit':
+    begin
+      email := edit;
+      password := panel.GetChild('password_edit');
+    end;
+    'password_edit':
+    begin
+      email := panel.GetChild('email_edit');
+      password := edit;
+    end;
+    else
+      TerminateScript('TWaspForm._Validate(), unknown control.');
+  end;
+
+  with email.getFont() do
+  begin
+    setStyle([fsBold]);
+    setColor($F0F0F0);
+  end;
+
+  with password.getFont() do
+  begin
+    setStyle([fsBold]);
+    setColor($F0F0F0);
+  end;
+
+  strMail := email.getText();
+  button := TButton(panel.GetChild('login_button'));
+  button.setEnabled(strMail.IsEmail() and (password.GetTextLen() > 4));
+
+  if button.IsEnabled() then
+    Self._LoginButton(button);
+end;
+
+procedure TWaspForm._MailField(sender: TObject; var key: char);
+var
+  panel: TPanel;
+  email, password: TEdit;
+  button: TButton;
+  strMail: String;
+begin
+  email := sender;
+  panel := email.getOwner().getOwner();
+  button := panel.GetChild('login_button');
+  password := panel.GetChild('password_edit');
+  strMail := email.getText();
+  button.setEnabled(strMail.IsEmail() and (password.GetTextLen() > 4));
+
   case key of
     ' ': key := #0;
-    #13:
-    begin
-      Self.Validate(sender);
-      if TButton(Self.Form.GetChild('login_button')).IsEnabled() then
-        Self.Login(sender);
-      Exit;
-    end;
+    #13: TEdit(sender).PerformTab(True);
   end;
-  if (key in [' ']) then
-    key := #0;
-  Self.Validate(sender);
 end;
+
+procedure TWaspForm._PasswordField(sender: TObject; var key: char); overload;
+var
+  panel: TPanel;
+  email: TEdit;
+  button: TButton;
+  strMail: String;
+begin
+  panel := TEdit(sender).getOwner().getOwner();
+  button := panel.GetChild('login_button');
+  email := panel.GetChild('email_edit');
+  strMail := email.getText();
+  button.setEnabled(strMail.IsEmail() and (TEdit(sender).GetTextLen() > 4));
+
+  case key of
+    ' ': key := #0;
+    #13: TEdit(sender).PerformTab(True);
+  end;
+end;
+
+
+procedure TWaspForm._AutoUpdateToggle(sender: TObject);
+var
+  list: TListBox;
+  script: TScriptData;
+begin
+  with TCheckBox(sender) do
+    case GetName() of
+      'update_script_checkbox':
+      begin
+        list := Self.Form.GetChild('scripts_listbox');
+        script := WaspClient.GetAllUserScripts()[list.getItemIndex()];
+        WaspConfig.Put('update_' + script.ID, IsChecked());
+      end;
+      else WaspConfig.Put(GetName(), IsChecked());
+    end;
+end;
+
+
+procedure TWaspForm._UpdateSRL();
+var
+  panel: TPanel;
+  caption: TLabel;
+begin
+  panel := Self.Form.GetChild('current_version_panel');
+  caption := panel.GetChild('current_srl_label');
+  WaspUpdater.Update('SRL-T', caption);
+end;
+
+procedure TWaspForm._UpdateWL();
+var
+  panel: TPanel;
+  caption: TLabel;
+begin
+  panel := Self.Form.GetChild('current_version_panel');
+  caption := panel.GetChild('current_wl_label');
+  WaspUpdater.Update('WaspLib', caption);
+end;
+
+procedure TWaspForm._UpdateScript();
+var
+  list: TListBox;
+  script: TScriptData;
+begin
+  try
+    Self.Updating.Script := True;
+    list := Self.Form.GetChild('scripts_listbox');
+    script := WaspClient.GetAllUserScripts()[list.getItemIndex()];
+    WaspUpdater.UpdateScript(script);
+    Self._OnScriptChange(list);
+  finally
+    Self.Updating.Script := False;
+  end;
+end;
+
+
+procedure TWaspForm._UpdateButton(sender: TObject);
+begin
+  case TButton(sender).getName() of
+    'update_srl_button':    {$IFNDEF DEVELOPER_MODE}Self._UpdateSRL{$ENDIF};
+    'update_wl_button':     {$IFNDEF DEVELOPER_MODE}Self._UpdateWL{$ENDIF};
+    'update_script_button': Self._UpdateScript;
+  end;
+end;
+
 
 procedure TWaspForm._OnEmailDone(sender: TObject);
 var
   email: TEdit;
   str: String;
 begin
-  Self.Validate(sender);
+  Self._Validate(sender);
   email := sender;
   str := LowerCase(Trim(email.getText()));
   if str.IsEmail() then
     WaspConfig.Put('email', LowerCase(Trim(email.getText())));
 end;
 
-procedure TWaspForm._OnPAssDone(sender: TObject);
+procedure TWaspForm._OnPassDone(sender: TObject);
 begin
-  Self.Validate(sender);
+  Self._Validate(sender);
 end;
 
 procedure TWaspForm._OnTogglePass(sender: TObject);
 var
-  name: String;
   panel: TPanel;
   edit: TEdit;
   caption: TLabel;
   checkbox: TCheckBox;
 begin
-  panel := Self.Form.GetChild('login_panel');
-  edit := panel.GetChild('password_edit');
+  checkbox := sender;
+  panel   := checkbox.getParent();
+  caption := panel.GetComponent(0);
+  panel := panel.getParent();
+  edit    := panel.GetChild('password_edit');
 
-  name := TControl(sender).GetName();
-  if name.Contains('label') then
+  if checkbox.IsChecked() then
   begin
-    caption := sender;
-    checkbox := panel.GetChild('viewpass_checkbox');
-    checkbox.Toggle();
-    if checkbox.IsChecked() then
-    begin
-      caption.setCaption('Hide password');
-      edit.setPasswordChar(#0);
-    end
-    else
-    begin
-      caption.setCaption('Show password');
-      edit.setPasswordChar('*');
-    end;
+    caption.setCaption('Hide password');
+    edit.setPasswordChar(#0);
     Exit;
   end;
 
-  checkbox := sender;
-  caption := panel.GetChild('viewpass_label');
-
-  if checkbox.IsChecked() then
-    begin
-      caption.setCaption('Hide password');
-      edit.setPasswordChar(#0);
-    end
-    else
-    begin
-      caption.setCaption('Show password');
-      edit.setPasswordChar('*');
-    end;
+  caption.setCaption('Show password');
+  edit.setPasswordChar('*');
 end;
 
 
+procedure TWaspForm._OnScriptChange(sender: TObject);
+var
+  list: TListBox;
+  main, panel: TPanel;
+  text: TLabel;
+  memo: TMemo;
+  button: TButton;
+  checkbox: TCheckBox;
+  scriptData: TScriptData;
+  scriptFile: TScriptFile;
+begin
+  list := sender;
+  scriptData := WaspClient.GetAllUserScripts()[list.getItemIndex()];
+  scriptFile := WaspUpdater.GetScriptFile(scriptData.ID);
 
+  main := list.getOwner().getOwner().getOwner().getOwner();
+
+  panel := main.GetChild('version_panel');
+
+  text := panel.GetChild('current_script_label');
+  if scriptFile.Revision = 0 then
+    text.setCaption('')
+  else
+    text.setCaption('rev.' + ToStr(scriptFile.Revision));
+
+  if scriptFile.Revision <> scriptData.Revision then
+    text.SetFontColor($1800E9)
+  else
+    text.SetFontColor($18E982);
+
+  text := panel.GetChild('latest_script_label');
+  text.setCaption('rev.' + ToStr(scriptData.Revision));
+
+  if scriptFile.Revision <> scriptData.Revision then
+    text.SetFontColor($1800E9)
+  else
+    text.SetFontColor($18E982);
+
+  button := panel.GetChild('update_script_button');
+  if scriptFile.Revision = 0 then
+    button.setCaption('Install')
+  else if scriptFile.Revision <> scriptData.Revision then
+    button.setCaption('Update')
+  else
+    button.setCaption('Re-install');
+
+  checkbox := panel.GetChild('update_script_checkbox');
+  if WaspConfig.GetBoolean('update_' + scriptData.ID) then
+  begin
+    checkbox.SetChecked(True);
+    if scriptFile.Revision <> scriptData.Revision then
+    begin
+      WaspUpdater.UpdateScript(scriptData);
+      Self._OnScriptChange(sender);
+      Exit;
+    end;
+  end
+  else
+    checkbox.SetChecked(False);
+
+  panel := main.GetChild('script_panel');
+  text := panel.GetChild('script_name_label');
+  text.setCaption(scriptData.Name);
+
+  text := panel.GetChild('script_category_label');
+  if scriptData.Categories.Contains('Premium') then
+  begin
+    text.setCaption('Premium');
+    text.SetFontColor($4DB5FF);
+  end
+  else
+  begin
+    text.setCaption('Free');
+    text.SetFontColor($F0F0F0);
+  end;
+  text.setLeft(panel.getWidth() - text.GetTrueWidth());
+
+  text := panel.GetChild('script_description_label');
+  text.setCaption(scriptData.Description);
+
+  memo := panel.GetChild('script_content_memo');
+  memo.setText(scriptData.Content);
+end;
+
+
+procedure TWaspForm.SetDarkTheme(sender: TWinControl);
+var
+  name: String;
+begin
+  name := sender.getName();
+  if (name = '') or name.Contains('label') then Exit;
+
+  if name.Contains('edit') then
+    SetWindowTheme(sender.getHandle(), 'DarkMode_CFD')
+  else
+    SetWindowTheme(sender.getHandle(), 'DarkMode_Explorer');
+
+  AllowDarkModeForWindow(sender.getHandle(), True);
+end;
 
 procedure TWaspForm.SetChildsDarkTheme(sender: TWinControl);
 var
-  i, hi: Int32;
-  child: TControl;
-  theme: WideString;
-  name: String;
+  i: Int32;
 begin
-  hi := sender.getComponentCount();
-
-  if hi > 0 then
-    for i := 0 to hi - 1 do
-    begin
-      child := sender.GetComponent(i);
-      Self.SetChildsDarkTheme(child);
-    end;
-
-  name := sender.getName();
-  if name = '' then Exit;
-
-  if name.Contains('label') then
-    Exit;
-
-  if name.Contains('edit') or name.Contains('button') or name.Contains('listbox') then
-  begin
-    theme := 'DarkMode_CFD';
-    sender.setColor($303030);
-    sender.getFont().setColor($F0F0F0);
-  end
-  else
-    theme := 'DarkMode_Explorer';
-
-  SetWindowTheme(sender.getHandle(), @theme, nil);
+  for i := 0 to sender.getComponentCount() - 1 do
+    Self.SetChildsDarkTheme(sender.GetComponent(i));
+  Self.SetDarkTheme(sender);
 end;
 
 procedure TWaspForm.SetAllChildsDarkTheme();
 var
-  i, hi: Int32;
+  i: Int32;
   child: TControl;
-  theme: WideString;
 begin
-  hi := Self.Form.getComponentCount();
+  for i := 0 to Self.Form.getComponentCount() - 1 do
+  begin
+    child := Self.Form.GetComponent(i);
+    Self.SetChildsDarkTheme(child);
+  end;
 
-  if hi > 0 then
-    for i := 0 to hi - 1 do
-    begin
-      child := Self.Form.GetComponent(i);
-      Self.SetChildsDarkTheme(child);
-    end;
-
-  theme := 'DarkMode_Explorer';
-  SetWindowTheme(Self.Form.getHandle(), @theme, nil);
+  SetWindowTheme(Self.Form.getHandle(), 'DarkMode_Explorer');
+  AllowDarkModeForWindow(Self.Form.getHandle(), True);
+  RefreshImmersiveColorPolicyState();
+  FlushMenuThemes();
 end;
 
 
-procedure TWaspForm.SetupLoginPanel(form: TForm);
+procedure TWaspForm.SetupDiscordPanel(form: TForm);
+  type TWaspForm = TWaspForm;
+  procedure TWaspForm._CancelButton(sender: TObject);
+  var
+    lPanel, dPanel: TPanel;
+  begin
+    dPanel := TButton(sender).getOwner();
+    lPanel := Self.Form.GetChild('login_panel');
+    lPanel.Show();
+    dPanel.Hide();
+    Self.TokenTimer.setEnabled(False);
+  end;
+
 var
   panel: TPanel;
-  edit: TEdit;
-  button: TButton;
-  email: String;
-  viewPass: TCheckBox;
-  viewPassLabel: TLabel;
+  tokenEdit: TLabeledEdit;
+  cancel: TButton;
+  caption: TLabel;
 begin
-  panel.Create(form, 'login');
+  panel.Create(form);
+  panel.setName('discord_panel');
+  panel.setCaption('');
+  panel.setWidth(400);
+  panel.setHeight(140);
+  panel.SetLeft(Self.Size.X div 2 - panel.getWidth() div 2);
+  panel.SetTop(Self.Size.Y div 2 - (panel.getHeight() - (panel.getHeight() div 10)));
+  panel.setBevelWidth(0);
+  panel.Hide();
 
-  panel.setWidth(TControl.AdjustToDPI(300));
-  panel.setHeight(TControl.AdjustToDPI(180));
-  panel.SetLeft(Self.Size.X div 2 - 300 div 2);
-  panel.SetTop(Self.Size.Y div 2 - 150);
+  tokenEdit.Create(panel);
+  tokenEdit.SetName('discord_token');
+  tokenEdit.SetCaption('Token:');
+  tokenEdit.SetWidth(panel.getWidth());
+  tokenEdit.SetControlColor($303030);
+  tokenEdit.setControlFontColor($F0F0F0);
 
-  email := WaspConfig.Get('email');
+  caption.Create(panel);
+  caption.SetName('discord_label');
+  caption.SetTop(tokenEdit.GetBottom() + 20);
+  caption.SetCaption('Waiting for login');
+  caption.SetLeft(panel.getWidth() div 2 - caption.GetTrueWidth() div 2);
+
+  cancel.Create(panel);
+  cancel.SetName('cancel_button');
+  cancel.SetCaption('Cancel');
+  cancel.setWidth(panel.getWidth() div 3);
+  cancel.SetLeft(panel.getWidth() div 2 - cancel.getWidth() div 2);
+  cancel.SetTop(panel.getHeight() - 40);
+  cancel.setOnClick(@Self._CancelButton);
+
+  (*
+  speedButton.Init(panel);
+  speedButton.setParent(panel);
+  speedButton.SetCaption('Login');
+
+  speedButton.setWidth(150);
+  speedButton.SetLeft(speedButton.getParent().getWidth() div 2 - 150 div 2);
+  speedButton.SetTop(speedButton.getParent().getHeight() - 40);
+  //speedButton.setEnabled(False);
+  speedButton.setOnClick(@Self._LoginButton);
+  speedButton.setFlat(True);
+  speedButton.setTransparent(False);
+  speedButton.setColor($00DDFF);
+  speedButton.getFont().setColor(0);
+  *)
+end;
+
+procedure TWaspForm._OnTimer({$H-}sender: TObject);{$H+}
+var
+  panel: TPanel;
+  caption: TLabel;
+  clipboard: String;
+  i: Int32;
+  {$IFDEF DEVELOPER_MODE}t: Double;{$ENDIF}
+begin
+  {$IFDEF DEVELOPER_MODE}t := PerformanceTimer();{$ENDIF}
+  clipboard := GetClipBoard();
+
+  if clipboard.IsRefreshToken() and WaspClient.Login(clipboard) then
+  begin
+    Self.HandleLogin(Self.Form.GetChild('login_panel'));
+    {$IFDEF DEVELOPER_MODE}
+    WriteLn('Full login took: ', Round(PerformanceTimer()-t, 4), 'ms.');
+    {$ENDIF}
+    Exit;
+  end;
+
+  panel := Self.Form.GetChild('discord_panel');
+  caption := panel.GetChild('discord_label');
+
+  i := caption.GetTextLen() - 17 + 1;
+  if i > 3 then i := 0;
+
+  caption.SetCaption('Waiting for login' + '.' * i);
+  caption.SetLeft(panel.getWidth() div 2 - caption.GetTrueWidth() div 2);
+end;
+
+procedure TWaspForm.RunTimer();
+begin
+  Self.TokenTimer.setOnTimer(@Self._OnTimer);
+  Self.TokenTimer.setEnabled(True);
+end;
+
+procedure TWaspForm.SetupLoginPanel(form: TForm);
+  type TWaspForm = TWaspForm;
+  procedure TWaspForm._DiscordButton(sender: TObject);
+  var
+    lPanel, dPanel: TPanel;
+  begin
+    lPanel := TButton(sender).getOwner();
+    dPanel := Self.Form.GetChild('discord_panel');
+    dPanel.Show();
+    lPanel.Hide();
+
+    OpenWebPage('https://waspscripts.com/refresh_token/');
+    Sync(@Self.RunTimer);
+  end;
+var
+  panel: TPanel;
+  mailEdit, passEdit: TLabeledEdit;
+  login, discord: TButton;
+  //speedButton: TSpeedButton;
+  email: String;
+  viewPass: TLabeledCheckBox;
+begin
+  panel.Create(form);
+  panel.setName('login_panel');
+  panel.setCaption('');
+  panel.setWidth(300);
+  panel.setHeight(180);
+  panel.SetLeft(Self.Size.X div 2 - panel.getWidth() div 2);
+  panel.SetTop(Self.Size.Y div 2 - (panel.getHeight() - (panel.getHeight() div 10)));
+  panel.setBevelWidth(0);
+
+  email := WaspConfig.GetString('email');
   if email = '' then
     email := 'email@mail.com';
 
-  edit.Create(panel, 0, 'Email', email);
-  edit.setOnKeyPress(@Self.MailField);
-  edit.setOnEditingDone(@Self._OnEmailDone);
+  mailEdit.Create(panel);
+  mailEdit.SetName('email');
+  mailEdit.SetCaption('Email');
+  mailEdit.SetWidth(panel.getWidth());
+  mailEdit.SetText(email);
+  mailEdit.SetControlColor($303030);
+  mailEdit.setControlFontColor($F0F0F0);
+  mailEdit.Edit.setOnKeyPress(@Self._MailField);
+  mailEdit.Edit.setOnEditingDone(@Self._OnEmailDone);
 
-  edit.Create(panel, 50, 'Password');
-  edit.setPasswordChar('*');
-  edit.setOnKeyPress(@Self.PasswordEdit);
-  edit.setOnEditingDone(@Self._OnPAssDone);
+  passEdit.Create(panel);
+  passEdit.SetName('password');
+  passEdit.SetCaption('Password');
+  passEdit.SetTop(50);
+  passEdit.SetWidth(panel.getWidth());
+  passEdit.SetControlColor($303030);
+  passEdit.setControlFontColor($F0F0F0);
+  passEdit.setPasswordChar('*');
+  passEdit.Edit.setOnKeyPress(@Self._PasswordField);
+  passEdit.Edit.setOnEditingDone(@Self._OnPassDone);
 
-  viewPass.Create(panel, 'viewpass');
-  viewPass.SetLeft(TControl.AdjustToDPI(10));
-  viewPass.SetTop(TControl.AdjustToDPI(100));
-  viewPass.setOnChange(@Self._OnTogglePass);
+  viewPass.Create(panel);
+  viewPass.SetName('viewpass');
+  viewPass.SetCaption('Show password');
+  viewPass.SetLeft(10);
+  viewPass.SetTop(100);
+  viewPass.CheckBox.setOnChange(@Self._OnTogglePass);
+  Self._OnTogglePass(viewPass.CheckBox);
 
-  viewPassLabel.Create(panel, 'Show password', 'viewpass');
-  viewPassLabel.SetLeft(TControl.AdjustToDPI(10 + CHECKBOX_LABEL_SPACING));
-  viewPassLabel.SetTop(TControl.AdjustToDPI(102));
-  viewPassLabel.setOnClick(@Self._OnTogglePass);
-  viewPassLabel.getFont().setPitch(fpFixed);
-  Self._OnTogglePass(viewPass);
+  login.Create(panel);
+  login.SetName('login_button');
+  login.SetCaption('Login');
+  login.setWidth(panel.getWidth() div 3);
+  login.SetTop(panel.getHeight() - (panel.getHeight() div 4));
+  login.setEnabled(False);
+  login.setOnClick(@Self._LoginButton);
 
-  button.Init(panel);
-  button.setParent(panel);
-  button.setName('login_button');
-  button.SetCaption('Login');
-  button.setOnClick(@Self.Login);
+  discord.Create(panel);
+  discord.SetName('discord_button');
+  discord.SetCaption('Discord login');
+  discord.setWidth(login.getWidth());
+  discord.SetLeft(panel.getWidth() - discord.getWidth());
+  discord.SetTop(login.GetTop());
+  discord.setOnClick(@Self._DiscordButton);
 
-  button.setWidth(TControl.AdjustToDPI(150));
-  button.SetLeft(button.getParent().getWidth() div 2 - TControl.AdjustToDPI(150) div 2);
-  button.SetTop(button.getParent().getHeight() - TControl.AdjustToDPI(40));
-  button.setEnabled(False);
+  (*
+  speedButton.Init(panel);
+  speedButton.setParent(panel);
+  speedButton.SetCaption('Login');
+
+  speedButton.setWidth(150);
+  speedButton.SetLeft(speedButton.getParent().getWidth() div 2 - 150 div 2);
+  speedButton.SetTop(speedButton.getParent().getHeight() - 40);
+  //speedButton.setEnabled(False);
+  speedButton.setOnClick(@Self._LoginButton);
+  speedButton.setFlat(True);
+  speedButton.setTransparent(False);
+  speedButton.setColor($00DDFF);
+  speedButton.getFont().setColor(0);
+  *)
 end;
 
 
-procedure TWaspForm._VersionsTitleLabel(parent: TPanel; name: String; left: Int32);
+function TWaspForm._VersionsTitleLabel(parent: TPanel; name: String; left: Int32): TPanel;
 var
-  panel: TPanel;
   textLabel: TLabel;
 begin
-  panel.Create(parent, LowerCase(name) + '_version_title_panel');
+  Result.Create(parent);
+  Result.setName(LowerCase(name) + '_version_title_panel');
+  Result.setCaption('');
+  Result.setWidth(110);
+  Result.setHeight(parent.GetHeight());
+  Result.SetLeft(left);
+  Result.setBevelWidth(0);
 
-  panel.setWidth(TControl.AdjustToDPI(110));
-  panel.setHeight(TControl.AdjustToDPI(50));
-  panel.SetLeft(left);
-  panel.SetTop(0);
-
-  textLabel.Init(panel);
-  textLabel.SetParent(panel);
+  textLabel.Create(Result);
   textLabel.setName(LowerCase(name) + '_srl_title_label');
   textLabel.setCaption(name + ' SRL-T:');
-  textLabel.setLeft(TControl.AdjustToDPI(3));
-  textLabel.SetTop(0);
+  textLabel.setLeft(3);
+  textLabel.SetFontSize(10);
+  textLabel.SetFontQuality(TFontQuality.fqCleartype);
 
-  with textLabel.getFont() do
-  begin
-    setSize(TControl.AdjustToDPI(10));
-    setQuality(TFontQuality.fqCleartype);
-  end;
-
-  textLabel.Init(panel);
-  textLabel.SetParent(panel);
+  textLabel.Create(Result);
   textLabel.setName(LowerCase(name) + '_wl_title_label');
   textLabel.setCaption(name + ' WaspLib:');
-  textLabel.setLeft(TControl.AdjustToDPI(3));
-  textLabel.SetTop(TControl.AdjustToDPI(25));
-  with textLabel.getFont() do
-  begin
-    setSize(TControl.AdjustToDPI(10));
-    setQuality(TFontQuality.fqCleartype);
-  end;
+  textLabel.setLeft(3);
+  textLabel.SetTop(23);
+  textLabel.SetFontSize(10);
+  textLabel.SetFontQuality(TFontQuality.fqCleartype);
+
+  textLabel.Create(Result);
+  textLabel.setName(LowerCase(name) + '_script_title_label');
+  textLabel.setCaption(name + ' Script:');
+  textLabel.setLeft(3);
+  textLabel.SetTop(46);
+  textLabel.SetFontSize(10);
+  textLabel.SetFontQuality(TFontQuality.fqCleartype);
 end;
 
-procedure TWaspForm._VersionsLabel(parent: TPanel; name, srlt, wl: String; left: Int32);
+function TWaspForm._VersionsLabel(parent: TPanel; name, srlt, wl: String; left: Int32): TPanel;
 var
-  panel: TPanel;
   textLabel: TLabel;
 begin
-  panel.Create(parent, name + '_version_panel');
+  Result.Create(parent);
+  Result.setName(name + '_version_panel');
+  Result.setCaption('');
+  if name = 'current' then
+    Result.setWidth(90)
+  else
+    Result.setWidth(70);
+  Result.setHeight(parent.GetHeight());
+  Result.SetLeft(left);
+  Result.setBevelWidth(0);
 
-  panel.setWidth(TControl.AdjustToDPI(70));
-  panel.setHeight(TControl.AdjustToDPI(50));
-  panel.SetLeft(left);
-  panel.SetTop(0);
-
-  textLabel.Init(panel);
-  textLabel.SetParent(panel);
+  textLabel.Create(Result);
   textLabel.setName(name + '_srl_label');
-  textLabel.setCaption('v.' + srlt);
-  textLabel.setLeft(TControl.AdjustToDPI(3));
-  textLabel.SetTop(0);
+  if srlt = '' then
+    textLabel.setCaption('Missing')
+  else
+    textLabel.setCaption('v.' + srlt);
+  textLabel.setLeft(3);
+  textLabel.SetFontSize(10);
+  if srlt <> GitHubClient.Packages.Latest.SRLT then
+    textLabel.SetFontColor($1800E9)
+  else
+    textLabel.SetFontColor($18E982);
 
-  with textLabel.getFont() do
-  begin
-    setSize(TControl.AdjustToDPI(10));
-    if GitHubClient.Packages.Current.SRLT <> GitHubClient.Packages.Latest.SRLT then
-      setColor($0000FF)
-    else
-      setColor($00FF00);
-  end;
-
-  textLabel.Init(panel);
-  textLabel.SetParent(panel);
+  textLabel.Create(Result);
   textLabel.setName(name + '_wl_label');
-  textLabel.setCaption('v.' + wl);
-  textLabel.setLeft(TControl.AdjustToDPI(3));
-  textLabel.SetTop(TControl.AdjustToDPI(25));
-  with textLabel.getFont() do
-  begin
-    setSize(TControl.AdjustToDPI(10));
-    if GitHubClient.Packages.Current.WaspLib <> GitHubClient.Packages.Latest.WaspLib then
-      setColor($0000FF)
-    else
-      setColor($00FF00);
-  end;
+
+  if wl = '' then
+    textLabel.setCaption('Missing')
+  else
+    textLabel.setCaption('v.' + wl);
+
+  textLabel.setLeft(3);
+  textLabel.SetTop(23);
+  textLabel.SetFontSize(10);
+  if wl <> GitHubClient.Packages.Latest.WaspLib then
+    textLabel.SetFontColor($1800E9)
+  else
+    textLabel.SetFontColor($18E982);
+
+  textLabel.Create(Result);
+  textLabel.setName(name + '_script_label');
+  textLabel.setLeft(3);
+  textLabel.SetTop(46);
+  textLabel.SetFontSize(10);
 end;
 
-procedure TWaspForm._VersionsControls(parent: TPanel; left: Int32);
+function TWaspForm._VersionsControls(parent: TPanel; left: Int32): TPanel;
 var
-  panel: TPanel;
   button: TButton;
-  check: TCheckBox;
-  checkLabel: TLabel;
+  check: TLabeledCheckBox;
 begin
-  panel.Create(parent, 'version_buttons_panel');
-  panel.setWidth(TControl.AdjustToDPI(180));
-  panel.setHeight(TControl.AdjustToDPI(50));
-  panel.SetLeft(left);
-  panel.SetTop(0);
+  Result.Create(parent);
+  Result.setName('version_buttons_panel');
+  Result.setCaption('');
+  Result.SetLeft(left);
+  Result.setWidth(180);
+  Result.setHeight(parent.GetHeight());
+  Result.setBevelWidth(0);
 
-  button.Init(panel);
-  button.SetParent(panel);
+  button.Create(Result);
   button.setName('update_srl_button');
-  button.setLeft(TControl.AdjustToDPI(3));
-  button.SetTop(0);
-  button.setHeight(TControl.AdjustToDPI(20));
+  button.setLeft(3);
+  button.setHeight(20);
   if GitHubClient.Packages.Current.SRLT <> GitHubClient.Packages.Latest.SRLT then
     button.setCaption('Update')
   else
     button.setCaption('Re-install');
+  button.setOnClick(@Self._UpdateButton);
 
-  button.Init(panel);
-  button.SetParent(panel);
+  button.Create(Result);
   button.setName('update_wl_button');
-  button.setLeft(TControl.AdjustToDPI(3));
-  button.SetTop(TControl.AdjustToDPI(25));
-  button.setHeight(TControl.AdjustToDPI(20));
+  button.setLeft(3);
+  button.SetTop(23);
+  button.setHeight(20);
   if GitHubClient.Packages.Current.WaspLib <> GitHubClient.Packages.Latest.WaspLib then
     button.setCaption('Update')
   else
     button.setCaption('Re-install');
+  button.setOnClick(@Self._UpdateButton);
 
-  check.Create(panel, 'update_srl');
-  check.setLeft(TControl.AdjustToDPI(90));
-  check.SetTop(0);
-  checkLabel.Create(panel, 'Auto-update');
-  checkLabel.setLeft(TControl.AdjustToDPI(90 + CHECKBOX_LABEL_SPACING));
-  checkLabel.SetTop(TControl.AdjustToDPI(2));
+  button.Create(Result);
+  button.setName('update_script_button');
+  button.setLeft(3);
+  button.SetTop(46);
+  button.setHeight(20);
+  if GitHubClient.Packages.Current.WaspLib <> GitHubClient.Packages.Latest.WaspLib then
+    button.setCaption('Update')
+  else
+    button.setCaption('Re-install');
+  button.setOnClick(@Self._UpdateButton);
 
-  check.Create(panel, 'update_wl');
-  check.setLeft(TControl.AdjustToDPI(90));
-  check.SetTop(TControl.AdjustToDPI(25));
-  checkLabel.Create(panel, 'Auto-update');
-  checkLabel.setLeft(TControl.AdjustToDPI(90 + CHECKBOX_LABEL_SPACING));
-  checkLabel.SetTop(TControl.AdjustToDPI(27));
+  check.Create(Result);
+  check.SetName('update_srl');
+  check.SetCaption('Auto-update');
+  check.setLeft(90);
+  check.SetTop(2);
+  if WaspConfig.GetBoolean('update_srl_checkbox') then
+  begin
+    check.SetChecked(True);
+    {$IFNDEF DEVELOPER_MODE}
+    if GitHubClient.Packages.Current.SRLT <> GitHubClient.Packages.Latest.SRLT then
+      Sync(@Self._UpdateSRL);
+    {$ENDIF}
+  end;
+  check.CheckBox.setOnChange(@Self._AutoUpdateToggle);
+
+  check.Create(Result);
+  check.SetName('update_wl');
+  check.SetCaption('Auto-update');
+  check.SetLeft(90);
+  check.SetTop(25);
+  if WaspConfig.GetBoolean('update_wl_checkbox') then
+  begin
+    check.SetChecked(True);
+    {$IFNDEF DEVELOPER_MODE}
+    if GitHubClient.Packages.Current.WaspLib <> GitHubClient.Packages.Latest.WaspLib then
+      Sync(@Self._UpdateWL);
+    {$ENDIF}
+  end;
+  check.CheckBox.setOnChange(@Self._AutoUpdateToggle);
+
+  check.Create(Result);
+  check.SetName('update_script');
+  check.SetCaption('Auto-update');
+  check.SetLeft(90);
+  check.SetTop(48);
+  check.CheckBox.setOnChange(@Self._AutoUpdateToggle);
 end;
 
-procedure TWaspForm.SetupVersionsPanel(parent: TPanel);
+procedure TWaspForm.SetupVersionsPanel(parent: TPanel; p: TPoint);
 var
-  panel: TPanel;
+  panel, tmp: TPanel;
+  w, h: Int32;
 begin
-  panel.Create(parent, 'version');
+  panel.Create(parent);
+  panel.setName('version_panel');
+  panel.setCaption('');
+  panel.setAlign(TAlign.alCustom);
+  panel.setBorderStyle(TFormBorderStyle.bsNone);
+  panel.setBevelWidth(1);
+  panel.SetLeft(p.X);
+  panel.SetTop(p.Y);
+  panel.setHeight(70);
 
-  panel.setWidth(TControl.AdjustToDPI(540));
-  panel.setHeight(TControl.AdjustToDPI(50));
-  panel.SetLeft(TControl.AdjustToDPI(10));
-  panel.SetTop(Round(Self.Size.Y/5) * 4);
+  tmp := Self._VersionsTitleLabel(panel, 'Current', 0);
+  w := tmp.getWidth();
+  h := tmp.getHeight();
+  tmp := Self._VersionsLabel(panel, 'current', GitHubClient.Packages.Current.SRLT, GitHubClient.Packages.Current.WaspLib, w);
+  w += tmp.getWidth();
+  h += tmp.getHeight();
 
-  Self._VersionsTitleLabel(panel, 'Current', 0);
-  Self._VersionsLabel(panel, 'current', GitHubClient.Packages.Current.SRLT, GitHubClient.Packages.Current.WaspLib, TControl.AdjustToDPI(110));
-  Self._VersionsTitleLabel(panel, 'Latest', TControl.AdjustToDPI(180));
-  Self._VersionsLabel(panel, 'latest', GitHubClient.Packages.Latest.SRLT, GitHubClient.Packages.Latest.WaspLib, TControl.AdjustToDPI(290));
-  Self._VersionsControls(panel, TControl.AdjustToDPI(360));
+  tmp := Self._VersionsTitleLabel(panel, 'Latest', w);
+  w += tmp.getWidth();
+  h += tmp.getHeight();
+  tmp := Self._VersionsLabel(panel, 'latest', GitHubClient.Packages.Latest.SRLT, GitHubClient.Packages.Latest.WaspLib, w);
+  w += tmp.getWidth();
+  h += tmp.getHeight();
+
+  tmp := Self._VersionsControls(panel, w);
+  w += tmp.getWidth();
+  h += tmp.getHeight();
+  panel.setWidth(w);
 end;
 
+procedure TWaspForm.SetupScriptPanel(parent: TPanel; topLeft: TPoint);
+var
+  panel, memoInnerPanel, memoOutterPanel: TPanel;
+  text: TLabel;
+  memo: TMemo;
+begin
+  panel.Create(parent);
+  panel.setName('script_panel');
+  panel.setCaption('');
+  panel.SetLeft(topLeft.X);
+  panel.SetTop(topLeft.Y);
+  panel.setWidth(Self.Size.X - topLeft.X - 40);
+  panel.setHeight(Self.Size.Y - topLeft.Y - 100);
+  panel.setBevelWidth(0);
+
+  text.Create(panel);
+  text.setName('script_name_label');
+  text.SetFontSize(10);
+  text.SetFontStyle([TFontStyle.fsBold]);
+
+  text.Create(panel);
+  text.setName('script_category_label');
+
+  text.Create(panel);
+  text.setName('script_description_label');
+  text.SetTop(20);
+
+  memoOutterPanel.Create(panel);
+  memoOutterPanel.setName('script_omemo_panel');
+  memoOutterPanel.setCaption('');
+  memoOutterPanel.SetTop(70);
+  memoOutterPanel.setWidth(panel.getWidth());
+  memoOutterPanel.setHeight(panel.getHeight() - 70);
+  memoOutterPanel.setBevelWidth(0);
+  memoOutterPanel.setColor($505050);
+
+  memoInnerPanel.Create(memoOutterPanel);
+  memoInnerPanel.setName('script_imemo_panel');
+  memoInnerPanel.setCaption('');
+  memoInnerPanel.SetTop(2);
+  memoInnerPanel.SetLeft(2);
+  memoInnerPanel.setWidth(memoOutterPanel.getWidth() - 4);
+  memoInnerPanel.setHeight(memoOutterPanel.getHeight() - 4);
+  memoInnerPanel.setBevelWidth(0);
+  memoInnerPanel.setColor($303030);
+
+  memo.Create(memoInnerPanel);
+  memo.setName('script_content_memo');
+  memo.setLeft(-2);
+  memo.SetTop(-2);
+  memo.setWidth(memoInnerPanel.getWidth()+4);
+  memo.setHeight(memoInnerPanel.getHeight()+4);
+  memo.setColor($303030);
+  memo.SetFontColor($D5D5D5);
+  memo.setScrollBars(TScrollStyle.ssAutoBoth);
+  memo.setReadOnly(True);
+  memo.setHideSelection(True);
+  memo.setWordWrap(True);
+end;
+
+
+procedure TWaspForm._OnUserClick(sender: TObject);
+begin
+  case TLabel(sender).getName() of
+    'user_label': OpenWebPage('https://waspscripts.com/user/' + WaspClient.Cache.User.Id);
+    'id_label': SetClipBoard(WaspClient.Cache.User.Id);
+  end;
+end;
 
 procedure TWaspForm.SetupMainPanel(form: TForm);
 var
   panel: TPanel;
-  textLabel: TLabel;
+  user, id: TLabel;
   button: TButton;
-  scriptsList: TListBox;
+  scriptsList: TLabeledDarkListBox;
 begin
-  panel.Create(form, 'main');
-
+  panel.Create(form);
+  panel.setName('main_panel');
+  panel.setCaption('');
   panel.setWidth(Self.Size.X);
   panel.setHeight(Self.Size.Y);
-  panel.SetLeft(0);
-  panel.SetTop(0);
+  panel.setBevelWidth(0);
 
-  textLabel.Init(panel);
-  textLabel.SetParent(panel);
-  textLabel.setName('user_label');
-  textLabel.setCaption('');
-  textLabel.setLeft(TControl.AdjustToDPI(10));
-  textLabel.SetTop(TControl.AdjustToDPI(10));
-  textLabel.getFont().setSize(15);
+  user.Create(panel);
+  user.setName('user_label');
+  user.setCaption('');
+  user.setLeft(10);
+  user.SetTop(20);
+  user.SetFontSize(12);
+  user.setHint('Click to open your user profile.');
+  user.setShowHint(True);
+  user.setOnClick(@Self._OnUserClick);
 
-  textLabel.Init(panel);
-  textLabel.SetParent(panel);
-  textLabel.setName('id_label');
-  textLabel.setCaption('');
-  textLabel.setLeft(TControl.AdjustToDPI(10));
-  textLabel.SetTop(TControl.AdjustToDPI(50));
-  textLabel.getFont().setSize(15);
+  id.Create(panel);
+  id.setName('id_label');
+  id.setCaption('');
+  id.setLeft(user.getLeft());
+  id.SetTop(user.GetTop() + user.GetHeight() + 5);
+  id.SetFontSize(10);
+  id.setHint('Click to copy the ID to the clipboard.');
+  id.setShowHint(True);
+  id.setOnClick(@Self._OnUserClick);
 
-  scriptsList.Init(panel);
-  scriptsList.setParent(panel);
-  scriptsList.SetName('scripts_listbox');
-  scriptsList.SetLeft(TControl.AdjustToDPI(10));
-  scriptsList.SetTop(TControl.AdjustToDPI(100));
-  scriptsList.setWidth(TControl.AdjustToDPI(250));
-  scriptsList.setHeight(TControl.AdjustToDPI(350));
+  scriptsList.Create(panel);
+  scriptsList.SetName('scripts');
+  scriptsList.SetCaption('Scripts:');
+  scriptsList.SetLeft(id.getLeft());
+  scriptsList.SetTop(id.GetTop() + id.getHeight() + 15);
+  scriptsList.SetWidth(260);
+  scriptsList.setHeight(Self.Size.Y - scriptsList.GetTop() - 100);
+  scriptsList.ListBox.ListBox.setOnClick(@Self._OnScriptChange);
 
   button.Init(panel);
   button.setParent(panel);
   button.setName('logout_button');
   button.SetCaption('Logout');
-  button.setOnClick(@Self.Logout);
+  button.setOnClick(@Self._LogoutButton);
+  button.setWidth(150);
+  button.SetLeft(10);
+  button.SetTop(panel.getHeight() - 40);
 
-  Self.SetupVersionsPanel(panel);
+  button.Init(panel);
+  button.setParent(panel);
+  button.setName('script_start_button');
+  button.SetCaption('Run script');
+  button.setOnClick(@Self._RunScript);
+  button.setWidth(150);
+  button.SetLeft(panel.getWidth() - 10 - button.getWidth());
+  button.SetTop(panel.getHeight() - 40);
 
-  button.setWidth(TControl.AdjustToDPI(150));
-  with button.getParent() do
-  begin
-    button.SetLeft(getWidth() div 2 - TControl.AdjustToDPI(150) div 2);
-    button.SetTop(getHeight() - TControl.AdjustToDPI(40));
-  end;
+  Self.SetupVersionsPanel(panel, [scriptsList.GetRight() + 50, user.GetTop()]);
+  Self.SetupScriptPanel(panel, [scriptsList.GetRight() + 50, scriptsList.GetTop() + 90]);
 end;
 
 
 procedure TWaspForm.OnShow(sender: TObject);
-const
-  ATTRIBUTE: DWORD = 20;
-  DARK: LongBool = True;
 begin
-  SetWindowAttribute(TForm(sender).getHandle(), ATTRIBUTE, @DARK, SizeOf(DARK));
+  {$IFDEF WINDOWS}
+  SetWindowDarkTitleBar(TForm(sender).getHandle());
+  {$ENDIF}
   Self.SetAllChildsDarkTheme();
 
-  if WaspClient.IsLoggedIn() then
-    Self.HandleLogin()
-  else
-    Self.HandleLogout();
+  case WaspClient.IsLoggedIn() of
+    True:  Self.HandleLogin(Self.Form.GetChild('login_panel'));
+    False: Self.HandleLogout(Self.Form.GetChild('main_panel'));
+  end;
 end;
 
 procedure TWaspForm.Setup();
 begin
-  Self.Size := [TControl.AdjustToDPI(900), TControl.AdjustToDPI(600)];
+  Self.Size := [900, 600];
 
   Self.Form.Init(nil);
   Self.Form.SetName('wasp_form');
@@ -650,7 +1034,7 @@ begin
   Self.Form.setHeight(Self.Size.Y);
   Self.Form.getConstraints().SetInterfaceConstraints(Self.Size.X, Self.Size.Y, Self.Size.X, Self.Size.Y);
   Self.Form.setPosition(TPosition.poScreenCenter);
-  Self.Form.setOnClose(@Self.OnClose);
+  //Self.Form.setOnClose(@Self.OnClose);
   Self.Form.setColor($242322);
   Self.Form.setOnShow(@Self.OnShow);
 
@@ -661,7 +1045,12 @@ begin
     SetColor($F0F0F0);
   end;
 
+  Self.TokenTimer.Init(nil);
+  Self.TokenTimer.setName('token_timer');
+  Self.TokenTimer.setInterval(1000);
+
   Self.SetupLoginPanel(Self.Form);
+  Self.SetupDiscordPanel(Self.Form);
   Self.SetupMainPanel(Self.Form);
 end;
 
@@ -673,15 +1062,36 @@ begin
     Writeln(GetExceptionMessage());
   finally
     Self.Form.Free();
+    Self.TokenTimer.setEnabled(False);
+    Self.TokenTimer.Free();
   end;
 end;
 
 procedure TWaspForm.Run();
+var
+  uxtheme: TLibHandle;
 begin
+  uxtheme := LoadLibrary('uxtheme.dll');
+  RefreshImmersiveColorPolicyState := GetProcAddr(uxtheme, PChar(104));
+  ShouldAppUseDarkMode := GetProcAddr(uxtheme, PChar(132));
+  AllowDarkModeForWindow := GetProcAddr(uxtheme, PChar(133));
+  AllowDarkModeForApp := GetProcAddr(uxtheme, PChar(135));
+  SetPreferredAppMode := GetProcAddr(uxtheme, PChar(135));
+  FlushMenuThemes := GetProcAddr(uxtheme, PChar(136));
+
+  AllowDarkModeForApp(True);
+  SetPreferredAppMode(TPreferredAppMode.AllowDark);
+
   Self.Setup();
   Sync(@Self.Show);
+
+  FreeLibrary(uxtheme);
+  AllowDarkModeForWindow := nil;
+  AllowDarkModeForApp := nil;
+  SetPreferredAppMode := nil;
+  FlushMenuThemes := nil;
+  RefreshImmersiveColorPolicyState := nil;
 end;
 
 var
   WaspForm: TWaspForm;
-

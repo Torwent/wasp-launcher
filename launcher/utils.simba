@@ -3,88 +3,24 @@ Utility methods
 *)
 
 {$DEFINE WS_UTILS_INCLUDED}
-{$IFNDEF WS_CORE}{$I core.simba}{$ENDIF}
-
-{$IFDEF WINDOWS}
-const
-  WINAPI_CC = {$IFDEF CPU386}'stdcall'{$ELSE}'win64'{$ENDIF};
-
-function PerformanceTimer(): Double;
-var
-  frequency,counter: ^UInt64;
-  function QPF(F: ^UInt64): LongBool; static; external 'QueryPerformanceFrequency@Kernel32.dll '+ WINAPI_CC;
-  function QPC(C: ^UInt64): LongBool; static; external 'QueryPerformanceCounter@Kernel32.dll '+ WINAPI_CC;
-begin
-  frequency := GetMem(SizeOf(UInt64)); // at least qword aligned
-  counter   := GetMem(SizeOf(UInt64)); // ...
-
-  if QPF(frequency) and QPC(counter) then
-    Result := counter^ / frequency^ * 1000
-  else
-    Result := GetTickCount();
-
-  FreeMem(frequency);
-  FreeMem(counter);
-end;
-{$ELSE}
-function PerformanceTimer(): Double;
-begin
-  Result := GetTickCount();
-end;
+{$IFNDEF WS_LAUNCHER}
+  {$I core.simba}
 {$ENDIF}
+
 procedure TerminateScript(reason: String); overload;
 begin
   WriteLn('Terminating: ' + reason);
   TerminateScript();
 end;
 
-function TimeStamp(): String;
+function CountSimbaWindows(): Int32;
 var
-  Time: Int64;
-  Hours, Mins, Secs, Millis: Int32;
+  wins: TOSWindowArray;
 begin
-  Time := GetTimeRunning();
-
-  Hours  := Time div 3600000;
-  Time   := Time mod 3600000;
-  Mins   := Time div 60000;
-  Time   := Time mod 60000;
-  Secs   := Time div 1000;
-  Millis := Time mod 1000;
-
-  Result := Format('[%.2d:%.2d:%.2d:%.3d]', [Hours, Mins, Secs, Millis]);
+  wins := GetWindows();
+  Result := Length(wins.GetByTitleAndClass('Simba', 'Window'));
 end;
 
-function String.IsEmail(): Boolean;
-const
-  REGEX: String = '^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$';
-begin
-  Result := ExecRegExpr(REGEX, System.Trim(Self));
-end;
-
-function String.Contains(subString: String): Boolean;
-begin
-  Result := System.Pos(subString, Self) > 0;
-end;
-
-function String.Before(SubStr: String): String; constref;
-var
-  p: UInt32;
-begin
-  p := System.Pos(SubStr, Self);
-  if (p = 0) then Exit(Self);
-  Result := Copy(Self, 1, p - 1);
-end;
-
-function String.After(SubStr: String): String; constref;
-var
-  p: UInt32;
-begin
-  p := System.Pos(SubStr, Self);
-  if (p = 0) then Exit(Self);
-  Inc(p, Length(SubStr));
-  Result := Copy(Self, p, Length(Self) - p + 1);
-end;
 
 function TJSONArray.High(): Int32;
 begin
@@ -93,13 +29,99 @@ end;
 
 procedure DebugLn(name, text: String);
 begin
-  WriteLn(TimeStamp() + ':[' + name + ']: ' + text);
+  WriteLn(SRL.TimeStamp() + ':[' + name + ']: ' + text);
 end;
 
+
+procedure DeleteAsyncFile(name: String);
+var
+  path: String;
+begin
+  if not name.EndsWith('.simba') then
+    name += '.simba';
+  path := LAUNCHER_DATA + 'async' + DirectorySeparator + name;
+  if FileExists(path) and not DeleteFile(path) then
+    TerminateScript('Failed to delete async file: ' + name);
+end;
+
+procedure WriteAsyncFile(name, content: String; autoDelete: Boolean = True);
+var
+  path: String;
+begin
+  if not name.EndsWith('.simba') then
+    name += '.simba';
+  DeleteAsyncFile(name);
+
+  path := LAUNCHER_DATA + 'async' + DirectorySeparator;
+
+  if not ForceDirectories(path) then
+    TerminateScript('Failed to create async files directory.');
+
+  if autoDelete then
+    content += LineEnding + 'begin DeleteFile(ScriptFile); end;';
+
+  if not WriteFileContents(path + name, content, False) then
+    TerminateScript('Failed to write async file: ' + name);
+end;
+
+procedure RunAsyncFile(name: String; params: TStringArray);
+var
+  path: String;
+begin
+  if not name.EndsWith('.simba') then
+    name += '.simba';
+  path := LAUNCHER_DATA + 'async' + DirectorySeparator;
+
+  RunScript(path + name, params);
+end;
+
+
 {$IFDEF WINDOWS}
+const
+  WINAPI_CC = {$IFDEF CPU386}'stdcall'{$ELSE}'win64'{$ENDIF};
+  DARK_MODE_ATTRIBUTE = 20;
+
+function ShowWindow(hwnd: TOSWindow; nCmdShow: UInt32): LongBool;
+external 'ShowWindow@user32.dll ' + WINAPI_CC;
+
 function SetWindowAttribute(hwnd: TOSWindow; dwAttribute: DWORD; pvAttribute: Pointer; cbAttribute: DWORD): UInt32;
 external 'DwmSetWindowAttribute@dwmapi.dll ' + WINAPI_CC;
 
-function SetWindowTheme(hwnd: TOSWindow; pszSubAppName: ^WideString; pszSubIdList: ^WideString): UInt32;
+function SetWindowAttribute(hwnd: TOSWindow; dwAttribute: DWORD; pvAttribute: LongBool): UInt32; overload;
+begin
+  Result := SetWindowAttribute(hwnd, dwAttribute, @pvAttribute, SizeOf(pvAttribute));
+end;
+
+function SetWindowDarkTitleBar(hwnd: TOSWindow): UInt32;
+begin
+  Result := SetWindowAttribute(hwnd, DARK_MODE_ATTRIBUTE, True);
+end;
+
+type PWideChar = ^WideChar;
+
+function SetWindowTheme(hwnd: TOSWindow; pszSubAppName: PWideChar; pszSubIdList: PWideChar): UInt32;
 external 'SetWindowTheme@uxtheme.dll ' + WINAPI_CC;
+
+function SetWindowTheme(hwnd: TOSWindow; pszSubAppName: WideString; pszSubIdList: PWideChar = nil): UInt32; overload;
+begin
+  Result := SetWindowTheme(hwnd, PWideChar(pszSubAppName), pszSubIdList);
+end;
+
+function GetProcAddr(handle: PtrUInt; name: PChar): Pointer;
+external 'GetProcAddress@kernel32.dll '+ WINAPI_CC;
+
+type
+{$SCOPEDENUMS ON}
+  TPreferredAppMode = (Default, AllowDark, ForceDark, ForceLight, Max);
+{$SCOPEDENUMS OFF}
+
+var
+{$H-}
+  ShouldAppUseDarkMode: function(): LongBool;
+  AllowDarkModeForWindow: function(hWnd: TOSWindow; allow: LongBool): LongBool;
+  AllowDarkModeForApp: function(allow: LongBool): LongBool;
+  SetPreferredAppMode: function(appMode: TPreferredAppMode): TPreferredAppMode;
+  FlushMenuThemes: procedure();
+  RefreshImmersiveColorPolicyState: procedure();
+{$H+}
 {$ENDIF}

@@ -1,14 +1,33 @@
 (*
 # S2SCompiler
 A "Simba to Simba compiler" that compiles multiple scripts into a single one.
-This is a very basic script and won't understand things like "IF" compiler directives.
+This is a very basic script and won't understand things like
+"IF" compiler directives.
+
+- `FILE_NAME` is the base file name you want to compile.
+- `PATH` is the path to `FILE_NAME`
+- `ERASE_DIRECTIVE_REGEX` is a regex for the lines you want this to ignore when "compiling" your script.
+  This is because if you have multiple files including the same file, you will get stuck in a recursive loop.
+  Should be easy to modify this to use simple strings instead of regex.
+
+The final result will be placed along thing script with `FILE_NAME` or if
+`FILE_NAME` is in the same directory, it will be named:
+```pascal
+FILE_NAME.Replace('.simba', '-compiled.simba')
+```
 *)
 {$I SRL-T/osr.simba}
 
 const
   FILE_NAME: String = 'launcher.simba';
   PATH: String = {$macro CURRENT_DIRECTORY} + 'launcher' + DirectorySeparator;
-  ERASE_DIRECTIVE: String = '{$IFNDEF WS_CORE}{$I core.simba}{$ENDIF}';
+  ERASE_DIRECTIVE_REGEX: TStringArray = [
+    '\{\$IFNDEF WS_LAUNCHER\}([\s\S]*?\{\$ENDIF\})',
+    '\{\$IFNDEF SRL_OSR\}([\s\S]*?\{\$ENDIF\})',
+    '\{\$IFNDEF SRL_UTILS\}([\s\S]*?\{\$ENDIF\})',
+    '\{\$IFNDEF WL_OSR\}([\s\S]*?\{\$ENDIF\})',
+    '\{\$IFNDEF WL_UTILS\}([\s\S]*?\{\$ENDIF\})'
+  ];
 
 const INCLUDE_DIRECTIVES: TStringArray = ['{$I ', '{$INCLUDE', '{$i ', '$include'];
 
@@ -22,11 +41,25 @@ end;
 
 function GetIncludeContent(content: String; directiveIndex: Int32): String;
 var
-  filePath: String;
+  filePath, regex: String;
 begin
   filePath := content.After(INCLUDE_DIRECTIVES[directiveIndex]).Before('}');
-  Result := ReadFileContents(PATH + filePath);
-  Result := Result.Replace(ERASE_DIRECTIVE, '');
+
+  if filePath.StartsWith('WaspLib') or filePath.StartsWith('SRL-T') then
+    Result := ReadFileContents(IncludePath + filePath)
+  else
+    Result := ReadFileContents(PATH + filePath);
+
+  for regex in ERASE_DIRECTIVE_REGEX do
+    Result := ReplaceRegExpr(regex, Result, '', True);
+
+  filePath := ExtractFilePath(PATH + filePath).Replace(AppPath, "AppPath + '") + "'";
+  filePath := filePath.Replace(DirectorySeparator, "' + DirectorySeparator + '");
+  filePath := filePath.Replace(" + ''", '');
+
+  Result := Result.Replace('{$macro CURRENT_DIRECTORY}', filePath);
+  Result := Result.Replace('{$MACRO CURRENT_DIRECTORY}', filePath);
+
   Result := LineEnding + Result + LineEnding;
 end;
 

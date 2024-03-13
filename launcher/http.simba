@@ -4,7 +4,9 @@ Responsible for loading settings from and saving them in json format.
 *)
 
 {$DEFINE WS_HTTP_INCLUDED}
-{$IFNDEF WS_CORE}{$I core.simba}{$ENDIF}
+{$IFNDEF WS_LAUNCHER}
+  {$I core.simba}
+{$ENDIF}
 
 type
   THTTPClient = record
@@ -28,11 +30,33 @@ var
   time: UInt64;
 begin
   time := GetTickCount();
-  Result := GetHTTPPage(Self.Client, route);
+  Result := GetHTTPPage(Self.Client, Self.Server + route);
   time := GetTickCount() - time;
   Result := StringReplace(Result, '\u0020', ' ', [rfReplaceAll]);
   if verbose then
+    {$IFNDEF DEVELOPER_MODE}
     DebugLn(Self.Name, 'HTTPCode: ' + ToStr(Self.GetHTTPCode()) + ' - ' + Result + ' - Response took: ' + ToStr(time) + 'ms.');
+    {$ELSE}
+    DebugLn(Self.Name, 'HTTPCode: ' + ToStr(Self.GetHTTPCode()) + ' - Response took: ' + ToStr(time) + 'ms.');
+    {$ENDIF}
+end;
+
+function THTTPClient.GETEx(route, destination: String; verbose: Boolean = True): Boolean;
+var
+  time: UInt64;
+  response: String;
+begin
+  time := GetTickCount();
+  response := GetHTTPPage(Self.Client, Self.Server + route);
+  Result := (Self.GetHTTPCode() = 200) and WriteFileContents(destination, response, False);
+  time := GetTickCount() - time;
+
+  if verbose then
+    {$IFNDEF DEVELOPER_MODE}
+    DebugLn(Self.Name, 'HTTPCode: ' + ToStr(Self.GetHTTPCode()) + ' - ' + ExtractFileName(destination) + ' - Download took: ' + ToStr(time) + 'ms.');
+    {$ELSE}
+    DebugLn(Self.Name, 'HTTPCode: ' + ToStr(Self.GetHTTPCode()) + ' - Download took: ' + ToStr(time) + 'ms.');
+    {$ENDIF}
 end;
 
 function THTTPClient.POST(route: String; verbose: Boolean = True): String;
@@ -41,11 +65,15 @@ var
 begin
   time := GetTickCount();
   ClearPostData(Self.Client);
-  Result := PostHTTPPageEx(Self.Client, route);
+  Result := PostHTTPPageEx(Self.Client, Self.Server + route);
   time := GetTickCount() - time;
   Result := StringReplace(Result, '\u0020', ' ', [rfReplaceAll]);
   if verbose then
+    {$IFNDEF DEVELOPER_MODE}
     DebugLn(Self.Name, 'HTTPCode: ' + ToStr(Self.GetHTTPCode()) + ' - ' + Result + ' - Response took: ' + ToStr(time) + 'ms.');
+    {$ELSE}
+    DebugLn(Self.Name, 'HTTPCode: ' + ToStr(Self.GetHTTPCode()) + ' - Response took: ' + ToStr(time) + 'ms.');
+    {$ENDIF}
 end;
 
 function THTTPClient.POST(route: String; payload: String; verbose: Boolean = True): String; overload;
@@ -53,11 +81,15 @@ var
   time: UInt64;
 begin
   time := GetTickCount();
-  Result := PostHTTPPage(Self.Client, route, payload);
+  Result := PostHTTPPage(Self.Client, Self.Server + route, payload);
   time := GetTickCount() - time;
   Result := StringReplace(Result, '\u0020', ' ', [rfReplaceAll]);
   if verbose then
+    {$IFNDEF DEVELOPER_MODE}
     DebugLn(Self.Name, 'HTTPCode: ' + ToStr(Self.GetHTTPCode()) + ' - ' + Result + ' - Response took: ' + ToStr(time) + 'ms.');
+    {$ELSE}
+    DebugLn(Self.Name, 'HTTPCode: ' + ToStr(Self.GetHTTPCode()) + ' - Response took: ' + ToStr(time) + 'ms.');
+    {$ENDIF}
 end;
 
 function THTTPClient.POST(route: String; payload: TJSONObject; verbose: Boolean = True): String; overload;
@@ -109,7 +141,8 @@ var
   response: String;
 begin
   try
-    response := Self.GET(Self.Server + ROUTE + pkg + '/releases/latest', False);
+    response := Self.GET(ROUTE + pkg + '/releases/latest', {$IFDEF FULL_DEVELOPER_MODE}True{$ELSE}{$IFDEF DEVELOPER_MODE}True{$ELSE}False{$ENDIF}{$ENDIF});
+
     if Self.GetHTTPCode() = 200 then
       Result.Init(response);
   except
@@ -133,10 +166,10 @@ var
 begin
   Self.Name := 'GitHub Client';
   Self.Server := 'https://api.github.com/';
-  Self.DownloadPath := AppPath + 'Data' + DirectorySeparator + 'WaspLib' + DirectorySeparator + 'downloads' + DirectorySeparator;
+  Self.DownloadPath := LAUNCHER_DATA + 'downloads' + DirectorySeparator;
 
   if not ForceDirectories(Self.DownloadPath) then
-    TerminateScript('Can''t create downloads directory.');
+    TerminateScript('GitHubClient can''t create downloads directory.');
 
   Self.RefreshClient(False);
   AddOnTerminate(@Self.Free);
@@ -165,9 +198,28 @@ begin
     Self.Packages.Latest.WaspLib := 'Failed!';
 end;
 
+
+function TGitHubClient.GetDownloaderContent(): String;
+begin
+  Result += "var httpClient: Int32; url, destination, pkg: String;" + LineEnding;
+  Result += "begin" + LineEnding;
+  Result += "  url := GetProcessParameter('url');" + LineEnding;
+  Result += "  destination := GetProcessParameter('destination');" + LineEnding;
+  Result += "  pkg := GetProcessParameter('pkg');" + LineEnding;
+  Result += "  WriteLn('[AsyncDownloader]: Downloading ', pkg, ', this might take a few seconds.');" + LineEnding;
+  Result += "  httpClient := InitializeHTTPClient(True);" + LineEnding;
+  Result += "  if GetHTTPPageEx(httpClient, url, destination) <> 200 then" + LineEnding;
+  Result += "    WriteLn('[AsyncDownloader]: Something went wrong while trying to download: ' + url);" + LineEnding;
+  Result += "  FreeHTTPClient(httpClient);" + LineEnding;
+  Result += "  WriteLn pkg + 'Downloaded.'";
+  Result += "end;";
+end;
+
+
 procedure TGitHubClient.Download(pkg: String);
 var
   url: String;
+  params: TStringArray;
 begin
   case LowerCase(pkg) of
     'srlt', 'srl-t': url := Self.Packages.Release.SRLT;
@@ -176,11 +228,11 @@ begin
       TerminateScript('Unrecognized package to download: ' + pkg);
   end;
 
-  DebugLn(Self.Name, 'Downloading ' + pkg + ' this might take a while.');
-  GetHTTPPageEx(Self.Client, url, Self.DownloadPath + pkg + '.zip');
-  if Self.GetHTTPCode() <> 200 then
-    TerminateScript('Something went wrong while trying to download: ' + url);
+  WriteAsyncFile(pkg + '-downloader.simba', Self.GetDownloaderContent());
+  params := ['url=' + url,'destination="'+ Self.DownloadPath + pkg + '.zip"', 'pkg=' + pkg];
+  RunAsyncFile(pkg + '-downloader.simba', params);
 end;
+
 
 var
   GitHubClient: TGitHubClient;
@@ -205,9 +257,13 @@ type
   TScriptData = record
     ID: String;
     Name: String;
+    Description: String;
+    Content: String;
     URL: String;
     Categories: TStringArray;
+    Revision: Int32;
   end;
+
   TScriptDataArray = array of TScriptData;
 
   TBundleData = record
@@ -217,6 +273,7 @@ type
     Owner: String;
     Scripts: TScriptDataArray;
   end;
+
   TBundleDataArray = array of TBundleData;
 
   TProductData = record
@@ -234,9 +291,37 @@ type
   end;
   TSubscriptionDataArray = array of TSubscriptionData;
 
+function TScriptDataArray.Find(const id: String): Int32; constref;
+begin
+  for Result := 0 to High(Self) do
+    if Self[Result].ID = id then
+      Exit;
+  Result := -1;
+end;
+
+function TScriptDataArray.Contains(const id: String): Boolean; constref;
+begin
+  Result := Self.Find(id) > -1;
+end;
+
+function ScriptDataSort(constref left, right: TScriptData): Int32;
+begin
+  if LowerCase(left.Name) > LowerCase(right.Name) then
+    Exit(1);
+  if LowerCase(left.Name) < LowerCase(right.Name) then
+    Exit(-1);
+end;
+
+function TScriptDataArray.Sorted(): TScriptDataArray;
+begin
+  Result := System.Sorted(Self, @ScriptDataSort);
+end;
+
+type
   TWaspClient = record(THTTPClient)
     Schema: String;
     APIKey: String;
+    DownloadPath: String;
 
     Cache: record
       User: record
@@ -252,30 +337,21 @@ type
         SubscribbedProducts: TProductDataArray;
         FreeAccessProducts: TProductDataArray;
         SubscribbedScripts: TScriptDataArray;
+        AllUserScripts: TScriptDataArray;
       end;
 
+      Launcher: TScriptData;
       Scripts: TScriptDataArray;
       FreeScripts: TScriptDataArray;
       PremiumScripts: TScriptDataArray;
 
       Bundles: TBundleDataArray;
-      //BundledScripts: array [String] of TScriptDataArray;
-
       Products: TProductDataArray;
 
       Free: Boolean;
     end;
+
   end;
-
-function TScriptDataArray.Contains(id: String): Boolean;
-var
-  i: Int32;
-begin
-  for i := 0 to High(Self) do
-    if Self[i].ID = id then
-      Exit(True);
-end;
-
 
 procedure TWaspClient.FreeUserData();
 begin
@@ -287,6 +363,7 @@ begin
   Self.Cache.User.SubscribbedProducts := [];
   Self.Cache.User.FreeAccessProducts := [];
   Self.Cache.User.SubscribbedScripts := [];
+  Self.Cache.User.AllUserScripts := [];
 
   Self.Cache.User.UserData.Free();
   Self.Cache.User.UserData := nil;
@@ -330,7 +407,7 @@ var
   response: TJSONObject;
 begin
   try
-    response.Init(Self.POST(Self.Server + ROUTE + QUERY + grantType, payload, False));
+    response.Init(Self.POST(ROUTE + QUERY + grantType, payload, False));
 
     Result := Self.GetHTTPCode() = 200;
     if Result then
@@ -343,7 +420,7 @@ begin
       Self.SaveRefreshToken();
       Self.Cache.Free := False;
 
-      Self.GetSubscribbedScripts();
+      Self.GetAllUserScripts();
     end
     else if not Result then
     begin
@@ -388,7 +465,7 @@ begin
     Exit(Self.Cache.User.UserData);
 
   try
-    response := Self.GET(Self.Server + ROUTE, False);
+    response := Self.GET(ROUTE, False);
     if Self.GetHTTPCode() = 200 then
     begin
       Result.Init(response);
@@ -404,7 +481,7 @@ const
   ROUTE: String = 'auth/v1/logout';
 begin
   try
-    Self.POST(Self.Server + ROUTE, False);
+    Self.POST(ROUTE, False);
     Result := Self.GetHTTPCode() = 204;
     if Result then
     begin
@@ -425,10 +502,11 @@ procedure TWaspClient.LoadRefreshToken();
 var
   token: String;
 begin
-  token := WaspConfig.Get('refresh_token');
+  token := WaspConfig.GetString('refresh_token');
   if (token <> '') and Self.Login(token) then
     DebugLn(Self.Name, 'Previous session refreshed!');
 end;
+
 
 
 procedure TWaspClient.SetSchema(schema: String);
@@ -455,7 +533,7 @@ begin
   Self.SetSchema('profiles');
   query += '&id=eq.' + Self.Cache.User.ID + '&limit=1';
   try
-    response := Self.GET(Self.Server + ROUTE + query, False);
+    response := Self.GET(ROUTE + query, False);
     if Self.GetHTTPCode() = 200 then
     begin
       tmp.Init(response);
@@ -477,7 +555,7 @@ begin
   end;
 end;
 
-function TWaspClient.Select(schema, table, query: String; filters: TStringArray = []): TJSONArray;
+function TWaspClient.Select(schema, table, query: String; filters: TStringArray = []; orders: TStringArray = []): TJSONArray;
 const
   ROUTE: String = 'rest/v1/';
 var
@@ -487,8 +565,13 @@ begin
 
   if filters <> [] then
     query += '&' + Implode('&', filters);
+
+  if orders <> [] then
+    query += '&order=' + Implode('&order=', orders);
+
   try
-    response := Self.GET(Self.Server + ROUTE + table + '?select=' + query, False);
+    response := Self.GET(ROUTE + table + '?select=' + query, False);
+
     if Self.GetHTTPCode() = 200 then
       Result.Init(response);
   except
@@ -557,7 +640,13 @@ var
 begin
   if Self.Cache.Scripts <> [] then
     Exit(Self.Cache.Scripts);
-  jsonArray := Self.Select('scripts', 'scripts', 'id,product,title,url,categories');
+  jsonArray := Self.Select(
+                  'scripts',
+                  'scripts',
+                  'id,product,title,description,content,url,categories,protected!inner(revision)',
+                  ['published=eq.true'],
+                  ['title.asc']
+               );
 
   for i := 0 to jsonArray.High() do
   begin
@@ -566,12 +655,19 @@ begin
     begin
       script.ID := getString('id');
       script.Name := getString('title');
+      script.Description := getString('description');
+      script.Content := getString('content');
       script.URL := 'https://waspscripts.com/scripts/' + getString('url');
+      script.Revision := getJSONObject('protected').getInt('revision');
+
       for j := 0 to categories.High() do
         script.Categories += categories.getString(j);
     end;
 
-    Result += script;
+    if script.ID = {$MACRO SCRIPT_ID} then
+      Self.Cache.Launcher := script
+    else
+      Result += script;
     script := [];
   end;
 
@@ -579,6 +675,7 @@ begin
 
   Self.Cache.Scripts := Result;
 end;
+
 
 function TWaspClient.GetFreeScripts(): TScriptDataArray;
 var
@@ -625,7 +722,6 @@ begin
   Self.Cache.PremiumScripts := Result;
 end;
 
-
 function TWaspClient.GetBundles(): TBundleDataArray;
 var
   jsonArray, scriptsJSON: TJSONArray;
@@ -638,10 +734,10 @@ begin
     Exit(Self.Cache.Bundles);
   jsonArray := Self.Select('scripts', 'bundles', 'product,id,name,scripts,user_id');
 
+  scripts := Self.GetPremiumScripts();
+
   for i := 0 to jsonArray.High() do
   begin
-    scripts := Self.GetPremiumScripts();
-
     with jsonArray.getJSONObject(i) do
     begin
       bundle.ID := getString('id');
@@ -715,6 +811,29 @@ begin
 end;
 
 
+
+procedure TWaspClient.Setup();
+begin
+  Self.Name := 'WaspClient';
+  Self.Server := 'https://db.waspscripts.com/';
+  Self.APIKey := 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVucWxwY2hvYm5peWx3cHNqY3FjIiwicm9sZSI6ImFub24iLCJpYXQiOjE2NjM5MzIxMDAsImV4cCI6MTk3OTUwODEwMH0.WUiK6CteSjnOT8A9AcbUHnYyvWwDxlwUwq_ueifPAxY';
+  Self.DownloadPath := LAUNCHER_DATA + 'downloads' + DirectorySeparator;
+
+  if not ForceDirectories(Self.DownloadPath) then
+    TerminateScript('WaspClient can''t create downloads directory.');
+
+  Self.RefreshClient(False);
+  AddOnTerminate(@Self.Free);
+  Self.LoadRefreshToken();
+
+  //Pre-load data...
+  Self.GetProducts();
+  Self.GetBundles();
+  Self.GetFreeScripts();
+end;
+
+
+
 function TWaspClient.GetSubscribbedProducts(): TProductDataArray;
 var
   subs: TSubscriptionDataArray;
@@ -768,7 +887,7 @@ begin
 end;
 
 
-function TWaspClient.GetSubscribbedScripts(): TScriptDataArray;
+function TWaspClient.GetAccessScripts(): TScriptDataArray;
 var
   subs, freeAccess: TProductDataArray;
   scripts, bundled: TScriptDataArray;
@@ -813,28 +932,85 @@ begin
 
     for j := 0 to High(scripts) do
     begin
-      if scripts[i].ID <> freeAccess[i].Script then
+      if scripts[j].ID <> freeAccess[i].Script then
         Continue;
-      if not Result.Contains(scripts[i].ID) then
-        Result += scripts[i];
+      if not Result.Contains(scripts[j].ID) then
+        Result += scripts[j];
     end;
   end;
+
   Self.Cache.User.SubscribbedScripts := Result;
 end;
 
-
-procedure TWaspClient.Setup();
+function TWaspClient.GetAllUserScripts(): TScriptDataArray;
 begin
-  Self.Name := 'WaspClient';
-  Self.Server := 'https://db.waspscripts.com/';
-  Self.APIKey := 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVucWxwY2hvYm5peWx3cHNqY3FjIiwicm9sZSI6ImFub24iLCJpYXQiOjE2NjM5MzIxMDAsImV4cCI6MTk3OTUwODEwMH0.WUiK6CteSjnOT8A9AcbUHnYyvWwDxlwUwq_ueifPAxY';
-  Self.RefreshClient(False);
-  AddOnTerminate(@Self.Free);
-  Self.LoadRefreshToken();
+  if Self.Cache.User.AllUserScripts <> [] then
+    Exit(Self.Cache.User.AllUserScripts);
 
-  Self.GetFreeScripts();
-  Self.GetPremiumScripts();
-  Self.GetBundles();
+  Result := Self.GetAccessScripts() + Self.GetFreeScripts();
+  Result := Result.Sorted();
+
+  Self.Cache.User.AllUserScripts := Result;
+end;
+
+
+function TWaspClient.Storage(route: String): String;
+var
+  response: String;
+begin
+  try
+    response := Self.GET(route, False);
+    if Self.GetHTTPCode() = 200 then
+      Result := response;
+  except
+    TerminateScript(GetExceptionMessage());
+  end;
+end;
+
+function TWaspClient.Storage(bucket, path: String): String; overload;
+const
+  ROUTE: String = 'storage/v1/object/authenticated/';
+begin
+  Result := Self.Storage(ROUTE + bucket + '/' + path);
+end;
+
+function TWaspClient.StorageGetSignedURL(bucket, path: String; expiresIn: UInt32 = 10): String;
+const
+  ROUTE: String = 'storage/v1/object/sign/';
+var
+  response: String;
+  payload, json: TJSONObject;
+begin
+  payload.Init();
+  payload.Put('expiresIn', expiresIn);
+
+  try
+    response := Self.POST(ROUTE + bucket + '/' + path, payload, False);
+    if Self.GetHTTPCode() = 200 then
+    begin
+     json.Init(response);
+     Result := 'storage/v1' + json.getString('signedURL');
+     json.Free();
+    end;
+  except
+    TerminateScript(GetExceptionMessage());
+  finally
+    payload.Free();
+  end;
+end;
+
+
+procedure TWaspClient.Download(id: String; revision: Int32);
+const
+  ROUTE: String = 'storage/v1/object/authenticated/scripts/';
+var
+  url, revStr: String;
+begin
+  revStr := PadL(ToStr(revision), 9, '0');
+  url := ROUTE + id + '/' + revStr + '/script.simba';
+  DebugLn(Self.Name, 'Downloading ' + id + ' this might take a while.');
+  if not Self.GETEx(url, Self.DownloadPath + id + '.simba') then
+    TerminateScript('Something went wrong while trying to download: ' + url);
 end;
 
 
@@ -852,7 +1028,7 @@ begin
   WriteLn('Products:', Self.GetProducts());
   WriteLn('SubbedProducts:', Self.GetSubscribbedProducts());
   WriteLn('BundledScripts:', Self.GetBundledScripts('86a1dbfc-338d-4c98-87c7-29b875549d9b'));
-  WriteLn('SubbedScripts:', Self.GetSubscribbedScripts());
+  WriteLn('SubbedScripts:', Self.GetAccessScripts());
 end;
 
 var

@@ -1,176 +1,478 @@
 {$DEFINE WS_UPDATER_INCLUDED}
-{$IFNDEF WS_CORE}{$I core.simba}{$ENDIF}
+{$IFNDEF WS_LAUNCHER}
+  {$I core.simba}
+{$ENDIF}
 
 type
+  TScriptFile = record
+    ID: String;
+    Revision: Int32;
+    Path: String;
+  end;
+
+  TScriptFileArray = array of TScriptFile;
+
+  EUpdaterState = (NONE, DOWNLOAD, UNZIP, CLEAN);
+
+  PWaspUpdater = ^TWaspUpdater;
+
+  TMonitor = record
+    Index: Int32;
+    Package: String;
+    Timer: TTimer;
+    State: EUpdaterState;
+    Caption: TLabel;
+    Parent: PWaspUpdater;
+    CurrentFile: String;
+  end;
+
   TWaspUpdater = record
     Name: String;
-    Paths: TStringArray;
-    Plugins: TStringArray;
+    Launcher: TScriptFile;
+
+    Scripts: TScriptFileArray;
+    ScriptsPath: String;
+    Monitors: array of ^TMonitor;
   end;
+
+
+procedure TMonitor.Free();
+var
+  i: Int32;
+begin
+  for i := High(Self.Parent^.Monitors) to Self.Index do
+    Self.Parent^.Monitors[i]^.Index -= 1;
+  Delete(Self.Parent^.Monitors, Self.Index, 1);
+  Self.Timer.Free();
+  Self.Timer := nil;
+  Self := [];
+end;
+
+procedure TMonitor.NextState();
+var
+  params: TStringArray;
+begin
+  Self.State := EUpdaterState(Ord(Self.State) + 1);
+  if Self.State > High(EUpdaterState) then
+    Self.State := EUpdaterState.NONE;
+
+  case Self.State of
+    EUpdaterState.DOWNLOAD:
+    begin
+      Self.CurrentFile := Self.Package + '-downloader.simba';
+      GitHubClient.Download(Self.Package);
+
+      Self.Caption.setCaption('Downloading');
+      Self.Caption.SetFontColor($00CCFF);
+      Self.Caption.Repaint();
+
+      Self.Timer.SetEnabled(True);
+    end;
+
+    EUpdaterState.UNZIP:
+    begin
+      Self.CurrentFile := Self.Package + '-unzipper.simba';
+
+      WriteAsyncFile(Self.CurrentFile, Parent^.GetUnzipperContent());
+      params := ['path=' + GitHubClient.DownloadPath, 'name=' + Self.Package];
+      RunAsyncFile(Self.CurrentFile, params);
+
+      Self.Caption.setCaption('Unzipping');
+      Self.Caption.SetFontColor($00CCAA);
+      Self.Caption.Repaint();
+
+      Self.Timer.SetEnabled(True);
+    end;
+
+    EUpdaterState.CLEAN:
+    begin
+      Self.CurrentFile := Self.Package + '-mover.simba';
+
+      WriteAsyncFile(Self.CurrentFile, Parent^.GetMoverContent());
+      params := ['origin=' + GitHubClient.DownloadPath, 'pkg=' + Self.Package];
+      RunAsyncFile(Self.CurrentFile, params);
+
+      Self.Caption.setCaption('Cleaning');
+      Self.Caption.SetFontColor($00CCAA);
+      Self.Caption.Repaint();
+
+      Self.Timer.SetEnabled(True);
+    end;
+
+    EUpdaterState.NONE:
+    begin
+      Self.CurrentFile := '';
+
+      case LowerCase(Self.Package) of
+        'srl-t', 'srlt':
+        begin
+          GitHubClient.Packages.Current.SRLT := GitHubClient.GetCurrentPackageVersion('srl-t');
+          if GitHubClient.Packages.Current.SRLT = '' then
+            Self.Caption.setCaption('Missing')
+          else
+            Self.Caption.setCaption('v.' + GitHubClient.Packages.Current.SRLT);
+
+          if GitHubClient.Packages.Current.SRLT <> GitHubClient.Packages.Latest.SRLT then
+            Self.Caption.SetFontColor($1800E9)
+          else
+            Self.Caption.SetFontColor($18E982);
+          Self.Caption.Repaint();
+        end;
+        'wasplib', 'wl':
+        begin
+          GitHubClient.Packages.Current.WaspLib := GitHubClient.GetCurrentPackageVersion('wasplib');
+          if GitHubClient.Packages.Current.WaspLib = '' then
+            Self.Caption.setCaption('Missing')
+          else
+            Self.Caption.setCaption('v.' + GitHubClient.Packages.Current.WaspLib);
+
+          if GitHubClient.Packages.Current.WaspLib <> GitHubClient.Packages.Latest.WaspLib then
+            Self.Caption.SetFontColor($1800E9)
+          else
+            Self.Caption.SetFontColor($18E982);
+          Self.Caption.Repaint();
+        end;
+      end;
+
+      Self.Caption.Repaint();
+      Self.Free();
+    end;
+  end;
+end;
+
+procedure TMonitor._OnTimer(sender: TObject);
+begin
+  if not FileExists(LAUNCHER_DATA + 'async' + DirectorySeparator + Self.CurrentFile) then
+  begin
+    TTimer(sender).SetEnabled(False);
+    Self.NextState();
+  end;
+end;
+
+
+function TWaspUpdater.GetUnzipperContent(): String;
+begin
+  Result += "var path, name: String;" + LineEnding;
+  Result += "begin" + LineEnding;
+  Result += "  path := GetProcessParameter('path');" + LineEnding;
+  Result += "  name := GetProcessParameter('name');" + LineEnding;
+  Result += "  WriteLn('[AsyncUnzipper]: Unzipping ', name, ', this might take a while.');" + LineEnding;
+  Result += "  try" + LineEnding;
+  Result += "    UnZipFile(path + name + '.zip', path + name);" + LineEnding;
+  Result += "    DeleteFile(path + name + '.zip');" + LineEnding;
+  Result += "  except" + LineEnding;
+  Result += "    WriteLn(GetExceptionMessage());" + LineEnding;
+  Result += "  end;" + LineEnding;
+  Result += "end;";
+end;
+
+function TWaspUpdater.GetMoverContent(): String;
+begin
+  Result += "const SEP = DirectorySeparator;" + LineEnding;
+  Result += "" + LineEnding;
+  Result += "procedure TerminateScript(reason: String); overload;" + LineEnding;
+  Result += "begin" + LineEnding;
+  Result += "  WriteLn('Terminating: ' + reason);" + LineEnding;
+  Result += "  TerminateScript();" + LineEnding;
+  Result += "end;" + LineEnding;
+  Result += "" + LineEnding;
+  Result += "function BackupFile(filePath: String): Boolean;" + LineEnding;
+  Result += "var" + LineEnding;
+  Result += "  f: Int32;" + LineEnding;
+  Result += "  str: String;" + LineEnding;
+  Result += "begin" + LineEnding;
+  Result += "  f := OpenFile(filePath, False);" + LineEnding;
+  Result += "" + LineEnding;
+  Result += "  if not ReadFileString(f, str, FileSize(f)) then" + LineEnding;
+  Result += "    Exit;" + LineEnding;
+  Result += "" + LineEnding;
+  Result += "  CloseFile(f);" + LineEnding;
+  Result += "  Result := WriteFileContents(filePath + '.bak', str, False);" + LineEnding;
+  Result += "end;" + LineEnding;
+  Result += "" + LineEnding;
+  Result += "function RestoreFile(filePath: String): Boolean;" + LineEnding;
+  Result += "var" + LineEnding;
+  Result += "  f: Int32;" + LineEnding;
+  Result += "  str: String;" + LineEnding;
+  Result += "begin" + LineEnding;
+  Result += "  f := OpenFile(filePath + '.bak', False);" + LineEnding;
+  Result += "  if not ReadFileString(f, str, FileSize(f)) then" + LineEnding;
+  Result += "    Exit;" + LineEnding;
+  Result += "" + LineEnding;
+  Result += "  CloseFile(f);" + LineEnding;
+  Result += "  Result := WriteFileContents(filePath, str, False);" + LineEnding;
+  Result += "  DeleteFile(filePath + '.bak');" + LineEnding;
+  Result += "end;" + LineEnding;
+  Result += "" + LineEnding;
+  Result += "" + LineEnding;
+  Result += "function IsFileLocked(path: String): Boolean;" + LineEnding;
+  Result += "begin" + LineEnding;
+  Result += "  if not FileExists(path) then" + LineEnding;
+  Result += "    Exit;" + LineEnding;
+  Result += "  if not BackupFile(path) then" + LineEnding;
+  Result += "    TerminateScript('Failed to backup file: ' + path);" + LineEnding;
+  Result += "" + LineEnding;
+  Result += "  Result := not DeleteFile(path);" + LineEnding;
+  Result += "  if not Result and not RestoreFile(path) then" + LineEnding;
+  Result += "    TerminateScript('Failed to restore file: ' + path);" + LineEnding;
+  Result += "end;" + LineEnding;
+  Result += "" + LineEnding;
+  Result += "function FindLockedPlugins(): TStringArray;" + LineEnding;
+  Result += "const" + LineEnding;
+  Result += "  PATHS = [" + LineEnding;
+  Result += "    IncludePath + 'SRL'   + SEP + 'plugins' + SEP + 'libremoteinput' + SEP," + LineEnding;
+  Result += "    IncludePath + 'SRL-T' + SEP + 'plugins' + SEP + 'libremoteinput' + SEP" + LineEnding;
+  Result += "  ];" + LineEnding;
+  Result += "var" + LineEnding;
+  Result += "  path, plugin: String;" + LineEnding;
+  Result += "begin" + LineEnding;
+  Result += "  for path in PATHS do" + LineEnding;
+  Result += "    for plugin in FindFiles(path, False) do" + LineEnding;
+  Result += "      if IsFileLocked(plugin) then" + LineEnding;
+  Result += "        Result += plugin;" + LineEnding;
+  Result += "end;" + LineEnding;
+  Result += "" + LineEnding;
+  Result += "procedure KillClients();" + LineEnding;
+  Result += "var" + LineEnding;
+  Result += "  window: TOSWindow;" + LineEnding;
+  Result += "begin" + LineEnding;
+  Result += "  for window in GetWindows().GetByClass('SunAwtCanvas') do" + LineEnding;
+  Result += "    window.Kill();" + LineEnding;
+  Result += "end;" + LineEnding;
+  Result += "" + LineEnding;
+  Result += "procedure UnlockPlugins();" + LineEnding;
+  Result += "var" + LineEnding;
+  Result += "  locked: TStringArray;" + LineEnding;
+  Result += "  plugin: String;" + LineEnding;
+  Result += "begin" + LineEnding;
+  Result += "  locked := FindLockedPlugins();" + LineEnding;
+  Result += "  if locked = [] then" + LineEnding;
+  Result += "    Exit;" + LineEnding;
+  Result += "" + LineEnding;
+  Result += "  if MessageDlg('Close RuneScape', 'RS Clients need to be closed to update this package.'," + LineEnding;
+  Result += "     TMsgDlgType.mtConfirmation, [mbOK, mbAbort]) = 3 then" + LineEnding;
+  Result += "    TerminateScript();" + LineEnding;
+  Result += "" + LineEnding;
+  Result += "  KillClients();" + LineEnding;
+  Result += "  for plugin in locked do if IsFileLocked(plugin) then" + LineEnding;
+  Result += "    TerminateScript('Failed to unlock: ' + plugin);" + LineEnding;
+  Result += "end;" + LineEnding;
+  Result += "" + LineEnding;
+  Result += "function DelDirectory(path: String; deleteRoot: Boolean = True): Boolean;" + LineEnding;
+  Result += "var" + LineEnding;
+  Result += "  f, tmp: String;" + LineEnding;
+  Result += "begin" + LineEnding;
+  Result += "  for f in FindFiles(path, True) do" + LineEnding;
+  Result += "  begin" + LineEnding;
+  Result += "    if Pos('.git', f) > -1 then" + LineEnding;
+  Result += "    begin" + LineEnding;
+  Result += "      deleteRoot := False;" + LineEnding;
+  Result += "      Continue;" + LineEnding;
+  Result += "    end;" + LineEnding;
+  Result += "" + LineEnding;
+  Result += "    if not DeleteFile(f) then" + LineEnding;
+  Result += "      Exit;" + LineEnding;
+  Result += "" + LineEnding;
+  Result += "    tmp := ExtractFilePath(f);" + LineEnding;
+  Result += "    if (FindFiles(tmp, True) = []) and (FindDirectories(tmp, True) = []) then" + LineEnding;
+  Result += "      if not DeleteDirectory(tmp, False) then" + LineEnding;
+  Result += "        Exit;" + LineEnding;
+  Result += "  end;" + LineEnding;
+  Result += "" + LineEnding;
+  Result += "  Result := not deleteRoot or DeleteDirectory(path, False);" + LineEnding;
+  Result += "end;" + LineEnding;
+  Result += "" + LineEnding;
+  Result += "procedure MoveFiles(origin, pkg: String);" + LineEnding;
+  Result += "var" + LineEnding;
+  Result += "  paths, files: TStringArray;" + LineEnding;
+  Result += "  path, f, fPath, destination: String;" + LineEnding;
+  Result += "begin" + LineEnding;
+  Result += "  paths := GetDirectories(origin + pkg + SEP);" + LineEnding;
+  Result += "  if Length(paths) <> 1 then" + LineEnding;
+  Result += "    TerminateScript('The ' + pkg + ' download is empty or has unexpected things inside.');" + LineEnding;
+  Result += "" + LineEnding;
+  Result += "  destination := IncludePath + pkg + SEP;" + LineEnding;
+  Result += "  if DirectoryExists(destination) and not DelDirectory(destination) then" + LineEnding;
+  Result += "    TerminateScript('Failed to delete old ' + pkg + ' library');" + LineEnding;
+  Result += "  if not ForceDirectories(destination) then" + LineEnding;
+  Result += "    TerminateScript('Failed to create path: ' + destination);" + LineEnding;
+  Result += "" + LineEnding;
+  Result += "  path := origin + pkg + SEP + paths[0] + SEP;" + LineEnding;
+  Result += "  files := FindFiles(path, True);" + LineEnding;
+  Result += "" + LineEnding;
+  Result += "  for f in files do" + LineEnding;
+  Result += "  begin" + LineEnding;
+  Result += "    fPath := Replace(f, path, '', [rfReplaceAll]);" + LineEnding;
+  Result += "    if Pos('.git', fPath) > -1 then" + LineEnding;
+  Result += "      Continue;" + LineEnding;
+  Result += "" + LineEnding;
+  Result += "    if not ForceDirectories(destination + ExtractFilePath(fPath)) then" + LineEnding;
+  Result += "      TerminateScript('Failed to create path: ' + destination + ExtractFilePath(fPath));" + LineEnding;
+  Result += "" + LineEnding;
+  Result += "    if not CopyFile(f, destination + fPath, False) then" + LineEnding;
+  Result += "      TerminateScript('Failed to copy file: ' + fPath);" + LineEnding;
+  Result += "" + LineEnding;
+  Result += "    DeleteFile(f);" + LineEnding;
+  Result += "    if (FindFiles(ExtractFilePath(f), True) = []) and (FindDirectories(ExtractFilePath(f), True) = []) then" + LineEnding;
+  Result += "      DeleteDirectory(ExtractFilePath(f), False);" + LineEnding;
+  Result += "  end;" + LineEnding;
+  Result += "" + LineEnding;
+  Result += "  DelDirectory(origin + pkg);" + LineEnding;
+  Result += "end;" + LineEnding;
+  Result += "" + LineEnding;
+  Result += "begin" + LineEnding;
+  Result += "  WriteLn('[AsyncMover]: Moving ', name, ' files, this will take a few seconds.');" + LineEnding;
+  Result += "  MoveFiles(GetProcessParameter('origin'), GetProcessParameter('pkg'));" + LineEnding;
+  Result += "end;" + LineEnding;
+end;
+
+function TWaspUpdater.MonitorRunning(pkg: String): Boolean;
+var
+  i: Int32;
+begin
+  for i := 0 to High(Self.Monitors) do
+    if Self.Monitors[i]^.Package = pkg then
+      Exit(True);
+end;
+
+procedure TWaspUpdater.RunMonitor(pkg: String; caption: TLabel);
+var
+  monitor: TMonitor;
+begin
+  Self.Monitors += @monitor;
+  monitor.Parent := @Self;
+  monitor.Index := High(Self.Monitors);
+  monitor.Package := pkg;
+  monitor.Caption := caption;
+
+  monitor.Timer.Init(nil);
+  monitor.Timer.setName(LowerCase(pkg) + '_update_monitor');
+  monitor.Timer.setInterval(200);
+  monitor.Timer.setOnTimer(@monitor._OnTimer);
+
+  monitor.NextState();
+end;
+
+
+
+procedure TWaspUpdater.Update(pkg: String; caption: TLabel);
+begin
+  if Self.MonitorRunning(pkg) then
+    Exit;
+  Self.RunMonitor(pkg, caption);
+end;
+
+
+function TWaspUpdater.GetScriptFileEx(filepath: String): TScriptFile;
+var
+  id, fileContent: String;
+begin
+  id := ExtractFileName(filepath).Before('.simba');
+  if not id.IsUUID() then
+    Exit;
+  Result.ID := id;
+  Result.Path := filepath;
+  fileContent := ReadFileContents(filepath);
+  Result.Revision := StrToIntDef(fileContent.After('SCRIPT_REVISION := ''').Before('''}'), 0);
+end;
+
+function TWaspUpdater.GetScriptFiles(): TScriptFileArray;
+var
+  files: TStringArray;
+  i: Int32;
+  script: TScriptFile;
+begin
+  if Self.Scripts <> [] then
+    Exit(Self.Scripts);
+
+  files := GetFiles(Self.ScriptsPath, 'simba');
+  for i := 0 to High(files) do
+  begin
+    script := GetScriptFileEx(Self.ScriptsPath + files[i]);
+    if script <> [] then
+      Result += script;
+  end;
+
+  Self.Scripts := Result;
+end;
+
+function TWaspUpdater.GetScriptFile(id: String): TScriptFile;
+var
+  i: Int32;
+  scripts: TScriptFileArray;
+begin
+  scripts := Self.GetScriptFiles();
+  for i := 0 to High(scripts) do
+    if id = scripts[i].ID then
+      Exit(scripts[i]);
+end;
+
+procedure TWaspUpdater.UpdateScriptFileRevision(script: TScriptFile);
+var
+  i: Int32;
+begin
+  for i := 0 to High(Self.Scripts) do
+    if Self.Scripts[i].ID = script.ID then
+    begin
+      Self.Scripts[i] := script;
+      Exit;
+    end;
+
+  Self.Scripts += script;
+end;
+
+procedure TWaspUpdater.UpdateScript(script: TScriptData);
+var
+  files: TStringArray;
+  fileName, path: String;
+begin
+  files := GetFiles(WaspClient.DownloadPath, 'simba');
+  for fileName in files do
+    DeleteFile(WaspClient.DownloadPath + fileName);
+
+  WaspClient.Download(script.ID, script.Revision);
+
+  files := GetFiles(WaspClient.DownloadPath, 'simba');
+  if Length(files) <> 1 then
+    Exit;
+
+  fileName := files[0];
+  path := Self.ScriptsPath + fileName;
+  if FileExists(path) and not DeleteFile(path) then
+    TerminateScript('Failed to delete old script: ' + fileName);
+
+  if not RenameFile(WaspClient.DownloadPath + fileName, path) then
+  begin
+    DeleteFile(WaspClient.DownloadPath + fileName);
+    TerminateScript('Failed to move script: ' + fileName);
+  end;
+
+  Self.UpdateScriptFileRevision(Self.GetScriptFileEx(path));
+end;
+
+
+procedure TWaspUpdater.SelfUpdate();
+begin
+  Self.UpdateScript(WaspClient.Cache.Launcher);
+
+  if FileExists(Self.Launcher.Path) and not DeleteFile(Self.Launcher.Path) then
+    TerminateScript('Failed to delete old launcher.');
+
+  if not CopyFile(Self.ScriptsPath + Self.Launcher.ID + '.simba', Self.Launcher.Path) then
+    TerminateScript('Failed to copy updated launcher to it''s directory.');
+end;
 
 procedure TWaspUpdater.Setup();
 begin
   Self.Name := 'WaspUpdater';
+  Self.Launcher.ID := {$macro SCRIPT_ID};
+  Self.Launcher.Revision := StrToIntDef({$macro SCRIPT_REVISION}, 1);
 
-  Self.Paths := [
-    IncludePath + 'SRL' + DirectorySeparator + 'plugins' + DirectorySeparator,
-    IncludePath + 'SRL-T' + DirectorySeparator + 'plugins' + DirectorySeparator
-  ];
+  Self.Launcher.Path := AppPath + 'Data' + DirectorySeparator + 'default.simba';
 
-  Self.Plugins := [
-    'libremoteinput64.so.aarch64',
-    'libremoteinput64.so',
-    'libremoteinput64.dylib',
-    'libremoteinput64.dll',
-    'libremoteinput32.dll'
-  ];
-end;
+  Self.ScriptsPath := ScriptPath + 'waspscripts.com' + DirectorySeparator;
 
-function TWaspUpdater.BackupFile(filePath: String): Boolean;
-var
-  f: Int32;
-  str: String;
-begin
-  f := OpenFile(filePath, False);
-  if not ReadFileString(f, str, FileSize(f)) then
-    Exit;
-  CloseFile(f);
-  Result := WriteFileContents(filePath + '.bak', str, False);
-end;
-
-function TWaspUpdater.RestoreFile(filePath: String): Boolean;
-var
-  f: Int32;
-  str: String;
-begin
-  f := OpenFile(filePath + '.bak', False);
-  if not ReadFileString(f, str, FileSize(f)) then
-    Exit;
-  CloseFile(f);
-  Result := WriteFileContents(filePath, str, False);
-  DeleteFile(filePath + '.bak');
-end;
-
-function TWaspUpdater.IsFileLocked(filePath: AnsiString): Boolean;
-begin
-  if not Self.BackupFile(filePath) then
-    TerminateScript('Failed to backup file: ' + filePath);
-
-  Result := not DeleteFile(filePath);
-
-  if not Result then
-    if not Self.RestoreFile(filePath) then
-      TerminateScript('Failed to restore file: ' + filePath);
-end;
-
-function TWaspUpdater.FindLockedPlugins(): TStringArray;
-var
-  path, plugin: String;
-begin
-  for path in Self.Paths do
-    for plugin in Self.Plugins do
-      if Self.IsFileLocked(path + plugin) then
-        Result += path + plugin;
-end;
-
-procedure TWaspUpdater.KillClients();
-var
-  window: TOSWindow;
-begin
-  for window in GetWindows().GetByClass('SunAwtCanvas') do
-    window.Kill();
-end;
-
-function TWaspUpdater.UnlockPlugins(): Boolean;
-var
-  locked: TStringArray;
-  plugin: String;
-begin
-  locked := Self.FindLockedPlugins();
-
-  if locked = [] then
-    Exit(True);
-
-  Self.KillClients();
-
-  for plugin in locked do
-    if Self.IsFileLocked(plugin) then
-      Exit;
-
-  Result := True;
-end;
-
-function TWaspUpdater.DeleteDirectory(path: String; deleteRoot: Boolean = True): Boolean;
-var
-  f, tmp: String;
-begin
-  for f in FindFiles(path, True) do
-  begin
-    if not DeleteFile(f) then
-      Exit;
-    tmp := ExtractFilePath(f);
-    if (FindFiles(tmp, True) = []) and (FindDirectories(tmp, True) = []) then
-      if not System.DeleteDirectory(tmp, False) then
-        Exit;
-  end;
-
-  Result := not deleteRoot or System.DeleteDirectory(path, False);
-end;
-
-procedure TWaspUpdater.MoveFiles(pkg: String);
-var
-  paths, files: TStringArray;
-  path, f, fPath, newPath: String;
-begin
-  paths := GetDirectories(GitHubClient.DownloadPath + pkg + DirectorySeparator);
-  if Length(paths) <> 1 then
-    TerminateScript('The ' + pkg + ' download is empty or has unexpected things inside.');
-
-  newPath := IncludePath + pkg + DirectorySeparator;
-  if not Self.DeleteDirectory(newPath) then
-    TerminateScript('Failed to delete old library: ' + newPath);
-  if not ForceDirectories(newPath) then
-    TerminateScript('Failed to create path: ' + newPath);
-
-  path := GitHubClient.DownloadPath + pkg + DirectorySeparator + paths[0] + DirectorySeparator;
-  files := FindFiles(path, True);
-  for f in files do
-  begin
-    fPath := f.After(path);
-    if fPath.Contains('.git') then
-      Continue;
-    if not ForceDirectories(newPath + ExtractFilePath(fPath)) then
-      TerminateScript('Failed to create path: ' + newPath + ExtractFilePath(fPath));
-
-    if not CopyFile(f, newPath + fPath, False) then
-      TerminateScript('Failed to copy file: ' + fPath);
-    DeleteFile(f);
-    if (FindFiles(ExtractFilePath(f), True) = []) and (FindDirectories(ExtractFilePath(f), True) = []) then
-      System.DeleteDirectory(ExtractFilePath(f), False);
-  end;
-
-  Self.DeleteDirectory(GitHubClient.DownloadPath + pkg);
-end;
-
-procedure TWaspUpdater.Update(pkg: String);
-begin
-  GitHubClient.Download(pkg);
-  DebugLn(Self.Name, 'Unzipping ' + pkg + ' this might take a while.');
-
-  try
-    UnZipFile(GitHubClient.DownloadPath + pkg + '.zip', GitHubClient.DownloadPath + pkg);
-    DeleteFile(GitHubClient.DownloadPath + pkg + '.zip');
-  except
-    TerminateScript(GetExceptionMessage());
-  end;
-
-  case LowerCase(pkg) of
-    'srl-t', 'srlt', 'srl':
-    if not Self.UnlockPlugins() then
-      TerminateScript('Failed to unlock Simba plugins. Close all RuneScape clients, any other Jagex software, any other bots and try again.');
-  end;
-
-  Self.MoveFiles(pkg);
+  ForceDirectories(Self.ScriptsPath);
 end;
 
 var
