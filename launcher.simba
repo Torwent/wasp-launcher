@@ -2812,7 +2812,6 @@ function TWaspClient.GetSubscribbedProducts(): TProductDataArray;
 var
   subs: TSubscriptionDataArray;
   products: TProductDataArray;
-  roles: TRolesData;
   i, j: Int32;
 begin
   if Self.Cache.User.SubscribbedProducts <> [] then
@@ -2820,17 +2819,16 @@ begin
 
   subs := Self.GetSubscriptions();
   products := Self.GetProducts();
-  roles := Self.GetRoles();
 
   for i := 0 to High(subs) do
   begin
-    for j := 0 to High(products) do
+    for j := High(products) downto 0 do
     begin
       if subs[i].Product <> products[j].ID then
-        if products[j].Owner <> Self.Cache.User.ID then
-          if not roles.Tester or not roles.Moderator or not roles.Administrator then
-            Continue;
+        Continue;
       Result += products[j];
+      Delete(products, j, 1);
+      Break;
     end;
   end;
   Self.Cache.User.SubscribbedProducts := Result;
@@ -2838,25 +2836,34 @@ end;
 
 function TWaspClient.GetFreeAccessProducts(): TProductDataArray;
 var
-  subs: TSubscriptionDataArray;
+  free: TSubscriptionDataArray;
   products: TProductDataArray;
+  roles: TRolesData;
   i, j: Int32;
 begin
   if Self.Cache.User.FreeAccessProducts <> [] then
     Exit(Self.Cache.User.FreeAccessProducts);
 
-  subs := Self.GetFreeAccess();
+  free := Self.GetFreeAccess();
   products := Self.GetProducts();
+  roles := Self.GetRoles();
 
-  for i := 0 to High(subs) do
+  for i := 0 to High(free) do
   begin
-    for j := 0 to High(products) do
+    for j := High(products) downto 0 do
     begin
-      if subs[i].Product <> products[j].ID then
+      if free[i].Product <> products[j].ID then
         Continue;
       Result += products[j];
+      Delete(products, j, 1);
+      Break;
     end;
   end;
+
+  if roles.Tester or roles.Moderator or roles.Administrator then
+    for i := 0 to High(products) do
+      Result += products[i];
+
   Self.Cache.User.FreeAccessProducts := Result;
 end;
 
