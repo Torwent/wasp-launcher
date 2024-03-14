@@ -211,8 +211,8 @@ begin
   Result += "  if GetHTTPPageEx(httpClient, url, destination) <> 200 then" + LineEnding;
   Result += "    WriteLn('[AsyncDownloader]: Something went wrong while trying to download: ' + url);" + LineEnding;
   Result += "  FreeHTTPClient(httpClient);" + LineEnding;
-  Result += "  WriteLn pkg + 'Downloaded.'";
-  Result += "end;";
+  Result += "  WriteLn(pkg + ' downloaded.');" + LineEnding;
+  Result += "end;" + LineEnding;
 end;
 
 

@@ -21,12 +21,6 @@ begin
   Result := Length(wins.GetByTitleAndClass('Simba', 'Window'));
 end;
 
-
-function TJSONArray.High(): Int32;
-begin
-  Result := Self.length()-1;
-end;
-
 procedure DebugLn(name, text: String);
 begin
   WriteLn(SRL.TimeStamp() + ':[' + name + ']: ' + text);
@@ -58,7 +52,11 @@ begin
     TerminateScript('Failed to create async files directory.');
 
   if autoDelete then
-    content += LineEnding + 'begin DeleteFile(ScriptFile); end;';
+  begin
+    content := content.Replace('TerminateScript();', 'begin DeleteFile(ScriptFile); TerminateScript(); end;');
+    content := content.Replace('TerminateScript;', 'begin DeleteFile(ScriptFile); TerminateScript(); end;');
+    content += LineEnding + LineEnding + 'begin DeleteFile(ScriptFile); end;';
+  end;
 
   if not WriteFileContents(path + name, content, False) then
     TerminateScript('Failed to write async file: ' + name);

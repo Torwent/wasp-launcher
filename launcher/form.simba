@@ -13,6 +13,8 @@ type
     Size: TPoint;
     TokenTimer: TTimer;
 
+    ReadClipboard: Boolean;
+
     Updating: record
       SRL: Boolean;
       WaspLib: Boolean;
@@ -22,8 +24,10 @@ type
 
 procedure TWaspForm.StartScript({$H-}sender: TObject);{$H+}
 begin
-  if Length(WaspUpdater.Monitors) > 0 then
-    Exit;
+  if WaspUpdater.MonitorSRLT.Timer.getEnabled() or
+     WaspUpdater.MonitorWL.Timer.getEnabled() then
+     Exit;
+
   Self.Form.SetOnClose(nil);
   Self.Form.Close();
 end;
@@ -75,7 +79,9 @@ var
   loginPanel: TPanel;
 begin
   loginPanel := Self.Form.GetChild('login_panel');
-  loginPanel.Show();
+
+  if WaspConfig.GetBoolean('use_discord') then
+    Self._DiscordButton(loginPanel.GetChild('discord_button'));
   msPanel.Hide();
 end;
 
@@ -256,21 +262,27 @@ end;
 procedure TWaspForm._UpdateSRL();
 var
   panel: TPanel;
-  caption: TLabel;
+  caption, button: TComponent;
 begin
   panel := Self.Form.GetChild('current_version_panel');
   caption := panel.GetChild('current_srl_label');
-  WaspUpdater.Update('SRL-T', caption);
+  panel := panel.GetOwner();
+  button := panel.GetChild('update_srl_button');
+  WaspUpdater.Update('srlt', caption, button);
 end;
 
 procedure TWaspForm._UpdateWL();
 var
   panel: TPanel;
-  caption: TLabel;
+  caption, button: TComponent;
 begin
   panel := Self.Form.GetChild('current_version_panel');
   caption := panel.GetChild('current_wl_label');
-  WaspUpdater.Update('WaspLib', caption);
+
+  panel := panel.GetOwner();
+  button := panel.GetChild('update_wl_button');
+
+  WaspUpdater.Update('wasplib', caption, button);
 end;
 
 procedure TWaspForm._UpdateScript();
@@ -286,16 +298,6 @@ begin
     Self._OnScriptChange(list);
   finally
     Self.Updating.Script := False;
-  end;
-end;
-
-
-procedure TWaspForm._UpdateButton(sender: TObject);
-begin
-  case TButton(sender).getName() of
-    'update_srl_button':    {$IFNDEF DEVELOPER_MODE}Self._UpdateSRL{$ENDIF};
-    'update_wl_button':     {$IFNDEF DEVELOPER_MODE}Self._UpdateWL{$ENDIF};
-    'update_script_button': Self._UpdateScript;
   end;
 end;
 
@@ -475,6 +477,7 @@ procedure TWaspForm.SetupDiscordPanel(form: TForm);
   var
     lPanel, dPanel: TPanel;
   begin
+    WaspConfig.Put('use_discord', False);
     dPanel := TButton(sender).getOwner();
     lPanel := Self.Form.GetChild('login_panel');
     lPanel.Show();
@@ -482,17 +485,23 @@ procedure TWaspForm.SetupDiscordPanel(form: TForm);
     Self.TokenTimer.setEnabled(False);
   end;
 
+  procedure TWaspForm._ClipboardToggle(sender: TObject);
+  begin
+    Self.ReadClipboard := TCheckBox(sender).IsChecked();
+  end;
+
 var
   panel: TPanel;
   tokenEdit: TLabeledEdit;
   cancel: TButton;
   caption: TLabel;
+  check: TLabeledCheckBox;
 begin
   panel.Create(form);
   panel.setName('discord_panel');
   panel.setCaption('');
   panel.setWidth(400);
-  panel.setHeight(140);
+  panel.setHeight(150);
   panel.SetLeft(Self.Size.X div 2 - panel.getWidth() div 2);
   panel.SetTop(Self.Size.Y div 2 - (panel.getHeight() - (panel.getHeight() div 10)));
   panel.setBevelWidth(0);
@@ -505,10 +514,26 @@ begin
   tokenEdit.SetControlColor($303030);
   tokenEdit.setControlFontColor($F0F0F0);
 
+  check.Create(panel);
+  check.SetName('clipboard_');
+  check.SetCaption('Read clipboard');
+  check.SetTop(tokenEdit.GetTop());
+  if WaspConfig.JSON.has('clipboard_checkbox') then
+  begin
+    if WaspConfig.GetBoolean('clipboard_checkbox') then
+      check.SetChecked(True);
+  end
+  else
+    check.SetChecked(True);
+  check.SetLeft(panel.getWidth() - check.GetWidth());
+
+  check.CheckBox.setOnChange(@Self._ClipboardToggle);
+  Self._ClipboardToggle(check.CheckBox);
+
   caption.Create(panel);
   caption.SetName('discord_label');
   caption.SetTop(tokenEdit.GetBottom() + 20);
-  caption.SetCaption('Waiting for login');
+  caption.SetCaption('Waiting for token');
   caption.SetLeft(panel.getWidth() div 2 - caption.GetTrueWidth() div 2);
 
   cancel.Create(panel);
@@ -518,45 +543,48 @@ begin
   cancel.SetLeft(panel.getWidth() div 2 - cancel.getWidth() div 2);
   cancel.SetTop(panel.getHeight() - 40);
   cancel.setOnClick(@Self._CancelButton);
-
-  (*
-  speedButton.Init(panel);
-  speedButton.setParent(panel);
-  speedButton.SetCaption('Login');
-
-  speedButton.setWidth(150);
-  speedButton.SetLeft(speedButton.getParent().getWidth() div 2 - 150 div 2);
-  speedButton.SetTop(speedButton.getParent().getHeight() - 40);
-  //speedButton.setEnabled(False);
-  speedButton.setOnClick(@Self._LoginButton);
-  speedButton.setFlat(True);
-  speedButton.setTransparent(False);
-  speedButton.setColor($00DDFF);
-  speedButton.getFont().setColor(0);
-  *)
 end;
 
 procedure TWaspForm._OnTimer({$H-}sender: TObject);{$H+}
 var
   panel: TPanel;
   caption: TLabel;
-  clipboard: String;
+  edit: TEdit;
+  token: String;
   i: Int32;
   {$IFDEF DEVELOPER_MODE}t: Double;{$ENDIF}
 begin
   {$IFDEF DEVELOPER_MODE}t := PerformanceTimer();{$ENDIF}
-  clipboard := GetClipBoard();
-
-  if clipboard.IsRefreshToken() and WaspClient.Login(clipboard) then
+  if Self.ReadClipboard then
   begin
-    Self.HandleLogin(Self.Form.GetChild('login_panel'));
-    {$IFDEF DEVELOPER_MODE}
-    WriteLn('Full login took: ', Round(PerformanceTimer()-t, 4), 'ms.');
-    {$ENDIF}
-    Exit;
+    token := GetClipBoard();
+
+    if token.IsRefreshToken() and WaspClient.Login(token) then
+    begin
+      Self.HandleLogin(Self.Form.GetChild('login_panel'));
+      {$IFDEF DEVELOPER_MODE}
+      WriteLn('Full login took: ', Round(PerformanceTimer()-t, 4), 'ms.');
+      {$ENDIF}
+      Exit;
+    end;
   end;
 
   panel := Self.Form.GetChild('discord_panel');
+
+  if not Self.ReadClipboard then
+  begin
+    edit := Self.Form.GetChild('discord_token_edit');
+    token := edit.GetText();
+    if token.IsRefreshToken() and WaspClient.Login(token) then
+    begin
+      Self.HandleLogin(Self.Form.GetChild('login_panel'));
+      {$IFDEF DEVELOPER_MODE}
+      WriteLn('Full login took: ', Round(PerformanceTimer()-t, 4), 'ms.');
+      {$ENDIF}
+      Exit;
+    end;
+  end;
+
   caption := panel.GetChild('discord_label');
 
   i := caption.GetTextLen() - 17 + 1;
@@ -578,8 +606,11 @@ procedure TWaspForm.SetupLoginPanel(form: TForm);
   var
     lPanel, dPanel: TPanel;
   begin
+    WaspConfig.Put('use_discord', True);
     lPanel := TButton(sender).getOwner();
+
     dPanel := Self.Form.GetChild('discord_panel');
+
     dPanel.Show();
     lPanel.Hide();
 
@@ -590,7 +621,6 @@ var
   panel: TPanel;
   mailEdit, passEdit: TLabeledEdit;
   login, discord: TButton;
-  //speedButton: TSpeedButton;
   email: String;
   viewPass: TLabeledCheckBox;
 begin
@@ -651,22 +681,6 @@ begin
   discord.SetLeft(panel.getWidth() - discord.getWidth());
   discord.SetTop(login.GetTop());
   discord.setOnClick(@Self._DiscordButton);
-
-  (*
-  speedButton.Init(panel);
-  speedButton.setParent(panel);
-  speedButton.SetCaption('Login');
-
-  speedButton.setWidth(150);
-  speedButton.SetLeft(speedButton.getParent().getWidth() div 2 - 150 div 2);
-  speedButton.SetTop(speedButton.getParent().getHeight() - 40);
-  //speedButton.setEnabled(False);
-  speedButton.setOnClick(@Self._LoginButton);
-  speedButton.setFlat(True);
-  speedButton.setTransparent(False);
-  speedButton.setColor($00DDFF);
-  speedButton.getFont().setColor(0);
-  *)
 end;
 
 
@@ -758,6 +772,16 @@ begin
 end;
 
 function TWaspForm._VersionsControls(parent: TPanel; left: Int32): TPanel;
+  type TWaspForm = TWaspForm;
+  procedure TWaspForm._UpdateButton(sender: TObject);
+  begin
+    case TButton(sender).getName() of
+      'update_srl_button':    {$IFNDEF DEVELOPER_MODE}Sync(@Self._UpdateSRL){$ENDIF};
+      'update_wl_button':     {$IFNDEF DEVELOPER_MODE}Sync(@Self._UpdateWL){$ENDIF};
+      'update_script_button': Self._UpdateScript;
+    end;
+  end;
+
 var
   button: TButton;
   check: TLabeledCheckBox;
@@ -1047,7 +1071,7 @@ begin
 
   Self.TokenTimer.Init(nil);
   Self.TokenTimer.setName('token_timer');
-  Self.TokenTimer.setInterval(1000);
+  Self.TokenTimer.setInterval(1500);
 
   Self.SetupLoginPanel(Self.Form);
   Self.SetupDiscordPanel(Self.Form);
