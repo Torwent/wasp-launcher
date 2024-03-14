@@ -13,14 +13,6 @@ begin
   TerminateScript();
 end;
 
-function CountSimbaWindows(): Int32;
-var
-  wins: TOSWindowArray;
-begin
-  wins := GetWindows();
-  Result := Length(wins.GetByTitleAndClass('Simba', 'Window'));
-end;
-
 procedure DebugLn(name, text: String);
 begin
   WriteLn(SRL.TimeStamp() + ':[' + name + ']: ' + text);
@@ -55,6 +47,7 @@ begin
   begin
     content := content.Replace('TerminateScript();', 'begin DeleteFile(ScriptFile); TerminateScript(); end;');
     content := content.Replace('TerminateScript;', 'begin DeleteFile(ScriptFile); TerminateScript(); end;');
+    content := content.Replace('FreeHTTPClient(httpClient); begin DeleteFile(ScriptFile); TerminateScript(); end;', 'DeleteFile(ScriptFile); FreeHTTPClient(httpClient); TerminateScript();');
     content += LineEnding + LineEnding + 'begin DeleteFile(ScriptFile); end;';
   end;
 

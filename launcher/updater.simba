@@ -14,8 +14,6 @@ type
 
   EUpdaterState = (NONE, DOWNLOAD, UNZIP, CLEAN);
 
-  PWaspUpdater = ^TWaspUpdater;
-
   TMonitor = record
     Package: String;
     CurrentFile: String;
@@ -39,7 +37,7 @@ type
   end;
 
 var
-  pWU: PWaspUpdater;
+  WaspUpdater: TWaspUpdater;
 
 procedure TMonitor.NextState(); forward;
 
@@ -78,7 +76,7 @@ begin
     begin
       Self.CurrentFile := Self.Package + '-unzipper.simba';
 
-      WriteAsyncFile(Self.CurrentFile, pWU^.GetUnzipperContent());
+      WriteAsyncFile(Self.CurrentFile, WaspUpdater.GetUnzipperContent());
       params := ['path=' + GitHubClient.DownloadPath, 'name=' + Self.Package];
       RunAsyncFile(Self.CurrentFile, params);
 
@@ -93,7 +91,7 @@ begin
     begin
       Self.CurrentFile := Self.Package + '-mover.simba';
 
-      WriteAsyncFile(Self.CurrentFile, pWU^.GetMoverContent());
+      WriteAsyncFile(Self.CurrentFile, WaspUpdater.GetMoverContent());
       params := ['origin=' + GitHubClient.DownloadPath, 'pkg=' + Self.Package];
       RunAsyncFile(Self.CurrentFile, params);
 
@@ -177,28 +175,23 @@ end;
 
 function TWaspUpdater.GetMoverContent(): String;
 begin
-  Result += "const SEP = DirectorySeparator;" + LineEnding;
-  Result += LineEnding;
+  Result += "const SEP = DirectorySeparator;" + LineEnding + LineEnding;
   Result += "procedure TerminateScript(reason: String); overload;" + LineEnding;
   Result += "begin" + LineEnding;
-  Result += "  WriteLn('Terminating: ' + reason);" + LineEnding;
+  Result += "  WriteLn('[AsyncMover]: Terminating: ' + reason);" + LineEnding;
   Result += "  TerminateScript();" + LineEnding;
-  Result += "end;" + LineEnding;
-  Result += LineEnding;
+  Result += "end;" + LineEnding + LineEnding;
   Result += "function BackupFile(filePath: String): Boolean;" + LineEnding;
   Result += "var" + LineEnding;
   Result += "  f: Int32;" + LineEnding;
   Result += "  str: String;" + LineEnding;
   Result += "begin" + LineEnding;
-  Result += "  f := OpenFile(filePath, False);" + LineEnding;
-  Result += LineEnding;
+  Result += "  f := OpenFile(filePath, False);" + LineEnding + LineEnding;
   Result += "  if not ReadFileString(f, str, FileSize(f)) then" + LineEnding;
-  Result += "    Exit;" + LineEnding;
-  Result += LineEnding;
+  Result += "    Exit;" + LineEnding + LineEnding;
   Result += "  CloseFile(f);" + LineEnding;
   Result += "  Result := WriteFileContents(filePath + '.bak', str, False);" + LineEnding;
-  Result += "end;" + LineEnding;
-  Result += LineEnding;
+  Result += "end;" + LineEnding + LineEnding;
   Result += "function RestoreFile(filePath: String): Boolean;" + LineEnding;
   Result += "var" + LineEnding;
   Result += "  f: Int32;" + LineEnding;
@@ -206,26 +199,23 @@ begin
   Result += "begin" + LineEnding;
   Result += "  f := OpenFile(filePath + '.bak', False);" + LineEnding;
   Result += "  if not ReadFileString(f, str, FileSize(f)) then" + LineEnding;
-  Result += "    Exit;" + LineEnding;
-  Result += LineEnding;
+  Result += "    Exit;" + LineEnding + LineEnding;
   Result += "  CloseFile(f);" + LineEnding;
   Result += "  Result := WriteFileContents(filePath, str, False);" + LineEnding;
   Result += "  DeleteFile(filePath + '.bak');" + LineEnding;
-  Result += "end;" + LineEnding;
-  Result += LineEnding;
-  Result += LineEnding;
+  Result += "end;" + LineEnding + LineEnding + LineEnding;
   Result += "function IsFileLocked(path: String): Boolean;" + LineEnding;
   Result += "begin" + LineEnding;
   Result += "  if not FileExists(path) then" + LineEnding;
-  Result += "    Exit;" + LineEnding;
+  Result += "    Exit;" + LineEnding + LineEnding;
   Result += "  if not BackupFile(path) then" + LineEnding;
-  Result += "    TerminateScript('Failed to backup file: ' + path);" + LineEnding;
-  Result += LineEnding;
-  Result += "  Result := not DeleteFile(path);" + LineEnding;
-  Result += "  if not Result and not RestoreFile(path) then" + LineEnding;
+  Result += "    TerminateScript('Failed to backup file: ' + path);" + LineEnding + LineEnding;
+  Result += "  Result := not DeleteFile(path);" + LineEnding + LineEnding;
+  Result += "  if Result then" + LineEnding;
+  Result += "    DeleteFile(path + '.bak')" + LineEnding;
+  Result += "  else if not RestoreFile(path) then" + LineEnding;
   Result += "    TerminateScript('Failed to restore file: ' + path);" + LineEnding;
-  Result += "end;" + LineEnding;
-  Result += LineEnding;
+  Result += "end;" + LineEnding + LineEnding;
   Result += "function FindLockedPlugins(): TStringArray;" + LineEnding;
   Result += "const" + LineEnding;
   Result += "  PATHS = [" + LineEnding;
@@ -239,16 +229,28 @@ begin
   Result += "    for plugin in FindFiles(path, False) do" + LineEnding;
   Result += "      if IsFileLocked(plugin) then" + LineEnding;
   Result += "        Result += plugin;" + LineEnding;
-  Result += "end;" + LineEnding;
-  Result += LineEnding;
+  Result += "end;" + LineEnding + LineEnding;
   Result += "procedure KillClients();" + LineEnding;
   Result += "var" + LineEnding;
   Result += "  window: TOSWindow;" + LineEnding;
   Result += "begin" + LineEnding;
   Result += "  for window in GetWindows().GetByClass('SunAwtCanvas') do" + LineEnding;
   Result += "    window.Kill();" + LineEnding;
-  Result += "end;" + LineEnding;
-  Result += LineEnding;
+  Result += "end;" + LineEnding + LineEnding;
+  Result += "procedure KillSimbas();" + LineEnding;
+  Result += "var" + LineEnding;
+  Result += "  windows, simbas: TOSWindowArray;" + LineEnding;
+  Result += "  win: TOSWindow;" + LineEnding;
+  Result += "begin" + LineEnding;
+  Result += "  windows := GetWindows();" + LineEnding;
+  Result += "  simbas := windows.GetByTitleAndClass('Output,File Browser,Editor,Function List', 'Window');" + LineEnding + LineEnding;
+  Result += "  if MessageDlg('Close Simba', 'Simba needs to be restarted.'," + LineEnding;
+  Result += "     TMsgDlgType.mtConfirmation, [mbOK, mbAbort]) = 3 then" + LineEnding;
+  Result += "    TerminateScript('You need to close all Simba windows to update SRL.');" + LineEnding + LineEnding;
+  Result += "  for win in simbas do" + LineEnding;
+  Result += "    win.Kill();" + LineEnding + LineEnding;
+  Result += "  TerminateScript();" + LineEnding;
+  Result += "end;" + LineEnding + LineEnding;
   Result += "procedure UnlockPlugins();" + LineEnding;
   Result += "var" + LineEnding;
   Result += "  locked: TStringArray;" + LineEnding;
@@ -256,17 +258,15 @@ begin
   Result += "begin" + LineEnding;
   Result += "  locked := FindLockedPlugins();" + LineEnding;
   Result += "  if locked = [] then" + LineEnding;
-  Result += "    Exit;" + LineEnding;
-  Result += LineEnding;
+  Result += "    Exit;" + LineEnding + LineEnding;
   Result += "  if MessageDlg('Close RuneScape', 'RS Clients need to be closed to update this package.'," + LineEnding;
   Result += "     TMsgDlgType.mtConfirmation, [mbOK, mbAbort]) = 3 then" + LineEnding;
-  Result += "    TerminateScript();" + LineEnding;
-  Result += LineEnding;
+  Result += "    TerminateScript('You need to close your RS Clients to update SRL.');" + LineEnding + LineEnding;
   Result += "  KillClients();" + LineEnding;
-  Result += "  for plugin in locked do if IsFileLocked(plugin) then" + LineEnding;
-  Result += "    TerminateScript('Failed to unlock plugin: ' + plugin);" + LineEnding;
-  Result += "end;" + LineEnding;
-  Result += LineEnding;
+  Result += "  for plugin in locked do" + LineEnding;
+  Result += "    if IsFileLocked(plugin) then" + LineEnding;
+  Result += "      KillSimbas();" + LineEnding;
+  Result += "end;" + LineEnding + LineEnding;
   Result += "function DelDirectory(path: String; deleteRoot: Boolean = True): Boolean;" + LineEnding;
   Result += "var" + LineEnding;
   Result += "  f, tmp: String;" + LineEnding;
@@ -277,20 +277,16 @@ begin
   Result += "    begin" + LineEnding;
   Result += "      deleteRoot := False;" + LineEnding;
   Result += "      Continue;" + LineEnding;
-  Result += "    end;" + LineEnding;
-  Result += LineEnding;
+  Result += "    end;" + LineEnding + LineEnding;
   Result += "    if not DeleteFile(f) then" + LineEnding;
-  Result += "      Exit;" + LineEnding;
-  Result += LineEnding;
+  Result += "      Exit;" + LineEnding + LineEnding;
   Result += "    tmp := ExtractFilePath(f);" + LineEnding;
   Result += "    if (FindFiles(tmp, True) = []) and (FindDirectories(tmp, True) = []) then" + LineEnding;
   Result += "      if not DeleteDirectory(tmp, False) then" + LineEnding;
   Result += "        Exit;" + LineEnding;
-  Result += "  end;" + LineEnding;
-  Result += LineEnding;
+  Result += "  end;" + LineEnding + LineEnding;
   Result += "  Result := not deleteRoot or DeleteDirectory(path, False);" + LineEnding;
-  Result += "end;" + LineEnding;
-  Result += LineEnding;
+  Result += "end;" + LineEnding + LineEnding;
   Result += "procedure MoveFiles(origin, pkg: String);" + LineEnding;
   Result += "var" + LineEnding;
   Result += "  paths, files: TStringArray;" + LineEnding;
@@ -298,51 +294,40 @@ begin
   Result += "begin" + LineEnding;
   Result += "  paths := GetDirectories(origin + pkg + SEP);" + LineEnding;
   Result += "  if Length(paths) <> 1 then" + LineEnding;
-  Result += "    TerminateScript('The ' + pkg + ' download is empty or has unexpected things inside.');" + LineEnding;
-  Result += LineEnding;
+  Result += "    TerminateScript('The ' + pkg + ' download is empty or has unexpected things inside.');" + LineEnding + LineEnding;
   Result += "  destination := IncludePath + pkg + SEP;" + LineEnding;
   Result += "  if DirectoryExists(destination) and not DelDirectory(destination) then" + LineEnding;
   Result += "    TerminateScript('Failed to delete old ' + pkg + ' library');" + LineEnding;
   Result += "  if not ForceDirectories(destination) then" + LineEnding;
-  Result += "    TerminateScript('Failed to create path: ' + destination);" + LineEnding;
-  Result += LineEnding;
+  Result += "    TerminateScript('Failed to create path: ' + destination);" + LineEnding + LineEnding;
   Result += "  path := origin + pkg + SEP + paths[0] + SEP;" + LineEnding;
-  Result += "  files := FindFiles(path, True);" + LineEnding;
-  Result += LineEnding;
+  Result += "  files := FindFiles(path, True);" + LineEnding + LineEnding;
   Result += "  for f in files do" + LineEnding;
   Result += "  begin" + LineEnding;
   Result += "    fPath := Replace(f, path, '', [rfReplaceAll]);" + LineEnding;
   Result += "    if Pos(SEP + '.git' + SEP, fPath) > 0 then" + LineEnding;
-  Result += "      Continue;" + LineEnding;
-  Result += LineEnding;
+  Result += "      Continue;" + LineEnding + LineEnding;
   Result += "    if not ForceDirectories(destination + ExtractFilePath(fPath)) then" + LineEnding;
-  Result += "      TerminateScript('Failed to create path: ' + destination + ExtractFilePath(fPath));" + LineEnding;
-  Result += LineEnding;
+  Result += "      TerminateScript('Failed to create path: ' + destination + ExtractFilePath(fPath));" + LineEnding + LineEnding;
   Result += "    if not CopyFile(f, destination + fPath, False) then" + LineEnding;
-  Result += "      TerminateScript('Failed to copy file: ' + fPath);" + LineEnding;
-  Result += LineEnding;
+  Result += "      TerminateScript('Failed to copy file: ' + fPath);" + LineEnding + LineEnding;
   Result += "    DeleteFile(f);" + LineEnding;
   Result += "    if (FindFiles(ExtractFilePath(f), True) = []) and (FindDirectories(ExtractFilePath(f), True) = []) then" + LineEnding;
   Result += "      DeleteDirectory(ExtractFilePath(f), False);" + LineEnding;
-  Result += "  end;" + LineEnding;
-  Result += LineEnding;
+  Result += "  end;" + LineEnding + LineEnding;
   Result += "  DelDirectory(origin + pkg);" + LineEnding;
-  Result += "end;" + LineEnding;
-  Result += LineEnding;
+  Result += "end;" + LineEnding + LineEnding;
   Result += "var" + LineEnding;
   Result += "  pkg: String;" + LineEnding;
   Result += "begin" + LineEnding;
-  Result += "  pkg := GetProcessParameter('pkg');" + LineEnding;
-  Result += LineEnding;
+  Result += "  pkg := GetProcessParameter('pkg');" + LineEnding + LineEnding;
   Result += "  case LowerCase(pkg) of" + LineEnding;
   Result += "    'srl-t', 'srlt', 'srl': UnlockPlugins();" + LineEnding;
-  Result += "  end;" + LineEnding;
-  Result += LineEnding;
+  Result += "  end;" + LineEnding + LineEnding;
   Result += "  WriteLn('[AsyncMover]: Moving ', pkg, ' files, this will take a few seconds.');" + LineEnding;
   Result += "  MoveFiles(GetProcessParameter('origin'), pkg);" + LineEnding;
   Result += "end;" + LineEnding;
 end;
-
 
 procedure TWaspUpdater.Update(pkg: String; caption, button: TComponent);
 begin
@@ -470,7 +455,6 @@ begin
 
   ForceDirectories(Self.ScriptsPath);
 
-
   Self.MonitorSRLT.Package := 'srl-t';
   Self.MonitorSRLT.Timer.Init(nil);
   Self.MonitorSRLT.Timer.setName('srlt_update_monitor');
@@ -482,8 +466,4 @@ begin
   Self.MonitorWL.Timer.setInterval(200);
 
   AddOnTerminate(@Self.Free);
-  pWU := @Self;
 end;
-
-var
-  WaspUpdater: TWaspUpdater;

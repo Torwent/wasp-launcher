@@ -6,6 +6,7 @@
 {$I core.simba}
 
 begin
+  ClearDebug();
   WaspConfig.Setup(LAUNCHER_DATA + 'configs' + DirectorySeparator + 'launcher.json');
   WaspClient.Setup();
   WaspUpdater.Setup();

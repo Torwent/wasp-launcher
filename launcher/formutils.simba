@@ -17,6 +17,11 @@ begin
   Result := Round(n * TControl.GetDPI() / 96);
 end;
 
+function TControl.ReverseAdjustToDPI(n: Int32): Int32; static;
+begin
+  Result := Round(n / TControl.GetDPI() / 96);
+end;
+
 
 procedure TPanel.Create(owner: TControl);
 begin
@@ -98,7 +103,7 @@ end;
 
 procedure TControl.SetFontSize(size: Int32);
 begin
-  Self.GetFont().setSize(size);
+  Self.GetFont().setSize(TControl.ReverseAdjustToDPI(size));
 end;
 
 procedure TControl.SetFontQuality(quality: TFontQuality);
@@ -109,27 +114,6 @@ end;
 procedure TControl.SetFontStyle(qualities: TFontStyles);
 begin
   Self.GetFont().setStyle(qualities);
-end;
-
-
-procedure TControl.SetTop(const value: Integer); constref; override;
-begin
-  inherited(TControl.AdjustToDPI(value));
-end;
-
-procedure TControl.SetLeft(const value: Integer); constref; override;
-begin
-  inherited(TControl.AdjustToDPI(value));
-end;
-
-procedure TControl.SetWidth(const value: Integer); constref; override;
-begin
-  inherited(TControl.AdjustToDPI(value));
-end;
-
-procedure TControl.SetLeft(const value: Integer); constref; override;
-begin
-  inherited(TControl.AdjustToDPI(value));
 end;
 
 
