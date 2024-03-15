@@ -22,17 +22,6 @@ type
     end;
   end;
 
-procedure TWaspForm.StartScript({$H-}sender: TObject);{$H+}
-begin
-  if WaspUpdater.MonitorSRLT.Timer.getEnabled() or
-     WaspUpdater.MonitorWL.Timer.getEnabled() then
-     Exit;
-
-  Self.Form.SetOnClose(nil);
-  Self.Form.Close();
-end;
-
-
 procedure TWaspForm.HandleLogin(loginPanel: TPanel);
 var
   msPanel, dPanel: TPanel;
@@ -44,7 +33,7 @@ begin
   if WaspUpdater.Launcher.Revision < WaspClient.Cache.Launcher.Revision then
   begin
     WaspUpdater.SelfUpdate();
-    SimbaRunDefault();
+    SimbaRunInTab(WaspUpdater.Launcher.Path);
     Self.Form.Close();
   end;
 
@@ -144,9 +133,7 @@ begin
   list := panel.GetChild('scripts_listbox');
   script := WaspClient.GetAllUserScripts()[list.getItemIndex()];
   scriptFile := WaspUpdater.GetScriptFile(script.ID);
-  SimbaOpenInTab(scriptFile.Path);
-  SimbaRunButton();
-
+  SimbaRunInTab(scriptFile.Path);
   Self.Form.Close();
 
   for proc in {$H-}GetProcesses(){$H+} do

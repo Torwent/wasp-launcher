@@ -449,7 +449,7 @@ begin
   Self.Launcher.ID := {$macro SCRIPT_ID};
   Self.Launcher.Revision := StrToIntDef({$macro SCRIPT_REVISION}, 1);
 
-  Self.Launcher.Path := AppPath + 'Data' + DirectorySeparator + 'default.simba';
+  Self.Launcher.Path := ScriptPath + 'wasp-launcher.simba';
 
   Self.ScriptsPath := ScriptPath + 'waspscripts.com' + DirectorySeparator;
 
