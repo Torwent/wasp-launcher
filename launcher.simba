@@ -1,5 +1,5 @@
 {$DEFINE SCRIPT_ID := 'd563990c-4d31-4aba-b214-18e69171ed5e'}
-{$DEFINE SCRIPT_REVISION := '6'}
+{$DEFINE SCRIPT_REVISION := '7'}
 
 {.$DEFINE DEVELOPER_MODE}
 
@@ -1940,7 +1940,7 @@ var
 {$IFNDEF WS_HTTP_INCLUDED}         
 (*
 # HTTPClients
-Responsible for loading settings from and saving them in json format.
+Responsible connecting to the internet.
 *)
 
 {$DEFINE WS_HTTP_INCLUDED}
@@ -3357,6 +3357,7 @@ begin
 
   Self.Edit.Create(Self.Panel);
   Self.Edit.setAlign(alClient);
+  Self.Edit.setHeight(TControl.AdjustToDPI(30));
   Self.Control := Self.Edit;
 
   Self.Panel.setHeight(Self.Caption.getHeight() + Self.Edit.getHeight());
@@ -3396,7 +3397,7 @@ begin
   Self.Control := Self.CheckBox;
 
   Self.Panel.setHeight(Self.Caption.GetTrueHeight());
-  Self.Panel.setWidth(22 + Self.Caption.GetTrueWidth());
+  Self.Panel.setWidth(TControl.AdjustToDPI(22) + Self.Caption.GetTrueWidth());
 end;
 
 procedure TLabeledComboBox.Create(owner: TControl); override;
@@ -3442,7 +3443,7 @@ procedure TLabeledCheckBox.SetCaption(value: String); override;
 begin
   Self.Caption.setCaption(value);
   Self.Panel.setHeight(Self.Caption.GetTrueHeight());
-  Self.Panel.setWidth(22 + Self.Caption.GetTrueWidth());
+  Self.Panel.setWidth(TControl.AdjustToDPI(22) + Self.Caption.GetTrueWidth());
 end;
 
 
@@ -4856,8 +4857,8 @@ begin
   panel.Create(form);
   panel.setName('login_panel');
   panel.setCaption('');
-  panel.setWidth(300);
-  panel.setHeight(180);
+  panel.setWidth(TControl.AdjustToDPI(300));
+  panel.setHeight(TControl.AdjustToDPI(180));
   panel.SetLeft(Self.Size.X div 2 - panel.getWidth() div 2);
   panel.SetTop(Self.Size.Y div 2 - (panel.getHeight() - (panel.getHeight() div 10)));
   panel.setBevelWidth(0);
@@ -4879,7 +4880,7 @@ begin
   passEdit.Create(panel);
   passEdit.SetName('password');
   passEdit.SetCaption('Password');
-  passEdit.SetTop(50);
+  passEdit.SetTop(TControl.AdjustToDPI(50));
   passEdit.SetWidth(panel.getWidth());
   passEdit.SetControlColor($303030);
   passEdit.setControlFontColor($F0F0F0);
@@ -4890,9 +4891,10 @@ begin
   viewPass.Create(panel);
   viewPass.SetName('viewpass');
   viewPass.SetCaption('Show password');
-  viewPass.SetLeft(10);
-  viewPass.SetTop(100);
+  viewPass.SetLeft(TControl.AdjustToDPI(10));
+  viewPass.SetTop(TControl.AdjustToDPI(100));
   viewPass.CheckBox.setOnChange(@Self._OnTogglePass);
+
   Self._OnTogglePass(viewPass.CheckBox);
 
   login.Create(panel);

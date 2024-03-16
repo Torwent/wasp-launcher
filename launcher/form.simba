@@ -597,8 +597,8 @@ begin
   panel.Create(form);
   panel.setName('login_panel');
   panel.setCaption('');
-  panel.setWidth(300);
-  panel.setHeight(180);
+  panel.setWidth(TControl.AdjustToDPI(300));
+  panel.setHeight(TControl.AdjustToDPI(180));
   panel.SetLeft(Self.Size.X div 2 - panel.getWidth() div 2);
   panel.SetTop(Self.Size.Y div 2 - (panel.getHeight() - (panel.getHeight() div 10)));
   panel.setBevelWidth(0);
@@ -620,7 +620,7 @@ begin
   passEdit.Create(panel);
   passEdit.SetName('password');
   passEdit.SetCaption('Password');
-  passEdit.SetTop(50);
+  passEdit.SetTop(TControl.AdjustToDPI(50));
   passEdit.SetWidth(panel.getWidth());
   passEdit.SetControlColor($303030);
   passEdit.setControlFontColor($F0F0F0);
@@ -631,9 +631,10 @@ begin
   viewPass.Create(panel);
   viewPass.SetName('viewpass');
   viewPass.SetCaption('Show password');
-  viewPass.SetLeft(10);
-  viewPass.SetTop(100);
+  viewPass.SetLeft(TControl.AdjustToDPI(10));
+  viewPass.SetTop(TControl.AdjustToDPI(100));
   viewPass.CheckBox.setOnChange(@Self._OnTogglePass);
+
   Self._OnTogglePass(viewPass.CheckBox);
 
   login.Create(panel);

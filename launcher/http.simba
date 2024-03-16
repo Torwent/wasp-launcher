@@ -1,6 +1,6 @@
 (*
 # HTTPClients
-Responsible for loading settings from and saving them in json format.
+Responsible connecting to the internet.
 *)
 
 {$DEFINE WS_HTTP_INCLUDED}

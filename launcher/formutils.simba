@@ -340,6 +340,7 @@ begin
 
   Self.Edit.Create(Self.Panel);
   Self.Edit.setAlign(alClient);
+  Self.Edit.setHeight(TControl.AdjustToDPI(30));
   Self.Control := Self.Edit;
 
   Self.Panel.setHeight(Self.Caption.getHeight() + Self.Edit.getHeight());
@@ -379,7 +380,7 @@ begin
   Self.Control := Self.CheckBox;
 
   Self.Panel.setHeight(Self.Caption.GetTrueHeight());
-  Self.Panel.setWidth(22 + Self.Caption.GetTrueWidth());
+  Self.Panel.setWidth(TControl.AdjustToDPI(22) + Self.Caption.GetTrueWidth());
 end;
 
 procedure TLabeledComboBox.Create(owner: TControl); override;
@@ -425,7 +426,7 @@ procedure TLabeledCheckBox.SetCaption(value: String); override;
 begin
   Self.Caption.setCaption(value);
   Self.Panel.setHeight(Self.Caption.GetTrueHeight());
-  Self.Panel.setWidth(22 + Self.Caption.GetTrueWidth());
+  Self.Panel.setWidth(TControl.AdjustToDPI(22) + Self.Caption.GetTrueWidth());
 end;
 
 
