@@ -761,11 +761,10 @@ end;
 function TWaspClient.GetBundles(): TBundleDataArray;
 var
   jsonArray, scriptsJSON: TJSONArray;
-  i, j, l: Int32;
+  i, j, n: Int32;
   bundle: TBundleData;
   scripts: TScriptDataArray;
 begin
-
   if Self.Cache.Bundles <> [] then
     Exit(Self.Cache.Bundles);
   jsonArray := Self.Select('scripts', 'bundles', 'product,id,name,scripts,user_id');
@@ -773,7 +772,6 @@ begin
   scripts := Self.GetPremiumScripts();
 
   for i := 0 to jsonArray.High() do
-  begin
     with jsonArray.getJSONObject(i) do
     begin
       bundle.ID := getString('id');
@@ -783,20 +781,16 @@ begin
 
       scriptsJSON := getJSONArray('scripts');
       for j := 0 to scriptsJSON.High() do
-        for l := High(scripts) downto 0 do
-          if scripts[l].ID = scriptsJSON.getString(j) then
+        for n := High(scripts) downto 0 do
+          if scripts[n].ID = scriptsJSON.getString(j) then
           begin
-            bundle.Scripts += scripts[l];
-            Delete(scripts, 1, 1);
+            bundle.Scripts += scripts[n];
+            Delete(scripts, n, 1);
           end;
 
       Result += bundle;
       bundle := [];
     end;
-
-    Result += bundle;
-    bundle := [];
-  end;
 
   jsonArray.Free();
 
@@ -809,13 +803,13 @@ var
   i: Int32;
 begin
   bundles := Self.GetBundles();
+
   for i := 0 to High(bundles) do
   begin
     if bundles[i].ID <> id then
       Continue;
 
-    Result := bundles[i].Scripts;
-    Break;
+    Exit(bundles[i].Scripts);
   end;
 end;
 
@@ -883,7 +877,6 @@ begin
   products := Self.GetProducts();
 
   for i := 0 to High(subs) do
-  begin
     for j := High(products) downto 0 do
     begin
       if subs[i].Product <> products[j].ID then
@@ -892,7 +885,7 @@ begin
       Delete(products, j, 1);
       Break;
     end;
-  end;
+
   Self.Cache.User.SubscribbedProducts := Result;
 end;
 
@@ -911,7 +904,6 @@ begin
   roles := Self.GetRoles();
 
   for i := 0 to High(free) do
-  begin
     for j := High(products) downto 0 do
     begin
       if free[i].Product <> products[j].ID then
@@ -920,7 +912,6 @@ begin
       Delete(products, j, 1);
       Break;
     end;
-  end;
 
   if roles.Tester or roles.Moderator or roles.Administrator then
     for i := 0 to High(products) do
@@ -968,6 +959,7 @@ begin
     if freeAccess[i].Script = 'null' then
     begin
       bundled := Self.GetBundledScripts(freeAccess[i].Bundle);
+
       for j := 0 to High(bundled) do
         if not Result.Contains(bundled[j].ID) then
           Result += bundled[j];

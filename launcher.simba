@@ -1,5 +1,5 @@
 {$DEFINE SCRIPT_ID := 'd563990c-4d31-4aba-b214-18e69171ed5e'}
-{$DEFINE SCRIPT_REVISION := '7'}
+{$DEFINE SCRIPT_REVISION := '8'}
 
 {.$DEFINE DEVELOPER_MODE}
 
@@ -2699,11 +2699,10 @@ end;
 function TWaspClient.GetBundles(): TBundleDataArray;
 var
   jsonArray, scriptsJSON: TJSONArray;
-  i, j, l: Int32;
+  i, j, n: Int32;
   bundle: TBundleData;
   scripts: TScriptDataArray;
 begin
-
   if Self.Cache.Bundles <> [] then
     Exit(Self.Cache.Bundles);
   jsonArray := Self.Select('scripts', 'bundles', 'product,id,name,scripts,user_id');
@@ -2711,7 +2710,6 @@ begin
   scripts := Self.GetPremiumScripts();
 
   for i := 0 to jsonArray.High() do
-  begin
     with jsonArray.getJSONObject(i) do
     begin
       bundle.ID := getString('id');
@@ -2721,20 +2719,16 @@ begin
 
       scriptsJSON := getJSONArray('scripts');
       for j := 0 to scriptsJSON.High() do
-        for l := High(scripts) downto 0 do
-          if scripts[l].ID = scriptsJSON.getString(j) then
+        for n := High(scripts) downto 0 do
+          if scripts[n].ID = scriptsJSON.getString(j) then
           begin
-            bundle.Scripts += scripts[l];
-            Delete(scripts, 1, 1);
+            bundle.Scripts += scripts[n];
+            Delete(scripts, n, 1);
           end;
 
       Result += bundle;
       bundle := [];
     end;
-
-    Result += bundle;
-    bundle := [];
-  end;
 
   jsonArray.Free();
 
@@ -2747,13 +2741,13 @@ var
   i: Int32;
 begin
   bundles := Self.GetBundles();
+
   for i := 0 to High(bundles) do
   begin
     if bundles[i].ID <> id then
       Continue;
 
-    Result := bundles[i].Scripts;
-    Break;
+    Exit(bundles[i].Scripts);
   end;
 end;
 
@@ -2821,7 +2815,6 @@ begin
   products := Self.GetProducts();
 
   for i := 0 to High(subs) do
-  begin
     for j := High(products) downto 0 do
     begin
       if subs[i].Product <> products[j].ID then
@@ -2830,7 +2823,7 @@ begin
       Delete(products, j, 1);
       Break;
     end;
-  end;
+
   Self.Cache.User.SubscribbedProducts := Result;
 end;
 
@@ -2849,7 +2842,6 @@ begin
   roles := Self.GetRoles();
 
   for i := 0 to High(free) do
-  begin
     for j := High(products) downto 0 do
     begin
       if free[i].Product <> products[j].ID then
@@ -2858,7 +2850,6 @@ begin
       Delete(products, j, 1);
       Break;
     end;
-  end;
 
   if roles.Tester or roles.Moderator or roles.Administrator then
     for i := 0 to High(products) do
@@ -2906,6 +2897,7 @@ begin
     if freeAccess[i].Script = 'null' then
     begin
       bundled := Self.GetBundledScripts(freeAccess[i].Bundle);
+
       for j := 0 to High(bundled) do
         if not Result.Contains(bundled[j].ID) then
           Result += bundled[j];
@@ -5226,7 +5218,7 @@ end;
 procedure TWaspForm.SetupMainPanel(form: TForm);
 var
   panel: TPanel;
-  user, id: TLabel;
+  user, id, launcherRev: TLabel;
   button: TButton;
   scriptsList: TLabeledDarkListBox;
 begin
@@ -5284,6 +5276,14 @@ begin
   button.SetLeft(panel.getWidth() - TControl.AdjustToDPI(10) - button.getWidth());
   button.SetTop(panel.getHeight() - TControl.AdjustToDPI(40));
 
+  launcherRev.Create(panel);
+  launcherRev.setName('launcher_revision_label');
+  launcherRev.setCaption('Launcher revision: ' + ToStr(WaspUpdater.Launcher.Revision));
+  launcherRev.SetTop(panel.getHeight() - TControl.AdjustToDPI(30));
+  launcherRev.setLeft(TControl.AdjustToDPI(Self.Size.X) div 2 - launcherRev.getWidth());
+  launcherRev.setHint('Click to open your user profile.');
+  launcherRev.setShowHint(True);
+
   Self.SetupVersionsPanel(panel, user.GetTop());
   Self.SetupScriptPanel(panel, [scriptsList.GetRight() + TControl.AdjustToDPI(30), scriptsList.GetTop() + TControl.AdjustToDPI(90)]);
 end;
@@ -5303,6 +5303,8 @@ begin
 end;
 
 procedure TWaspForm.Setup();
+var
+  launcherRev: TLabel;
 begin
   Self.Size := [TControl.AdjustToDPI(900), TControl.AdjustToDPI(600)];
 
@@ -5331,6 +5333,14 @@ begin
   Self.SetupLoginPanel(Self.Form);
   Self.SetupDiscordPanel(Self.Form);
   Self.SetupMainPanel(Self.Form);
+
+  launcherRev.Create(Self.Form);
+  launcherRev.setName('launcher_revision_label');
+  launcherRev.setCaption('Launcher revision: ' + ToStr(WaspUpdater.Launcher.Revision));
+  launcherRev.SetTop(Self.Form.getHeight() - TControl.AdjustToDPI(30));
+  launcherRev.setLeft(TControl.AdjustToDPI(Self.Size.X) div 2 - launcherRev.getWidth());
+  launcherRev.setHint('Click to open your user profile.');
+  launcherRev.setShowHint(True);
 end;
 
 procedure TWaspForm.Show();
@@ -5394,6 +5404,7 @@ begin
   ClearDebug();
   WaspConfig.Setup(LAUNCHER_DATA + 'configs' + DirectorySeparator + 'launcher.json');
   WaspClient.Setup();
+
   WaspUpdater.Setup();
   GitHubClient.Setup();
 
