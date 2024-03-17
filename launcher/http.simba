@@ -781,12 +781,9 @@ begin
 
       scriptsJSON := getJSONArray('scripts');
       for j := 0 to scriptsJSON.High() do
-        for n := High(scripts) downto 0 do
+        for n := 0 to High(scripts) do
           if scripts[n].ID = scriptsJSON.getString(j) then
-          begin
             bundle.Scripts += scripts[n];
-            Delete(scripts, n, 1);
-          end;
 
       Result += bundle;
       bundle := [];

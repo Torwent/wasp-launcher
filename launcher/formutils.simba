@@ -63,6 +63,7 @@ procedure TButton.Create(owner: TControl);
 begin
   Self.Init(owner);
   Self.SetParent(owner);
+  Self.SetHeight(TControl.AdjustToDPI(20));
 end;
 
 procedure TCheckBox.Create(owner: TControl);

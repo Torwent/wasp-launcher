@@ -470,8 +470,8 @@ begin
   panel.Create(form);
   panel.setName('discord_panel');
   panel.setCaption('');
-  panel.setWidth(400);
-  panel.setHeight(150);
+  panel.setWidth(TControl.AdjustToDPI(400));
+  panel.setHeight(TControl.AdjustToDPI(150));
   panel.SetLeft(Self.Size.X div 2 - panel.getWidth() div 2);
   panel.SetTop(Self.Size.Y div 2 - (panel.getHeight() - (panel.getHeight() div 10)));
   panel.setBevelWidth(0);
@@ -502,7 +502,7 @@ begin
 
   caption.Create(panel);
   caption.SetName('discord_label');
-  caption.SetTop(tokenEdit.GetBottom() + 20);
+  caption.SetTop(tokenEdit.GetBottom() + TControl.AdjustToDPI(20));
   caption.SetCaption('Waiting for token');
   caption.SetLeft(panel.getWidth() div 2 - caption.GetTrueWidth() div 2);
 
@@ -511,7 +511,7 @@ begin
   cancel.SetCaption('Cancel');
   cancel.setWidth(panel.getWidth() div 3);
   cancel.SetLeft(panel.getWidth() div 2 - cancel.getWidth() div 2);
-  cancel.SetTop(panel.getHeight() - 40);
+  cancel.SetTop(panel.getHeight() - TControl.AdjustToDPI(40));
   cancel.setOnClick(@Self._CancelButton);
 end;
 
@@ -802,6 +802,7 @@ begin
   button.setName('update_srl_button');
   button.setLeft(TControl.AdjustToDPI(3));
   button.setHeight(TControl.AdjustToDPI(20));
+  button.setWidth(TControl.AdjustToDPI(70));
   if GitHubClient.Packages.Current.SRLT <> GitHubClient.Packages.Latest.SRLT then
     button.setCaption('Update')
   else
@@ -813,6 +814,7 @@ begin
   button.setLeft(TControl.AdjustToDPI(3));
   button.SetTop(TControl.AdjustToDPI(23));
   button.setHeight(TControl.AdjustToDPI(20));
+  button.setWidth(TControl.AdjustToDPI(70));
   if GitHubClient.Packages.Current.WaspLib <> GitHubClient.Packages.Latest.WaspLib then
     button.setCaption('Update')
   else
@@ -824,6 +826,7 @@ begin
   button.setLeft(TControl.AdjustToDPI(3));
   button.SetTop(TControl.AdjustToDPI(46));
   button.setHeight(TControl.AdjustToDPI(20));
+  button.setWidth(TControl.AdjustToDPI(70));
   if GitHubClient.Packages.Current.WaspLib <> GitHubClient.Packages.Latest.WaspLib then
     button.setCaption('Update')
   else
@@ -991,7 +994,7 @@ begin
   id.setName('id_label');
   id.setCaption('');
   id.setLeft(user.getLeft());
-  id.SetTop(user.GetTop() + user.GetHeight() + TControl.AdjustToDPI(5));
+  id.SetTop(user.GetTop() + user.GetTrueHeight() + TControl.AdjustToDPI(20));
   id.SetFontSize(10);
   id.setHint('Click to copy the ID to the clipboard.');
   id.setShowHint(True);
@@ -1006,8 +1009,7 @@ begin
   scriptsList.setHeight(Self.Size.Y - scriptsList.GetTop() - TControl.AdjustToDPI(100));
   scriptsList.ListBox.ListBox.setOnClick(@Self._OnScriptChange);
 
-  button.Init(panel);
-  button.setParent(panel);
+  button.Create(panel);
   button.setName('logout_button');
   button.SetCaption('Logout');
   button.setOnClick(@Self._LogoutButton);
@@ -1015,8 +1017,7 @@ begin
   button.SetLeft(TControl.AdjustToDPI(10));
   button.SetTop(panel.getHeight() - TControl.AdjustToDPI(40));
 
-  button.Init(panel);
-  button.setParent(panel);
+  button.Create(panel);
   button.setName('script_start_button');
   button.SetCaption('Run script');
   button.setOnClick(@Self._RunScript);
@@ -1028,9 +1029,7 @@ begin
   launcherRev.setName('launcher_revision_label');
   launcherRev.setCaption('Launcher revision: ' + ToStr(WaspUpdater.Launcher.Revision));
   launcherRev.SetTop(panel.getHeight() - TControl.AdjustToDPI(30));
-  launcherRev.setLeft(TControl.AdjustToDPI(Self.Size.X) div 2 - launcherRev.getWidth());
-  launcherRev.setHint('Click to open your user profile.');
-  launcherRev.setShowHint(True);
+  launcherRev.setLeft(Self.Size.X div 2 - launcherRev.GetTrueWidth() div 2);
 
   Self.SetupVersionsPanel(panel, user.GetTop());
   Self.SetupScriptPanel(panel, [scriptsList.GetRight() + TControl.AdjustToDPI(30), scriptsList.GetTop() + TControl.AdjustToDPI(90)]);
@@ -1087,8 +1086,7 @@ begin
   launcherRev.setCaption('Launcher revision: ' + ToStr(WaspUpdater.Launcher.Revision));
   launcherRev.SetTop(Self.Form.getHeight() - TControl.AdjustToDPI(30));
   launcherRev.setLeft(TControl.AdjustToDPI(Self.Size.X) div 2 - launcherRev.getWidth());
-  launcherRev.setHint('Click to open your user profile.');
-  launcherRev.setShowHint(True);
+  launcherRev.setLeft(Self.Size.X div 2 - launcherRev.GetTrueWidth() div 2);
 end;
 
 procedure TWaspForm.Show();
