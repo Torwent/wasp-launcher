@@ -435,6 +435,8 @@ begin
     WaspConfig.Put('refresh_token', Self.Cache.User.RefreshToken);
 end;
 
+
+//Login
 function TWaspClient.Login(grantType: String; payload: TJSONObject): Boolean;
 const
   ROUTE: String = 'auth/v1/token';
@@ -445,8 +447,7 @@ begin
   try
     response.Init(Self.POST(ROUTE + QUERY + grantType, payload, False));
 
-    Result := Self.GetHTTPCode() = 200;
-    if Result then
+    if Self.GetHTTPCode() = 200 then
     begin
       Self.Cache.User.AccessToken := response.getString('access_token');
       Self.Cache.User.RefreshToken := response.getString('refresh_token');
@@ -457,18 +458,21 @@ begin
       Self.Cache.Free := False;
 
       Self.GetAllUserScripts();
-    end
-    else if not Result then
-    begin
-      Self.Cache.User := [];
-      WaspConfig.Remove('refresh_token');
-      Self.FreeUserData();
+      Exit(True);
     end;
+
+    Self.Cache.User := [];
+    WaspConfig.Remove('refresh_token');
+    Self.FreeUserData();
+
   except
-    TerminateScript(response.ToString() + LineEnding + GetExceptionMessage());
+    WriteLn('Error logging in: ', GetExceptionMessage());
+    if response <> nil then
+      TerminateScript('Response: ' + response.ToString());
   finally
     payload.Free();
-    response.Free();
+    if response <> nil then
+      response.Free();
   end;
 end;
 
@@ -490,6 +494,7 @@ begin
   payload.Put('refresh_token', refreshToken);
   Result := Self.Login('refresh_token', payload);
 end;
+
 
 function TWaspClient.GetUserData(): TJSONObject;
 const
