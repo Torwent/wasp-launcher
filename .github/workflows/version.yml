@@ -2,13 +2,23 @@ name: Version
 on:
   push:
     branches: [main]
-  pull_request:
-    branches: [main]
+
+env:
+  simba-download: https://github.com/Villavu/Simba/releases/download/simba1400-release/Simba-Win32.exe
+  srl-download: https://github.com/Torwent/SRL-T.git
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
+  compile:
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-      
-     #todo...
+      - uses: Torwent/setup-simba
+
+      - name: Setup upterm session
+        uses: lhotari/action-upterm@v1
+
+      - name: Compile test
+        shell: bash
+        run: |
+          cd ..
+          ./Simba.exe --compile test.simba
