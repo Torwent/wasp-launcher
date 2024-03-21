@@ -14,8 +14,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: Torwent/setup-simba@master
 
-      - name: Setup upterm session
-        uses: lhotari/action-upterm@v1
+      - name: Setup tmate session
+        uses: mxschmitt/action-tmate@v3
 
       - name: Compile test
         shell: bash
