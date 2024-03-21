@@ -11,8 +11,10 @@ jobs:
   compile:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
       - uses: Torwent/setup-simba@master
+      - uses: actions/checkout@v4
+        with:
+          path: Simba/Scripts
 
       - name: Setup tmate session
         uses: mxschmitt/action-tmate@v3
