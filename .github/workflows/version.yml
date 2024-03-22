@@ -6,10 +6,13 @@ on:
 env:
   simba-download: https://github.com/Villavu/Simba/releases/download/simba1400-release/Simba-Win32.exe
   srl-download: https://github.com/Torwent/SRL-T.git
-
+    
 jobs:
   compile:
     runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: Torwent/setup-simba@master          
       - uses: actions/checkout@v4
@@ -17,55 +20,32 @@ jobs:
           path: Simba/Scripts
      
       - name: Compile test
-        shell: bash
         working-directory: ./Simba
         run: ./Simba.exe --compile Scripts/launcher/launcher.simba
           
       - name: S2SCompiler
-        shell: bash
         working-directory: ./Simba
         run: ./Simba.exe --run --path=Scripts/launcher/ --output=Scripts/ Includes/WaspLib/tools/s2scompiler.simba
         
-      - name: Generate changelog
-        id: changelog
-        uses: TriPSs/conventional-changelog-action@v3.18.0
-        working-directory: ./Simba/Scripts
+      - name: Upload to waspscripts.com
+        uses: Torwent/wasp-upload-action@master
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          git-message: "chore(release): {version}"
-          preset: "angular"
-          tag-prefix: "v"
-          output-file: "CHANGELOG.md"
-          skip-version-file: "true"
-          skip-on-empty: "true"
-          skip-commit: "true"          
-       
-          
-         
-          
+          SB_URL: ${{ secrets.SB_URL }}
+          SB_ANON_KEY: ${{ secrets.SB_ANON_KEY }}
+          EMAIL: ${{ secrets.EMAIL }}
+          PASSWORD: ${{ secrets.PASSWORD }}
+          MODIFIED_FILES: ["Simba/Scripts/launcher.simba"]
+        
       - name: Commit and push changes
         working-directory: ./Simba/Scripts
-        if: ${{ steps.changelog.outputs.skipped == 'false' }}
         run: |
           git config --global user.name 'WaspBot'
           git config --global user.email 'wasp@waspscripts.com'
           git commit -am "chore: github action"
           git push
       
-      - name: Create release
-        uses: actions/create-release@v1.1.4
-        working-directory: ./Simba/Scripts
-        if: ${{ steps.changelog.outputs.skipped == 'false' }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: ${{ steps.changelog.outputs.tag }}
-          release_name: ${{ steps.changelog.outputs.tag }}
-          body: ${{ steps.changelog.outputs.clean_changelog }}
-    
       - name: Discord notification
         uses: rguillaume/discord-action-embed@v1.0.4
-        if: ${{ steps.changelog.outputs.skipped == 'false' }}
         with:
           webhook: ${{ secrets.UPDATES_WEBHOOK }}
           embed: '{"title": "Update: ${{ github.event.repository.name }}", "description": ${{ toJSON(github.event.head_commit.message) }}, "url": "${{ github.event.head_commit.url }}", "footer": {"text": "Committer: ${{ github.event.head_commit.author.username }}"}, "color": "16760576"}'
