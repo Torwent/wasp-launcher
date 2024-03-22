@@ -20,12 +20,12 @@ jobs:
         shell: bash
         run: |
           cd Simba
-          ./Simba.exe --compile Scripts\launcher\launcher.simba
+          ./Simba.exe --compile Scripts/launcher/launcher.simba
           
       - name: S2SCompiler
         shell: bash
         run: |
           cd Simba
-          ./Simba.exe --run --path Scripts\launcher\launcher\ --output Scripts\ Includes\WaspLib\tools\s2scompiler.simba
+          ./Simba.exe --run --path Scripts/launcher/launcher/ --output Scripts/ Includes/WaspLib/tools/s2scompiler.simba
 
       
