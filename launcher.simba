@@ -1,7 +1,7 @@
 {$DEFINE SCRIPT_ID := 'd563990c-4d31-4aba-b214-18e69171ed5e'}
 {$DEFINE SCRIPT_REVISION := '10'}
 
-{.$DEFINE DEVELOPER_MODE}
+{$DEFINE DEVELOPER_MODE}
 
 
 {$DEFINE WS_LAUNCHER}{$DEFINE WL_UTILS}{$DEFINE SRL_UTILS}
@@ -4575,7 +4575,7 @@ var
   main, panel: TPanel;
   text: TLabel;
   memo: TMemo;
-  button: TButton;
+  button, start: TButton;
   checkbox: TCheckBox;
   scriptData: TScriptData;
   scriptFile: TScriptFile;
@@ -4608,12 +4608,20 @@ begin
     text.SetFontColor($18E982);
 
   button := panel.GetChild('update_script_button');
+
+
   if scriptFile.Revision = 0 then
     button.setCaption('Install')
   else if scriptFile.Revision <> scriptData.Revision then
     button.setCaption('Update')
   else
     button.setCaption('Re-install');
+
+  start  := main.GetChild('script_start_button');
+  if scriptFile.Revision = 0 then
+    start.setEnabled(False)
+  else
+    start.setEnabled(True);
 
   checkbox := panel.GetChild('update_script_checkbox');
   if WaspConfig.GetBoolean('update_' + scriptData.ID) then
@@ -5403,7 +5411,7 @@ var
 
 begin
   ClearDebug();
-  WaspConfig.Setup(LAUNCHER_DATA + 'configs' + DirectorySeparator + 'launcher.json');
+  WaspConfig.Setup(AppPath + 'Configs' + DirectorySeparator + 'launcher.json');
   WaspClient.Setup();
 
   WaspUpdater.Setup();

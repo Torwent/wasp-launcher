@@ -9,7 +9,7 @@ env:
 
 jobs:
   compile:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     steps:
       - uses: Torwent/setup-simba@master
       - uses: actions/checkout@v4
@@ -27,8 +27,5 @@ jobs:
         run: |
           cd Simba
           ./Simba.exe --path Scripts\launcher\launcher\ --output Scripts\ Includes\WaspLib\tools\s2scompiler.simba
-    
-      - name: Setup tmate session
-        uses: mxschmitt/action-tmate@v3
 
       
