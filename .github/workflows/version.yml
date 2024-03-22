@@ -27,11 +27,11 @@ jobs:
         run: |
           cd Simba
           ./Simba.exe --run --path Scripts/launcher/launcher/ --output Scripts/ Includes/WaspLib/tools/s2scompiler.simba
-          cd Scripts
 
 
       - name: Commit and push changes
         run: |
+          cd Scripts
           git config --global user.name 'WaspBot'
           git config --global user.email 'wasp@waspscripts.com'
           git commit -am "chore: github action"
