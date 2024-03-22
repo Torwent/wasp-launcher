@@ -27,6 +27,7 @@ jobs:
         run: |
           cd Simba
           ./Simba.exe --run --path Scripts/launcher/ --output Scripts/ Includes/WaspLib/tools/s2scompiler.simba
+          head -10 Scripts/launcher.simba
         
 
           
