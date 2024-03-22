@@ -30,8 +30,7 @@ jobs:
           head -10 Scripts/launcher.simba
           echo " ... "
           head -10 Scripts/launcher/launcher.simba
-
-          
+                  
       - name: Commit and push changes
         run: |
           cd Simba/Scripts
