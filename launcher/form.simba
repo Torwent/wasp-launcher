@@ -320,7 +320,7 @@ var
   main, panel: TPanel;
   text: TLabel;
   memo: TMemo;
-  button: TButton;
+  button, start: TButton;
   checkbox: TCheckBox;
   scriptData: TScriptData;
   scriptFile: TScriptFile;
@@ -353,12 +353,20 @@ begin
     text.SetFontColor($18E982);
 
   button := panel.GetChild('update_script_button');
+
+
   if scriptFile.Revision = 0 then
     button.setCaption('Install')
   else if scriptFile.Revision <> scriptData.Revision then
     button.setCaption('Update')
   else
     button.setCaption('Re-install');
+
+  start  := main.GetChild('script_start_button');
+  if scriptFile.Revision = 0 then
+    start.setEnabled(False)
+  else
+    start.setEnabled(True);
 
   checkbox := panel.GetChild('update_script_checkbox');
   if WaspConfig.GetBoolean('update_' + scriptData.ID) then
