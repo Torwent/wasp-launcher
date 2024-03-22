@@ -18,20 +18,18 @@ jobs:
      
       - name: Compile test
         shell: bash
-        run: |
-          cd Simba
-          ./Simba.exe --compile Scripts/launcher/launcher.simba
+        working-directory: ./Simba
+        run: ./Simba.exe --compile Scripts/launcher/launcher.simba
           
       - name: S2SCompiler
         shell: bash
-        run: |
-          cd Simba
-          ./Simba.exe --run --path=Scripts/launcher/ --output=Scripts/ Includes/WaspLib/tools/s2scompiler.simba
+        working-directory: ./Simba
+        run: ./Simba.exe --run --path=Scripts/launcher/ --output=Scripts/ Includes/WaspLib/tools/s2scompiler.simba
         
       - name: Generate changelog
         id: changelog
         uses: TriPSs/conventional-changelog-action@v3.18.0
-        run: cd Simba/Scripts
+        working-directory: ./Simba/Scripts
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           git-message: "chore(release): {version}"
@@ -43,10 +41,12 @@ jobs:
           skip-commit: "true"          
        
           
+         
+          
       - name: Commit and push changes
+        working-directory: ./Simba/Scripts
         if: ${{ steps.changelog.outputs.skipped == 'false' }}
         run: |
-          cd Simba/Scripts
           git config --global user.name 'WaspBot'
           git config --global user.email 'wasp@waspscripts.com'
           git commit -am "chore: github action"
@@ -54,6 +54,7 @@ jobs:
       
       - name: Create release
         uses: actions/create-release@v1.1.4
+        working-directory: ./Simba/Scripts
         if: ${{ steps.changelog.outputs.skipped == 'false' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
