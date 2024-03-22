@@ -11,9 +11,7 @@ jobs:
   compile:
     runs-on: windows-latest
     steps:
-      - uses: Torwent/setup-simba@master
-        with:
-          
+      - uses: Torwent/setup-simba@master          
       - uses: actions/checkout@v4
         with:
           path: Simba/Scripts
