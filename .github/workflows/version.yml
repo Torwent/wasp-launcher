@@ -31,7 +31,7 @@ jobs:
 
       - name: Commit and push changes
         run: |
-          cd Scripts
+          cd Simba/Scripts
           git config --global user.name 'WaspBot'
           git config --global user.email 'wasp@waspscripts.com'
           git commit -am "chore: github action"
