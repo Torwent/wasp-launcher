@@ -41,7 +41,6 @@ jobs:
           skip-version-file: "true"
           skip-on-empty: "true"
           skip-commit: "true"
-
       
       - name: Commit and push changes
         if: ${{ steps.changelog.outputs.skipped == 'false' }}
