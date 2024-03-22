@@ -9,13 +9,16 @@ env:
 
 jobs:
   compile:
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
     steps:
       - uses: Torwent/setup-simba@master
       - uses: actions/checkout@v4
         with:
           path: Simba/Scripts
       
+      - name: Setup tmate session
+        uses: mxschmitt/action-tmate@v3
+     
       - name: Compile test
         shell: bash
         run: |
