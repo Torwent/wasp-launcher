@@ -26,9 +26,10 @@ jobs:
         shell: bash
         run: |
           cd Simba
-          ./Simba.exe --run --path Scripts/launcher/ --output Scripts/ Includes/WaspLib/tools/s2scompiler.simba
+          ./Simba.exe --run --path Scripts/launcher/launcher/ --output Scripts/ Includes/WaspLib/tools/s2scompiler.simba
           head -10 Scripts/launcher.simba
-        
+          echo " ... "
+          head -10 Scripts/launcher/launcher.simba
 
           
       - name: Commit and push changes
