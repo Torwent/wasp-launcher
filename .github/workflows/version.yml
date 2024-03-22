@@ -27,6 +27,7 @@ jobs:
         run: |
           cd Simba
           ./Simba.exe --run --path Scripts/launcher/launcher/ --output Scripts/ Includes/WaspLib/tools/s2scompiler.simba
+          cd Scripts
         
       - name: Generate changelog
         id: changelog
@@ -40,7 +41,8 @@ jobs:
           skip-version-file: "true"
           skip-on-empty: "true"
           skip-commit: "true"
-          
+
+      
       - name: Commit and push changes
         if: ${{ steps.changelog.outputs.skipped == 'false' }}
         run: |
