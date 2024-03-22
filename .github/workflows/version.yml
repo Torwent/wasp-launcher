@@ -28,4 +28,22 @@ jobs:
           cd Simba
           ./Simba.exe --run --path Scripts/launcher/launcher/ --output Scripts/ Includes/WaspLib/tools/s2scompiler.simba
 
-      
+  
+          
+      - name: Commit and push changes
+        if: ${{ steps.changelog.outputs.skipped == 'false' }}
+        run: |
+          git config --global user.name 'WaspBot'
+          git config --global user.email 'wasp@waspscripts.com'
+          git commit -am "chore: github action"
+          git push
+          
+      - name: Create release
+        uses: actions/create-release@v1.1.4
+        if: ${{ steps.changelog.outputs.skipped == 'false' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ steps.changelog.outputs.tag }}
+          release_name: ${{ steps.changelog.outputs.tag }}
+          body: ${{ steps.changelog.outputs.clean_changelog }}
