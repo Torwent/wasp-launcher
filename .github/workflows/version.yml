@@ -27,16 +27,44 @@ jobs:
         run: |
           cd Simba
           ./Simba.exe --run --path=Scripts/launcher/ --output=Scripts/ Includes/WaspLib/tools/s2scompiler.simba
-          head -10 Scripts/launcher.simba
-          echo " ... "
-          head -10 Scripts/launcher/launcher.simba
         
+      - name: Generate changelog
+        id: changelog
+        uses: TriPSs/conventional-changelog-action@v3.18.0
+        run: cd Simba/Scripts
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          git-message: "chore(release): {version}"
+          preset: "angular"
+          tag-prefix: "v"
+          output-file: "CHANGELOG.md"
+          skip-version-file: "true"
+          skip-on-empty: "true"
+          skip-commit: "true"          
+       
           
       - name: Commit and push changes
+        if: ${{ steps.changelog.outputs.skipped == 'false' }}
         run: |
           cd Simba/Scripts
-          head -10 launcher.simba
           git config --global user.name 'WaspBot'
           git config --global user.email 'wasp@waspscripts.com'
           git commit -am "chore: github action"
           git push
+      
+      - name: Create release
+        uses: actions/create-release@v1.1.4
+        if: ${{ steps.changelog.outputs.skipped == 'false' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ steps.changelog.outputs.tag }}
+          release_name: ${{ steps.changelog.outputs.tag }}
+          body: ${{ steps.changelog.outputs.clean_changelog }}
+    
+      - name: Discord notification
+        uses: rguillaume/discord-action-embed@v1.0.4
+        if: ${{ steps.changelog.outputs.skipped == 'false' }}
+        with:
+          webhook: ${{ secrets.UPDATES_WEBHOOK }}
+          embed: '{"title": "Update: ${{ github.event.repository.name }}", "description": ${{ toJSON(github.event.head_commit.message) }}, "url": "${{ github.event.head_commit.url }}", "footer": {"text": "Committer: ${{ github.event.head_commit.author.username }}"}, "color": "16760576"}'
