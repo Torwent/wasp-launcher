@@ -34,7 +34,7 @@ jobs:
           SB_ANON_KEY: ${{ secrets.SB_ANON_KEY }}
           EMAIL: ${{ secrets.EMAIL }}
           PASSWORD: ${{ secrets.PASSWORD }}
-          MODIFIED_FILES: ["Simba/Scripts/launcher.simba"]
+          MODIFIED_FILES: ['Simba/Scripts/launcher.simba']
         
       - name: Commit and push changes
         working-directory: ./Simba/Scripts
