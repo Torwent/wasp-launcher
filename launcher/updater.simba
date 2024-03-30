@@ -179,7 +179,7 @@ begin
   Result += "procedure TerminateScript(reason: String); overload;" + LineEnding;
   Result += "begin" + LineEnding;
   Result += "  WriteLn('[AsyncMover]: Terminating: ' + reason);" + LineEnding;
-  Result += "  TerminateScript();" + LineEnding;
+  Result += "  begin DeleteFile(ScriptFile); TerminateScript(); end;" + LineEnding;
   Result += "end;" + LineEnding + LineEnding;
   Result += "function BackupFile(filePath: String): Boolean;" + LineEnding;
   Result += "var" + LineEnding;
@@ -237,6 +237,16 @@ begin
   Result += "  for window in GetWindows().GetByClass('SunAwtCanvas') do" + LineEnding;
   Result += "    window.Kill();" + LineEnding;
   Result += "end;" + LineEnding + LineEnding;
+  Result += "procedure KillJLaunchers();" + LineEnding;
+  Result += "var" + LineEnding;
+  Result += "  window: TOSWindow;" + LineEnding;
+  Result += "begin" + LineEnding;
+  Result += "  for window in GetWindows().GetByClass('Jagex Launcher') do" + LineEnding;
+  Result += "  begin" + LineEnding;
+  Result += "    window.Kill();" + LineEnding;
+  Result += "    Break;" + LineEnding;
+  Result += "  end;" + LineEnding;
+  Result += "end;" + LineEnding + LineEnding;
   Result += "procedure KillSimbas();" + LineEnding;
   Result += "var" + LineEnding;
   Result += "  windows, simbas: TOSWindowArray;" + LineEnding;
@@ -249,7 +259,7 @@ begin
   Result += "    TerminateScript('You need to close all Simba windows to update SRL.');" + LineEnding + LineEnding;
   Result += "  for win in simbas do" + LineEnding;
   Result += "    win.Kill();" + LineEnding + LineEnding;
-  Result += "  TerminateScript();" + LineEnding;
+  Result += "  begin DeleteFile(ScriptFile); TerminateScript(); end;" + LineEnding;
   Result += "end;" + LineEnding + LineEnding;
   Result += "procedure UnlockPlugins();" + LineEnding;
   Result += "var" + LineEnding;
@@ -262,10 +272,19 @@ begin
   Result += "  if MessageDlg('Close RuneScape', 'RS Clients need to be closed to update this package.'," + LineEnding;
   Result += "     TMsgDlgType.mtConfirmation, [mbOK, mbAbort]) = 3 then" + LineEnding;
   Result += "    TerminateScript('You need to close your RS Clients to update SRL.');" + LineEnding + LineEnding;
-  Result += "  KillClients();" + LineEnding;
+  Result += "  KillClients();" + LineEnding + LineEnding;
   Result += "  for plugin in locked do" + LineEnding;
   Result += "    if IsFileLocked(plugin) then" + LineEnding;
+  Result += "    begin" + LineEnding;
+  Result += "      KillJLaunchers();" + LineEnding;
+  Result += "      Break;" + LineEnding;
+  Result += "    end;" + LineEnding + LineEnding;
+  Result += "  for plugin in locked do" + LineEnding;
+  Result += "    if IsFileLocked(plugin) then" + LineEnding;
+  Result += "    begin" + LineEnding;
   Result += "      KillSimbas();" + LineEnding;
+  Result += "      Break;" + LineEnding;
+  Result += "    end;" + LineEnding;
   Result += "end;" + LineEnding + LineEnding;
   Result += "function DelDirectory(path: String; deleteRoot: Boolean = True): Boolean;" + LineEnding;
   Result += "var" + LineEnding;
@@ -326,7 +345,8 @@ begin
   Result += "  end;" + LineEnding + LineEnding;
   Result += "  WriteLn('[AsyncMover]: Moving ', pkg, ' files, this will take a few seconds.');" + LineEnding;
   Result += "  MoveFiles(GetProcessParameter('origin'), pkg);" + LineEnding;
-  Result += "end;" + LineEnding;
+  Result += "end;" + LineEnding + LineEnding + LineEnding;
+  Result += "begin DeleteFile(ScriptFile); end;" + LineEnding;
 end;
 
 procedure TWaspUpdater.Update(pkg: String; caption, button: TComponent);
