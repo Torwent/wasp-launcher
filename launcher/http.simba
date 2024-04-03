@@ -446,7 +446,6 @@ var
 begin
   try
     response.Init(Self.POST(ROUTE + QUERY + grantType, payload, False));
-
     if Self.GetHTTPCode() = 200 then
     begin
       Self.Cache.User.AccessToken := response.getString('access_token');
@@ -544,8 +543,13 @@ var
   token: String;
 begin
   token := WaspConfig.GetString('refresh_token');
-  if (token <> '') and Self.Login(token) then
-    DebugLn(Self.Name, 'Previous session refreshed!');
+  if (token <> '') then
+  begin
+    if Self.Login(token) then
+      DebugLn(Self.Name, 'Previous session refreshed!')
+    else
+      Self.RefreshClient(True);
+  end;
 end;
 
 
@@ -676,7 +680,7 @@ end;
 function TWaspClient.GetScripts(): TScriptDataArray;
   function _parseDate(fulldate: String): String;
   var
-    date, time: String;
+    time: String;
     yy, mm, dd: String;
   begin
     yy := fulldate.Before('-');

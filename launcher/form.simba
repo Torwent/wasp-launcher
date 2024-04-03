@@ -121,6 +121,22 @@ begin
     Self.HandleLogout(TButton(sender).getOwner());
 end;
 
+procedure TWaspForm._OpenScript(sender: TObject);
+var
+  panel: TPanel;
+  list: TListBox;
+  script: TScriptData;
+  scriptFile: TScriptFile;
+  proc: TSysProc;
+begin
+  panel := TButton(sender).getOwner();
+  list := panel.GetChild('scripts_listbox');
+  script := WaspClient.GetAllUserScripts()[list.getItemIndex()];
+  scriptFile := WaspUpdater.GetScriptFile(script.ID);
+  SimbaOpenInTab(scriptFile.Path);
+  Self.Form.Close();
+end;
+
 procedure TWaspForm._RunScript(sender: TObject);
 var
   panel: TPanel;
@@ -1023,7 +1039,15 @@ begin
   button.setOnClick(@Self._LogoutButton);
   button.setWidth(TControl.AdjustToDPI(150));
   button.SetLeft(TControl.AdjustToDPI(10));
-  button.SetTop(panel.getHeight() - TControl.AdjustToDPI(40));
+  button.SetTop(panel.getHeight() - TControl.AdjustToDPI(51));
+
+  button.Create(panel);
+  button.setName('script_open_button');
+  button.SetCaption('Open script');
+  button.SetOnClick(@Self._OpenScript);
+  button.setWidth(TControl.AdjustToDPI(150));
+  button.SetLeft(panel.getWidth() - TControl.AdjustToDPI(10) - button.getWidth());
+  button.SetTop(panel.getHeight() - TControl.AdjustToDPI(62));
 
   button.Create(panel);
   button.setName('script_start_button');
