@@ -1,5 +1,5 @@
 {$DEFINE SCRIPT_ID := 'd563990c-4d31-4aba-b214-18e69171ed5e'}
-{$DEFINE SCRIPT_REVISION := '12'}
+{$DEFINE SCRIPT_REVISION := '13'}
 
 {.$DEFINE DEVELOPER_MODE}
 
@@ -845,7 +845,6 @@ end;
 ```pascal
 function String.FileName(): String; constref;
 ```
-
 Returns the file name
 *)
 function String.FileName(): String; constref;
@@ -2612,6 +2611,19 @@ end;
 
 
 function TWaspClient.GetScripts(): TScriptDataArray;
+  function _parseDate(fulldate: String): String;
+  var
+    date, time: String;
+    yy, mm, dd: String;
+  begin
+    yy := fulldate.Before('-');
+    mm := fulldate.After('-').Before('-');
+    dd := fulldate.After('-').After('-').Before('T');
+    time := fulldate.After('T').Before('.');
+
+    Result := dd + '/' + mm + '/' + yy + ', ' + time;
+  end;
+
 var
   jsonArray, categories: TJSONArray;
   i, j: Int32;
@@ -2622,7 +2634,7 @@ begin
   jsonArray := Self.Select(
                   'scripts',
                   'scripts',
-                  'id,product,title,description,content,url,categories,protected!inner(revision)',
+                  'id,product,title,description,content,url,categories,protected!inner(revision,username,revision_date)',
                   ['published=eq.true'],
                   ['title.asc']
                );
@@ -2638,6 +2650,17 @@ begin
       script.Content := getString('content');
       script.URL := 'https://waspscripts.com/scripts/' + getString('url');
       script.Revision := getJSONObject('protected').getInt('revision');
+
+      script.Content := script.Content.
+                        Replace('{$id}', script.ID).
+                        Replace('{$title}', script.Name).
+                        Replace('{$description}', script.Description).
+                        Replace('{$revision}', ToStr(script.Revision)).
+                        Replace('{$author}', getJSONObject('protected').getString('username')).
+                        Replace('{$revision_date}', _parseDate(getJSONObject('protected').getString('revision_date')).Before(',')).
+                        Replace('{$last_revision_date}', _parseDate(getJSONObject('protected').getString('revision_date')).Before(',')).
+                        Replace('{$last_revision_time}', _parseDate(getJSONObject('protected').getString('revision_date')).After(', ')).
+                        Replace('{$last_revision_full_date}', _parseDate(getJSONObject('protected').getString('revision_date')));
 
       for j := 0 to categories.High() do
         script.Categories += categories.getString(j);
