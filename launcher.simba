@@ -1,5 +1,5 @@
 {$DEFINE SCRIPT_ID := 'd563990c-4d31-4aba-b214-18e69171ed5e'}
-{$DEFINE SCRIPT_REVISION := '13'}
+{$DEFINE SCRIPT_REVISION := '14'}
 
 {.$DEFINE DEVELOPER_MODE}
 
@@ -2383,7 +2383,6 @@ var
 begin
   try
     response.Init(Self.POST(ROUTE + QUERY + grantType, payload, False));
-
     if Self.GetHTTPCode() = 200 then
     begin
       Self.Cache.User.AccessToken := response.getString('access_token');
@@ -2481,8 +2480,13 @@ var
   token: String;
 begin
   token := WaspConfig.GetString('refresh_token');
-  if (token <> '') and Self.Login(token) then
-    DebugLn(Self.Name, 'Previous session refreshed!');
+  if (token <> '') then
+  begin
+    if Self.Login(token) then
+      DebugLn(Self.Name, 'Previous session refreshed!')
+    else
+      Self.RefreshClient(True);
+  end;
 end;
 
 
@@ -2613,7 +2617,7 @@ end;
 function TWaspClient.GetScripts(): TScriptDataArray;
   function _parseDate(fulldate: String): String;
   var
-    date, time: String;
+    time: String;
     yy, mm, dd: String;
   begin
     yy := fulldate.Before('-');
@@ -4419,6 +4423,22 @@ begin
     Self.HandleLogout(TButton(sender).getOwner());
 end;
 
+procedure TWaspForm._OpenScript(sender: TObject);
+var
+  panel: TPanel;
+  list: TListBox;
+  script: TScriptData;
+  scriptFile: TScriptFile;
+  proc: TSysProc;
+begin
+  panel := TButton(sender).getOwner();
+  list := panel.GetChild('scripts_listbox');
+  script := WaspClient.GetAllUserScripts()[list.getItemIndex()];
+  scriptFile := WaspUpdater.GetScriptFile(script.ID);
+  SimbaOpenInTab(scriptFile.Path);
+  Self.Form.Close();
+end;
+
 procedure TWaspForm._RunScript(sender: TObject);
 var
   panel: TPanel;
@@ -5321,7 +5341,15 @@ begin
   button.setOnClick(@Self._LogoutButton);
   button.setWidth(TControl.AdjustToDPI(150));
   button.SetLeft(TControl.AdjustToDPI(10));
-  button.SetTop(panel.getHeight() - TControl.AdjustToDPI(40));
+  button.SetTop(panel.getHeight() - TControl.AdjustToDPI(51));
+
+  button.Create(panel);
+  button.setName('script_open_button');
+  button.SetCaption('Open script');
+  button.SetOnClick(@Self._OpenScript);
+  button.setWidth(TControl.AdjustToDPI(150));
+  button.SetLeft(panel.getWidth() - TControl.AdjustToDPI(10) - button.getWidth());
+  button.SetTop(panel.getHeight() - TControl.AdjustToDPI(62));
 
   button.Create(panel);
   button.setName('script_start_button');
