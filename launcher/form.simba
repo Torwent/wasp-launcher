@@ -68,52 +68,6 @@ begin
 end;
 
 
-procedure TWaspForm._LoginButton(sender: TObject);
-var
-  loginPanel, msPanel: TPanel;
-  email, password: TEdit;
-  {$IFDEF DEVELOPER_MODE}
-  t: Double;
-  {$ENDIF}
-begin
-  {$IFDEF DEVELOPER_MODE}
-  t := PerformanceTimer();
-  {$ENDIF}
-
-  loginPanel := TComponent(sender).getOwner();
-  msPanel := Self.Form.GetChild('main_panel');
-
-  email := loginPanel.GetChild('email_edit');
-  password := loginPanel.GetChild('password_edit');
-
-  if WaspClient.Login(email.getText(), password.getText()) then
-  begin
-    Self.HandleLogin(loginPanel);
-    {$IFDEF DEVELOPER_MODE}
-    WriteLn('Full login took: ', Round(PerformanceTimer()-t, 4), 'ms.');
-    {$ENDIF}
-    Exit;
-  end;
-
-  with email.getFont() do
-  begin
-    setColor($0000FF);
-    setStyle([]);
-  end;
-
-  with password.getFont() do
-  begin
-    setColor($0000FF);
-    setStyle([]);
-  end;
-end;
-
-procedure TWaspForm._LogoutButton(sender: TObject);
-begin
-  if WaspClient.Logout() then
-    Self.HandleLogout(TButton(sender).getOwner());
-end;
-
 procedure TWaspForm._OpenScript(sender: TObject);
 var
   panel: TPanel;
@@ -153,49 +107,6 @@ begin
 end;
 
 
-procedure TWaspForm._Validate(edit: TEdit);
-var
-  panel: TPanel;
-  email, password: TEdit;
-  strMail: String;
-  button: TButton;
-begin
-  panel := edit.getOwner().getOwner();
-
-  case edit.getName() of
-    'email_edit':
-    begin
-      email := edit;
-      password := panel.GetChild('password_edit');
-    end;
-    'password_edit':
-    begin
-      email := panel.GetChild('email_edit');
-      password := edit;
-    end;
-    else
-      TerminateScript('TWaspForm._Validate(), unknown control.');
-  end;
-
-  with email.getFont() do
-  begin
-    setStyle([fsBold]);
-    setColor($F0F0F0);
-  end;
-
-  with password.getFont() do
-  begin
-    setStyle([fsBold]);
-    setColor($F0F0F0);
-  end;
-
-  strMail := email.getText();
-  button := TButton(panel.GetChild('login_button'));
-  button.setEnabled(strMail.IsEmail() and (password.GetTextLen() > 4));
-
-  if button.IsEnabled() then
-    Self._LoginButton(button);
-end;
 
 procedure TWaspForm._MailField(sender: TObject; var key: char);
 var
@@ -279,23 +190,6 @@ begin
   end;
 end;
 
-
-procedure TWaspForm._OnEmailDone(sender: TObject);
-var
-  email: TEdit;
-  str: String;
-begin
-  Self._Validate(sender);
-  email := sender;
-  str := LowerCase(Trim(email.getText()));
-  if str.IsEmail() then
-    WaspConfig.Put('email', LowerCase(Trim(email.getText())));
-end;
-
-procedure TWaspForm._OnPassDone(sender: TObject);
-begin
-  Self._Validate(sender);
-end;
 
 procedure TWaspForm._OnTogglePass(sender: TObject);
 var
@@ -584,6 +478,124 @@ end;
 
 procedure TWaspForm.SetupLoginPanel(form: TForm);
   type TWaspForm = TWaspForm;
+
+  procedure TWaspForm._LoginButton(sender: TObject);
+  var
+    loginPanel, msPanel: TPanel;
+    email, password: TEdit;
+    {$IFDEF DEVELOPER_MODE}
+    t: Double;
+    {$ENDIF}
+  begin
+    {$IFDEF DEVELOPER_MODE}
+    t := PerformanceTimer();
+    {$ENDIF}
+
+    loginPanel := TComponent(sender).getOwner();
+    msPanel := Self.Form.GetChild('main_panel');
+
+    email := loginPanel.GetChild('email_edit');
+    password := loginPanel.GetChild('password_edit');
+
+    if WaspClient.Login(email.getText(), password.getText()) then
+    begin
+      Self.HandleLogin(loginPanel);
+      {$IFDEF DEVELOPER_MODE}
+      WriteLn('Full login took: ', Round(PerformanceTimer()-t, 4), 'ms.');
+      {$ENDIF}
+      Exit;
+    end;
+
+    with email.getFont() do
+    begin
+      setColor($0000FF);
+      setStyle([]);
+    end;
+
+    with password.getFont() do
+    begin
+      setColor($0000FF);
+      setStyle([]);
+    end;
+  end;
+
+  procedure TWaspForm._LogoutButton(sender: TObject);
+  begin
+    if WaspClient.Logout() then
+      Self.HandleLogout(TButton(sender).getOwner());
+  end;
+
+  procedure TWaspForm._Validate(edit: TEdit);
+  var
+    panel: TPanel;
+    email, password: TEdit;
+    strMail: String;
+    button: TButton;
+  begin
+    panel := edit.getOwner().getOwner();
+
+    case edit.getName() of
+      'email_edit':
+      begin
+        email := edit;
+        password := panel.GetChild('password_edit');
+      end;
+      'password_edit':
+      begin
+        email := panel.GetChild('email_edit');
+        password := edit;
+      end;
+      else
+        TerminateScript('TWaspForm._Validate(), unknown control.');
+    end;
+
+    with email.getFont() do
+    begin
+      setStyle([fsBold]);
+      setColor($F0F0F0);
+    end;
+
+    with password.getFont() do
+    begin
+      setStyle([fsBold]);
+      setColor($F0F0F0);
+    end;
+
+    strMail := email.getText();
+    button := TButton(panel.GetChild('login_button'));
+    button.setEnabled(strMail.IsEmail() and (password.GetTextLen() > 4));
+
+    if button.IsEnabled() then
+      Self._LoginButton(button);
+  end;
+
+  procedure TWaspForm._OnEmailDone(sender: TObject);
+  var
+    email: TEdit;
+    str: String;
+  begin
+    Self._Validate(sender);
+    email := sender;
+    str := LowerCase(Trim(email.getText()));
+    if str.IsEmail() then
+      WaspConfig.Put('email', LowerCase(Trim(email.getText())));
+  end;
+
+  procedure TWaspForm._OnEmailChange(sender: TObject);
+  begin
+    Self._OnEmailDone(sender);
+  end;
+
+  procedure TWaspForm._OnPassDone(sender: TObject);
+  begin
+    Self._Validate(sender);
+  end;
+
+  procedure TWaspForm._OnPassChange(sender: TObject);
+  begin
+    Self._OnPassDone(sender);
+  end;
+
   procedure TWaspForm._DiscordButton(sender: TObject);
   var
     lPanel, dPanel: TPanel;
@@ -639,6 +651,7 @@ begin
   passEdit.setPasswordChar('*');
   passEdit.Edit.setOnKeyPress(@Self._PasswordField);
   passEdit.Edit.setOnEditingDone(@Self._OnPassDone);
+  passEdit.Edit.setOnChange(@Self._OnPassChange);
 
   viewPass.Create(panel);
   viewPass.SetName('viewpass');
@@ -667,213 +680,215 @@ begin
 end;
 
 
-function TWaspForm._VersionsTitleLabel(parent: TPanel; name: String; left: Int32): TPanel;
-var
-  textLabel: TLabel;
-begin
-  Result.Create(parent);
-  Result.setName(LowerCase(name) + '_version_title_panel');
-  Result.setCaption('');
-  Result.setWidth(TControl.AdjustToDPI(110));
-  Result.setHeight(parent.GetHeight());
-  Result.SetLeft(left);
-  Result.setBevelWidth(0);
-
-  textLabel.Create(Result);
-  textLabel.setName(LowerCase(name) + '_srl_title_label');
-  textLabel.setCaption(name + ' SRL-T:');
-  textLabel.setLeft(TControl.AdjustToDPI(3));
-  textLabel.SetFontSize(10);
-  textLabel.SetFontQuality(TFontQuality.fqCleartype);
-
-  textLabel.Create(Result);
-  textLabel.setName(LowerCase(name) + '_wl_title_label');
-  textLabel.setCaption(name + ' WaspLib:');
-  textLabel.setLeft(TControl.AdjustToDPI(3));
-  textLabel.SetTop(TControl.AdjustToDPI(23));
-  textLabel.SetFontSize(10);
-  textLabel.SetFontQuality(TFontQuality.fqCleartype);
-
-  textLabel.Create(Result);
-  textLabel.setName(LowerCase(name) + '_script_title_label');
-  textLabel.setCaption(name + ' Script:');
-  textLabel.setLeft(TControl.AdjustToDPI(3));
-  textLabel.SetTop(TControl.AdjustToDPI(46));
-  textLabel.SetFontSize(10);
-  textLabel.SetFontQuality(TFontQuality.fqCleartype);
-end;
-
-function TWaspForm._VersionsLabel(parent: TPanel; name, srlt, wl: String; left: Int32): TPanel;
-var
-  textLabel: TLabel;
-begin
-  Result.Create(parent);
-  Result.setName(name + '_version_panel');
-  Result.setCaption('');
-  if name = 'current' then
-    Result.setWidth(TControl.AdjustToDPI(90))
-  else
-    Result.setWidth(TControl.AdjustToDPI(70));
-  Result.setHeight(parent.GetHeight());
-  Result.SetLeft(left);
-  Result.setBevelWidth(0);
-
-  textLabel.Create(Result);
-  textLabel.setName(name + '_srl_label');
-  if srlt = '' then
-    textLabel.setCaption('Missing')
-  else if srlt = 'failed' then
-    textLabel.setCaption('Rate limited')
-  else
-    textLabel.setCaption('v.' + srlt);
-  textLabel.setLeft(TControl.AdjustToDPI(3));
-  textLabel.SetFontSize(10);
-  if srlt <> GitHubClient.Packages.Latest.SRLT then
-    textLabel.SetFontColor($1800E9)
-  else
-    textLabel.SetFontColor($18E982);
-
-  textLabel.Create(Result);
-  textLabel.setName(name + '_wl_label');
-
-  if wl = '' then
-    textLabel.setCaption('Missing')
-  else if wl = 'failed' then
-    textLabel.setCaption('Rate limited')
-  else
-    textLabel.setCaption('v.' + wl);
-
-  textLabel.setLeft(TControl.AdjustToDPI(3));
-  textLabel.SetTop(TControl.AdjustToDPI(23));
-  textLabel.SetFontSize(10);
-  if wl <> GitHubClient.Packages.Latest.WaspLib then
-    textLabel.SetFontColor($1800E9)
-  else
-    textLabel.SetFontColor($18E982);
-
-  textLabel.Create(Result);
-  textLabel.setName(name + '_script_label');
-  textLabel.setLeft(TControl.AdjustToDPI(3));
-  textLabel.SetTop(TControl.AdjustToDPI(46));
-  textLabel.SetFontSize(10);
-end;
-
-function TWaspForm._VersionsControls(parent: TPanel; left: Int32): TPanel;
-  type TWaspForm = TWaspForm;
-  procedure TWaspForm._UpdateButton(sender: TObject);
-  begin
-    case TButton(sender).getName() of
-      'update_srl_button':    {$IFNDEF DEVELOPER_MODE}Sync(@Self._UpdateSRL){$ENDIF};
-      'update_wl_button':     {$IFNDEF DEVELOPER_MODE}Sync(@Self._UpdateWL){$ENDIF};
-      'update_script_button': Self._UpdateScript;
-    end;
-  end;
-
-  procedure TWaspForm._AutoUpdateToggle(sender: TObject);
-  var
-    panel: TPanel;
-    button: TButton;
-    list: TListBox;
-    script: TScriptData;
-  begin
-    with TCheckBox(sender) do
-      case GetName() of
-        'update_script_checkbox':
-        begin
-          list := Self.Form.GetChild('scripts_listbox');
-          script := WaspClient.GetAllUserScripts()[list.getItemIndex()];
-          WaspConfig.Put('update_' + script.ID, IsChecked());
-        end;
-
-        else
-        begin
-          WaspConfig.Put(GetName(), IsChecked());
-          panel := TCheckBox(sender).getParent().getParent();
-          button := panel.GetChild(GetName().Replace('checkbox', 'button'));
-          {$IFNDEF DEVELOPER_MODE}
-          if IsChecked() and (button.getCaption() <> 'Re-install') then
-            Self._UpdateButton(button);
-          {$ENDIF}
-        end;
-      end;
-  end;
-
-var
-  button: TButton;
-  check: TLabeledCheckBox;
-begin
-  Result.Create(parent);
-  Result.setName('version_buttons_panel');
-  Result.setCaption('');
-  Result.SetLeft(left);
-  Result.setWidth(TControl.AdjustToDPI(180));
-  Result.setHeight(parent.GetHeight());
-  Result.setBevelWidth(0);
-
-  button.Create(Result);
-  button.setName('update_srl_button');
-  button.setLeft(TControl.AdjustToDPI(3));
-  button.setHeight(TControl.AdjustToDPI(20));
-  button.setWidth(TControl.AdjustToDPI(70));
-  if GitHubClient.Packages.Current.SRLT <> GitHubClient.Packages.Latest.SRLT then
-    button.setCaption('Update')
-  else
-    button.setCaption('Re-install');
-  button.setOnClick(@Self._UpdateButton);
-
-  button.Create(Result);
-  button.setName('update_wl_button');
-  button.setLeft(TControl.AdjustToDPI(3));
-  button.SetTop(TControl.AdjustToDPI(23));
-  button.setHeight(TControl.AdjustToDPI(20));
-  button.setWidth(TControl.AdjustToDPI(70));
-  if GitHubClient.Packages.Current.WaspLib <> GitHubClient.Packages.Latest.WaspLib then
-    button.setCaption('Update')
-  else
-    button.setCaption('Re-install');
-  button.setOnClick(@Self._UpdateButton);
-
-  button.Create(Result);
-  button.setName('update_script_button');
-  button.setLeft(TControl.AdjustToDPI(3));
-  button.SetTop(TControl.AdjustToDPI(46));
-  button.setHeight(TControl.AdjustToDPI(20));
-  button.setWidth(TControl.AdjustToDPI(70));
-  if GitHubClient.Packages.Current.WaspLib <> GitHubClient.Packages.Latest.WaspLib then
-    button.setCaption('Update')
-  else
-    button.setCaption('Re-install');
-  button.setOnClick(@Self._UpdateButton);
-
-  check.Create(Result);
-  check.SetName('update_srl');
-  check.SetCaption('Auto-update');
-  check.setLeft(TControl.AdjustToDPI(90));
-  check.SetTop(TControl.AdjustToDPI(2));
-  if WaspConfig.GetBoolean('update_srl_checkbox') then
-    check.SetChecked(True);
-  check.CheckBox.setOnChange(@Self._AutoUpdateToggle);
-  Self._AutoUpdateToggle(check.CheckBox);
-
-  check.Create(Result);
-  check.SetName('update_wl');
-  check.SetCaption('Auto-update');
-  check.SetLeft(TControl.AdjustToDPI(90));
-  check.SetTop(TControl.AdjustToDPI(25));
-  if WaspConfig.GetBoolean('update_wl_checkbox') then
-    check.SetChecked(True);
-  check.CheckBox.setOnChange(@Self._AutoUpdateToggle);
-  Self._AutoUpdateToggle(check.CheckBox);
-
-  check.Create(Result);
-  check.SetName('update_script');
-  check.SetCaption('Auto-update');
-  check.SetLeft(TControl.AdjustToDPI(90));
-  check.SetTop(TControl.AdjustToDPI(48));
-  check.CheckBox.setOnChange(@Self._AutoUpdateToggle);
-end;
-
 procedure TWaspForm.SetupVersionsPanel(parent: TPanel; top: Int32);
+  type TWaspForm = TWaspForm;
+
+  function TWaspForm._VersionsTitleLabel(parent: TPanel; name: String; left: Int32): TPanel;
+  var
+    textLabel: TLabel;
+  begin
+    Result.Create(parent);
+    Result.setName(LowerCase(name) + '_version_title_panel');
+    Result.setCaption('');
+    Result.setWidth(TControl.AdjustToDPI(110));
+    Result.setHeight(parent.GetHeight());
+    Result.SetLeft(left);
+    Result.setBevelWidth(0);
+
+    textLabel.Create(Result);
+    textLabel.setName(LowerCase(name) + '_srl_title_label');
+    textLabel.setCaption(name + ' SRL-T:');
+    textLabel.setLeft(TControl.AdjustToDPI(3));
+    textLabel.SetFontSize(10);
+    textLabel.SetFontQuality(TFontQuality.fqCleartype);
+
+    textLabel.Create(Result);
+    textLabel.setName(LowerCase(name) + '_wl_title_label');
+    textLabel.setCaption(name + ' WaspLib:');
+    textLabel.setLeft(TControl.AdjustToDPI(3));
+    textLabel.SetTop(TControl.AdjustToDPI(23));
+    textLabel.SetFontSize(10);
+    textLabel.SetFontQuality(TFontQuality.fqCleartype);
+
+    textLabel.Create(Result);
+    textLabel.setName(LowerCase(name) + '_script_title_label');
+    textLabel.setCaption(name + ' Script:');
+    textLabel.setLeft(TControl.AdjustToDPI(3));
+    textLabel.SetTop(TControl.AdjustToDPI(46));
+    textLabel.SetFontSize(10);
+    textLabel.SetFontQuality(TFontQuality.fqCleartype);
+  end;
+
+  function TWaspForm._VersionsLabel(parent: TPanel; name, srlt, wl: String; left: Int32): TPanel;
+  var
+    textLabel: TLabel;
+  begin
+    Result.Create(parent);
+    Result.setName(name + '_version_panel');
+    Result.setCaption('');
+    if name = 'current' then
+      Result.setWidth(TControl.AdjustToDPI(90))
+    else
+      Result.setWidth(TControl.AdjustToDPI(70));
+    Result.setHeight(parent.GetHeight());
+    Result.SetLeft(left);
+    Result.setBevelWidth(0);
+
+    textLabel.Create(Result);
+    textLabel.setName(name + '_srl_label');
+    if srlt = '' then
+      textLabel.setCaption('Missing')
+    else if srlt = 'failed' then
+      textLabel.setCaption('Rate limited')
+    else
+      textLabel.setCaption('v.' + srlt);
+    textLabel.setLeft(TControl.AdjustToDPI(3));
+    textLabel.SetFontSize(10);
+    if srlt <> GitHubClient.Packages.Latest.SRLT then
+      textLabel.SetFontColor($1800E9)
+    else
+      textLabel.SetFontColor($18E982);
+
+    textLabel.Create(Result);
+    textLabel.setName(name + '_wl_label');
+
+    if wl = '' then
+      textLabel.setCaption('Missing')
+    else if wl = 'failed' then
+      textLabel.setCaption('Rate limited')
+    else
+      textLabel.setCaption('v.' + wl);
+
+    textLabel.setLeft(TControl.AdjustToDPI(3));
+    textLabel.SetTop(TControl.AdjustToDPI(23));
+    textLabel.SetFontSize(10);
+    if wl <> GitHubClient.Packages.Latest.WaspLib then
+      textLabel.SetFontColor($1800E9)
+    else
+      textLabel.SetFontColor($18E982);
+
+    textLabel.Create(Result);
+    textLabel.setName(name + '_script_label');
+    textLabel.setLeft(TControl.AdjustToDPI(3));
+    textLabel.SetTop(TControl.AdjustToDPI(46));
+    textLabel.SetFontSize(10);
+  end;
+
+  function TWaspForm._VersionsControls(parent: TPanel; left: Int32): TPanel;
+    type TWaspForm = TWaspForm;
+    procedure TWaspForm._UpdateButton(sender: TObject);
+    begin
+      case TButton(sender).getName() of
+        'update_srl_button':    {$IFNDEF DEVELOPER_MODE}Sync(@Self._UpdateSRL){$ENDIF};
+        'update_wl_button':     {$IFNDEF DEVELOPER_MODE}Sync(@Self._UpdateWL){$ENDIF};
+        'update_script_button': Self._UpdateScript;
+      end;
+    end;
+
+    procedure TWaspForm._AutoUpdateToggle(sender: TObject);
+    var
+      panel: TPanel;
+      button: TButton;
+      list: TListBox;
+      script: TScriptData;
+    begin
+      with TCheckBox(sender) do
+        case GetName() of
+          'update_script_checkbox':
+          begin
+            list := Self.Form.GetChild('scripts_listbox');
+            script := WaspClient.GetAllUserScripts()[list.getItemIndex()];
+            WaspConfig.Put('update_' + script.ID, IsChecked());
+          end;
+
+          else
+          begin
+            WaspConfig.Put(GetName(), IsChecked());
+            panel := TCheckBox(sender).getParent().getParent();
+            button := panel.GetChild(GetName().Replace('checkbox', 'button'));
+            {$IFNDEF DEVELOPER_MODE}
+            if IsChecked() and (button.getCaption() <> 'Re-install') then
+              Self._UpdateButton(button);
+            {$ENDIF}
+          end;
+        end;
+    end;
+
+  var
+    button: TButton;
+    check: TLabeledCheckBox;
+  begin
+    Result.Create(parent);
+    Result.setName('version_buttons_panel');
+    Result.setCaption('');
+    Result.SetLeft(left);
+    Result.setWidth(TControl.AdjustToDPI(180));
+    Result.setHeight(parent.GetHeight());
+    Result.setBevelWidth(0);
+
+    button.Create(Result);
+    button.setName('update_srl_button');
+    button.setLeft(TControl.AdjustToDPI(3));
+    button.setHeight(TControl.AdjustToDPI(20));
+    button.setWidth(TControl.AdjustToDPI(70));
+    if GitHubClient.Packages.Current.SRLT <> GitHubClient.Packages.Latest.SRLT then
+      button.setCaption('Update')
+    else
+      button.setCaption('Re-install');
+    button.setOnClick(@Self._UpdateButton);
+
+    button.Create(Result);
+    button.setName('update_wl_button');
+    button.setLeft(TControl.AdjustToDPI(3));
+    button.SetTop(TControl.AdjustToDPI(23));
+    button.setHeight(TControl.AdjustToDPI(20));
+    button.setWidth(TControl.AdjustToDPI(70));
+    if GitHubClient.Packages.Current.WaspLib <> GitHubClient.Packages.Latest.WaspLib then
+      button.setCaption('Update')
+    else
+      button.setCaption('Re-install');
+    button.setOnClick(@Self._UpdateButton);
+
+    button.Create(Result);
+    button.setName('update_script_button');
+    button.setLeft(TControl.AdjustToDPI(3));
+    button.SetTop(TControl.AdjustToDPI(46));
+    button.setHeight(TControl.AdjustToDPI(20));
+    button.setWidth(TControl.AdjustToDPI(70));
+    if GitHubClient.Packages.Current.WaspLib <> GitHubClient.Packages.Latest.WaspLib then
+      button.setCaption('Update')
+    else
+      button.setCaption('Re-install');
+    button.setOnClick(@Self._UpdateButton);
+
+    check.Create(Result);
+    check.SetName('update_srl');
+    check.SetCaption('Auto-update');
+    check.setLeft(TControl.AdjustToDPI(90));
+    check.SetTop(TControl.AdjustToDPI(2));
+    if WaspConfig.GetBoolean('update_srl_checkbox') then
+      check.SetChecked(True);
+    check.CheckBox.setOnChange(@Self._AutoUpdateToggle);
+    Self._AutoUpdateToggle(check.CheckBox);
+
+    check.Create(Result);
+    check.SetName('update_wl');
+    check.SetCaption('Auto-update');
+    check.SetLeft(TControl.AdjustToDPI(90));
+    check.SetTop(TControl.AdjustToDPI(25));
+    if WaspConfig.GetBoolean('update_wl_checkbox') then
+      check.SetChecked(True);
+    check.CheckBox.setOnChange(@Self._AutoUpdateToggle);
+    Self._AutoUpdateToggle(check.CheckBox);
+
+    check.Create(Result);
+    check.SetName('update_script');
+    check.SetCaption('Auto-update');
+    check.SetLeft(TControl.AdjustToDPI(90));
+    check.SetTop(TControl.AdjustToDPI(48));
+    check.CheckBox.setOnChange(@Self._AutoUpdateToggle);
+  end;
+
 var
   panel, tmp: TPanel;
   w, h: Int32;
@@ -907,7 +922,6 @@ begin
   panel.setWidth(w + 20);
   panel.setLeft(Self.Size.X - TControl.AdjustToDPI(40) - w);
 end;
-
 
 procedure TWaspForm.SetupScriptPanel(parent: TPanel; topLeft: TPoint);
 var
@@ -976,15 +990,17 @@ begin
 end;
 
 
-procedure TWaspForm._OnUserClick(sender: TObject);
-begin
-  case TLabel(sender).getName() of
-    'user_label': OpenWebPage('https://waspscripts.com/user/' + WaspClient.Cache.User.Id);
-    'id_label': SetClipBoard(WaspClient.Cache.User.Id);
-  end;
-end;
-
 procedure TWaspForm.SetupMainPanel(form: TForm);
+  type TWaspForm = TWaspForm;
+
+  procedure TWaspForm._OnUserClick(sender: TObject);
+  begin
+    case TLabel(sender).getName() of
+      'user_label': OpenWebPage('https://waspscripts.com/user/' + WaspClient.Cache.User.Id);
+      'id_label': SetClipBoard(WaspClient.Cache.User.Id);
+    end;
+  end;
+
 var
   panel: TPanel;
   user, id, launcherRev: TLabel;
