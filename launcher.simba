@@ -1,5 +1,5 @@
 {$DEFINE SCRIPT_ID := 'd563990c-4d31-4aba-b214-18e69171ed5e'}
-{$DEFINE SCRIPT_REVISION := '14'}
+{$DEFINE SCRIPT_REVISION := '15'}
 
 {.$DEFINE DEVELOPER_MODE}
 
@@ -2295,6 +2295,7 @@ type
     Schema: String;
     APIKey: String;
     DownloadPath: String;
+    AssetsPath: String;
 
     Cache: record
       User: record
@@ -2323,7 +2324,6 @@ type
 
       Free: Boolean;
     end;
-
   end;
 
 procedure TWaspClient.FreeUserData();
@@ -2808,13 +2808,13 @@ begin
 end;
 
 
-
 procedure TWaspClient.Setup();
 begin
   Self.Name := 'WaspClient';
   Self.Server := 'https://db.waspscripts.com/';
   Self.APIKey := 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVucWxwY2hvYm5peWx3cHNqY3FjIiwicm9sZSI6ImFub24iLCJpYXQiOjE2NjM5MzIxMDAsImV4cCI6MTk3OTUwODEwMH0.WUiK6CteSjnOT8A9AcbUHnYyvWwDxlwUwq_ueifPAxY';
   Self.DownloadPath := LAUNCHER_DATA + 'downloads' + DirectorySeparator;
+  Self.AssetsPath := LAUNCHER_DATA + 'assets' + DirectorySeparator;
 
   if not ForceDirectories(Self.DownloadPath) then
     TerminateScript('WaspClient can''t create downloads directory.');
@@ -2828,7 +2828,6 @@ begin
   Self.GetBundles();
   Self.GetFreeScripts();
 end;
-
 
 
 function TWaspClient.GetSubscribbedProducts(): TProductDataArray;
@@ -3002,7 +3001,7 @@ begin
 end;
 
 
-procedure TWaspClient.Download(id: String; revision: Int32);
+procedure TWaspClient.DownloadScript(id: String; revision: Int32);
 const
   ROUTE: String = 'storage/v1/object/authenticated/scripts/';
 var
@@ -3013,6 +3012,42 @@ begin
   DebugLn(Self.Name, 'Downloading ' + id + ' this might take a while.');
   if not Self.GETEx(url, Self.DownloadPath + id + '.simba') then
     TerminateScript('Something went wrong while trying to download: ' + url);
+end;
+
+procedure TWaspClient.DownloadScriptEx(id: String; revision: Int32);
+const
+  ROUTE: String = 'storage/v1/object/public/scripts/';
+var
+  url, revStr: String;
+begin
+  revStr := PadL(ToStr(revision), 9, '0');
+  url := ROUTE + id + '/' + revStr + '/script.simba';
+
+  DebugLn(Self.Name, 'Downloading ' + id + ' this might take a while.');
+  if not Self.GETEx(url, Self.DownloadPath + id + '.simba') then
+    TerminateScript('Something went wrong while trying to download: ' + url);
+end;
+
+
+procedure TWaspClient.DownloadImage(id, img: String);
+const
+  ROUTE: String = 'storage/v1/object/authenticated/imgs/scripts/';
+var
+  url: String;
+  path: String;
+begin
+  url := ROUTE + id + '/' + img + '.jpg';
+
+  path := Self.AssetsPath + id + DirectorySeparator;
+  if not ForceDirectories(path) then
+    TerminateScript('Failed to create assets path: ' + id);
+
+  if not Self.GETEx(url, path + img + '.jpg') then
+  begin
+    url := ROUTE + 'default/' + img + '.jpg';
+    if not Self.GETEx(url, path + img + '.jpg') then
+      TerminateScript('Something went wrong while trying to download: ' + url);
+  end;
 end;
 
 
@@ -3252,6 +3287,67 @@ begin
   end;
 end;
 
+
+procedure TImage.LoadFromFile(path: String);
+var
+  name, extension: String;
+begin
+  if Pos(APPPATH, path) = 0 then
+    path := APPPATH + path;
+
+  Self.getPicture().LoadFromFile(path);
+
+  name := ExtractFileName(path);
+  extension := ExtractFileExt(name);
+
+  name := 'image_' + StringReplace(LowerCase(name), extension, '', [rfReplaceAll]);
+  Self.SetName(name);
+end;
+
+procedure TControl.LoadFromFile(path: String);
+var
+  img: TImage;
+begin
+  img.Create(Self);
+  img.LoadFromFile(path);
+
+  img.SetBounds(0, 0, Self.getWidth(), Self.getHeight());
+  img.SetStretch(True);
+  img.SetProportional(True);
+
+  img.setAlign(alClient);
+end;
+
+procedure TControl.SwapImage(path: String);
+var
+  hi, i: Int32;
+  child: TControl;
+begin
+  hi := Self.getComponentCount()-1;
+
+  if hi < 0 then
+  begin
+    Self.LoadFromFile(path);
+    Exit;
+  end;
+
+  for i := 0 to hi do
+  begin
+    child := Self.GetComponent(i);
+    if 'image_' in child.getName() then
+      Break;
+    if i = hi then
+    begin
+      Self.LoadFromFile(path);
+      Exit;
+    end;
+  end;
+
+  TImage(child).LoadFromFile(path);
+end;
+
+
+
 type
   TDarkListBox = record
     OutterPanel: TPanel;
@@ -3345,10 +3441,10 @@ begin
     h := getHeight();
   end;
 
-  h -= 15;
+  h -= TControl.AdjustToDPI(15);
 
-  Self.InnerPanel.setWidth(w-4);
-  Self.InnerPanel.setHeight(h-4);
+  Self.InnerPanel.setWidth(w - TControl.AdjustToDPI(4));
+  Self.InnerPanel.setHeight(h - TControl.AdjustToDPI(4));
 
   Self.ListBox.setWidth(w);
   Self.ListBox.setHeight(h);
@@ -4237,7 +4333,10 @@ begin
   for fileName in files do
     DeleteFile(WaspClient.DownloadPath + fileName);
 
-  WaspClient.Download(script.ID, script.Revision);
+  if script = WaspClient.Cache.Launcher then
+    WaspClient.DownloadScriptEx(script.ID, script.Revision)
+  else
+    WaspClient.DownloadScript(script.ID, script.Revision);
 
   files := GetFiles(WaspClient.DownloadPath, 'simba');
   if Length(files) <> 1 then
@@ -4332,13 +4431,6 @@ var
   listBox: TListBox;
   i: Int32;
 begin
-  if WaspUpdater.Launcher.Revision < WaspClient.Cache.Launcher.Revision then
-  begin
-    WaspUpdater.SelfUpdate();
-    SimbaCloseCurrentTab();
-    Self.Form.Close();
-  end;
-
   Self.TokenTimer.setEnabled(False);
   msPanel := Self.Form.GetChild('main_panel');
   dPanel := Self.Form.GetChild('discord_panel');
@@ -4429,7 +4521,6 @@ var
   list: TListBox;
   script: TScriptData;
   scriptFile: TScriptFile;
-  proc: TSysProc;
 begin
   panel := TButton(sender).getOwner();
   list := panel.GetChild('scripts_listbox');
@@ -4638,7 +4729,7 @@ var
   main, panel: TPanel;
   text: TLabel;
   memo: TMemo;
-  button, start: TButton;
+  update, start, open: TButton;
   checkbox: TCheckBox;
   scriptData: TScriptData;
   scriptFile: TScriptFile;
@@ -4670,35 +4761,29 @@ begin
   else
     text.SetFontColor($18E982);
 
-  button := panel.GetChild('update_script_button');
-
+  update := panel.GetChild('update_script_button');
 
   if scriptFile.Revision = 0 then
-    button.setCaption('Install')
+    update.setCaption('Install')
   else if scriptFile.Revision <> scriptData.Revision then
-    button.setCaption('Update')
+    update.setCaption('Update')
   else
-    button.setCaption('Re-install');
+    update.setCaption('Re-install');
 
   start  := main.GetChild('script_start_button');
-  if scriptFile.Revision = 0 then
-    start.setEnabled(False)
-  else
-    start.setEnabled(True);
+  open  := main.GetChild('script_open_button');
+  start.setEnabled(scriptFile.Revision <> 0);
+  open.setEnabled(scriptFile.Revision <> 0);
 
   checkbox := panel.GetChild('update_script_checkbox');
-  if WaspConfig.GetBoolean('update_' + scriptData.ID) then
+
+  checkbox.SetChecked(WaspConfig.GetBoolean('update_' + scriptData.ID));
+  if checkbox.IsChecked() and (scriptFile.Revision <> scriptData.Revision) then
   begin
-    checkbox.SetChecked(True);
-    if scriptFile.Revision <> scriptData.Revision then
-    begin
-      WaspUpdater.UpdateScript(scriptData);
-      Self._OnScriptChange(sender);
-      Exit;
-    end;
-  end
-  else
-    checkbox.SetChecked(False);
+    WaspUpdater.UpdateScript(scriptData);
+    Self._OnScriptChange(sender);
+    Exit;
+  end;
 
   panel := main.GetChild('script_panel');
   text := panel.GetChild('script_name_label');
@@ -4715,13 +4800,15 @@ begin
     text.setCaption('Free');
     text.SetFontColor($F0F0F0);
   end;
-  text.setLeft(panel.getWidth() - text.GetTrueWidth());
-
-  text := panel.GetChild('script_description_label');
-  text.setCaption(scriptData.Description);
+  text.setLeft(panel.getWidth() - text.GetTrueWidth() - TControl.AdjustToDPI(5));
 
   memo := panel.GetChild('script_content_memo');
-  memo.setText(scriptData.Content);
+  memo.setText(scriptData.Description + LineEnding + LineEnding + scriptData.Content);
+
+  if not FileExists(WaspClient.AssetsPath + scriptData.ID + DirectorySeparator + 'banner.jpg') then
+    WaspClient.DownloadImage(scriptData.ID, 'banner');
+
+  panel.SwapImage(WaspClient.AssetsPath + scriptData.ID + DirectorySeparator + 'banner.jpg');
 end;
 
 
@@ -5228,6 +5315,7 @@ var
   panel, memoInnerPanel, memoOutterPanel: TPanel;
   text: TLabel;
   memo: TMemo;
+  img: TImage;
 begin
   panel.Create(parent);
   panel.setName('script_panel');
@@ -5235,46 +5323,51 @@ begin
   panel.SetLeft(topLeft.X);
   panel.SetTop(topLeft.Y);
   panel.setWidth(Self.Size.X - topLeft.X - TControl.AdjustToDPI(40));
-  panel.setHeight(Self.Size.Y - topLeft.Y - TControl.AdjustToDPI(100));
+  panel.setHeight(Self.Size.Y - topLeft.Y - TControl.AdjustToDPI(80));
   panel.setBevelWidth(0);
+
+  img.Create(panel);
+  img.SetBounds(0, 0, panel.getWidth(), TControl.AdjustToDPI(140));
+  img.SetStretch(True);
+  img.SetName('image_null');
 
   text.Create(panel);
   text.setName('script_name_label');
   text.SetFontSize(10);
   text.SetFontStyle([TFontStyle.fsBold]);
+  text.setLeft(TControl.AdjustToDPI(5));
+  text.SetTop(TControl.AdjustToDPI(115));
 
   text.Create(panel);
   text.setName('script_category_label');
-
-  text.Create(panel);
-  text.setName('script_description_label');
-  text.SetTop(20);
+  text.setLeft(-TControl.AdjustToDPI(5));
+  text.SetTop(TControl.AdjustToDPI(115));
 
   memoOutterPanel.Create(panel);
   memoOutterPanel.setName('script_omemo_panel');
   memoOutterPanel.setCaption('');
-  memoOutterPanel.SetTop(70);
+  memoOutterPanel.SetTop(TControl.AdjustToDPI(145));
   memoOutterPanel.setWidth(panel.getWidth());
-  memoOutterPanel.setHeight(panel.getHeight() - 70);
+  memoOutterPanel.setHeight(panel.getHeight() - memoOutterPanel.GetTop());
   memoOutterPanel.setBevelWidth(0);
   memoOutterPanel.setColor($505050);
 
   memoInnerPanel.Create(memoOutterPanel);
   memoInnerPanel.setName('script_imemo_panel');
   memoInnerPanel.setCaption('');
-  memoInnerPanel.SetTop(2);
-  memoInnerPanel.SetLeft(2);
-  memoInnerPanel.setWidth(memoOutterPanel.getWidth() - 4);
-  memoInnerPanel.setHeight(memoOutterPanel.getHeight() - 4);
+  memoInnerPanel.SetTop(TControl.AdjustToDPI(2));
+  memoInnerPanel.SetLeft(TControl.AdjustToDPI(2));
+  memoInnerPanel.setWidth(memoOutterPanel.getWidth() - TControl.AdjustToDPI(4));
+  memoInnerPanel.setHeight(memoOutterPanel.getHeight() - TControl.AdjustToDPI(4));
   memoInnerPanel.setBevelWidth(0);
   memoInnerPanel.setColor($303030);
 
   memo.Create(memoInnerPanel);
   memo.setName('script_content_memo');
-  memo.setLeft(-2);
-  memo.SetTop(-2);
-  memo.setWidth(memoInnerPanel.getWidth()+4);
-  memo.setHeight(memoInnerPanel.getHeight()+4);
+  memo.setLeft(-TControl.AdjustToDPI(2));
+  memo.SetTop(-TControl.AdjustToDPI(2));
+  memo.setWidth(memoInnerPanel.getWidth() + TControl.AdjustToDPI(4));
+  memo.setHeight(memoInnerPanel.getHeight() + TControl.AdjustToDPI(4));
   memo.setColor($303030);
   memo.SetFontColor($D5D5D5);
   memo.setScrollBars(TScrollStyle.ssAutoBoth);
@@ -5332,7 +5425,7 @@ begin
   scriptsList.SetLeft(id.getLeft());
   scriptsList.SetTop(id.GetTop() + id.getHeight() + TControl.AdjustToDPI(15));
   scriptsList.SetWidth(TControl.AdjustToDPI(260));
-  scriptsList.setHeight(Self.Size.Y - scriptsList.GetTop() - TControl.AdjustToDPI(100));
+  scriptsList.setHeight(Self.Size.Y - scriptsList.GetTop() - TControl.AdjustToDPI(80));
   scriptsList.ListBox.ListBox.setOnClick(@Self._OnScriptChange);
 
   button.Create(panel);
@@ -5366,7 +5459,11 @@ begin
   launcherRev.setLeft(Self.Size.X div 2 - launcherRev.GetTrueWidth() div 2);
 
   Self.SetupVersionsPanel(panel, user.GetTop());
-  Self.SetupScriptPanel(panel, [scriptsList.GetRight() + TControl.AdjustToDPI(30), scriptsList.GetTop() + TControl.AdjustToDPI(90)]);
+  Self.SetupScriptPanel(
+    panel,
+    [scriptsList.GetRight() + TControl.AdjustToDPI(30),
+     scriptsList.GetTop()   + TControl.AdjustToDPI(30)]
+  );
 end;
 
 
@@ -5488,6 +5585,14 @@ begin
 
   WaspUpdater.Setup();
   GitHubClient.Setup();
+
+  if WaspUpdater.Launcher.Revision < WaspClient.Cache.Launcher.Revision then
+  begin
+    WaspUpdater.SelfUpdate();
+    SimbaCloseCurrentTab();
+    WriteLn(LineEnding + LineEnding + LineEnding + LineEnding + 'Wasp Launcher has been updated. Please run it again!' + LineEnding + LineEnding + LineEnding + LineEnding);
+    TerminateScript();
+  end;
 
   WaspForm.Run();
 end;
