@@ -1,5 +1,5 @@
 {$DEFINE SCRIPT_ID := 'd563990c-4d31-4aba-b214-18e69171ed5e'}
-{$DEFINE SCRIPT_REVISION := '16'}
+{$DEFINE SCRIPT_REVISION := '17'}
 
 {.$DEFINE DEVELOPER_MODE}
 
@@ -3014,7 +3014,7 @@ begin
     TerminateScript('Something went wrong while trying to download: ' + url);
 end;
 
-procedure TWaspClient.DownloadScriptEx(id: String; revision: Int32);
+function TWaspClient.DownloadScriptEx(id: String; revision: Int32): Boolean;
 const
   ROUTE: String = 'storage/v1/object/public/scripts/';
 var
@@ -3024,8 +3024,7 @@ begin
   url := ROUTE + id + '/' + revStr + '/script.simba';
 
   DebugLn(Self.Name, 'Downloading ' + id + ' this might take a while.');
-  if not Self.GETEx(url, Self.DownloadPath + id + '.simba') then
-    TerminateScript('Something went wrong while trying to download: ' + url);
+  Result := Self.GETEx(url, Self.DownloadPath + id + '.simba');
 end;
 
 
@@ -3942,6 +3941,8 @@ type
 
     MonitorSRLT: TMonitor;
     MonitorWL: TMonitor;
+
+    UpdateAfterLogin: Boolean;
   end;
 
 var
@@ -4334,8 +4335,15 @@ begin
     DeleteFile(WaspClient.DownloadPath + fileName);
 
   if script = WaspClient.Cache.Launcher then
-    WaspClient.DownloadScriptEx(script.ID, script.Revision)
-  else
+  begin
+    if Self.UpdateAfterLogin then
+      WaspClient.DownloadScript(script.ID, script.Revision)
+    else if not WaspClient.DownloadScriptEx(script.ID, script.Revision) then
+    begin
+      Self.UpdateAfterLogin := True;
+      Exit;
+    end;
+  end else
     WaspClient.DownloadScript(script.ID, script.Revision);
 
   files := GetFiles(WaspClient.DownloadPath, 'simba');
@@ -4427,10 +4435,23 @@ procedure TWaspForm.HandleLogin(loginPanel: TPanel);
 var
   msPanel, dPanel: TPanel;
   id, user: TLabel;
+  pass: TEdit;
   scripts: TScriptDataArray;
   listBox: TListBox;
   i: Int32;
 begin
+  if WaspUpdater.UpdateAfterLogin then
+  begin
+    WaspUpdater.SelfUpdate();
+    SimbaCloseCurrentTab();
+    WriteLn(LineEnding + LineEnding + LineEnding + LineEnding + 'Wasp Launcher has been updated. Please run it again!' + LineEnding + LineEnding + LineEnding + LineEnding);
+    Self.Form.Close();
+    TerminateScript();
+  end;
+
+  pass := loginPanel.GetChild('password_edit');
+  pass.Clear();
+
   Self.TokenTimer.setEnabled(False);
   msPanel := Self.Form.GetChild('main_panel');
   dPanel := Self.Form.GetChild('discord_panel');
@@ -4464,7 +4485,9 @@ begin
   loginPanel := Self.Form.GetChild('login_panel');
 
   if WaspConfig.GetBoolean('use_discord') then
-    Self._DiscordButton(loginPanel.GetChild('discord_button'));
+    Self._DiscordButton(loginPanel.GetChild('discord_button'))
+  else
+    loginPanel.Show();
   msPanel.Hide();
 end;
 
