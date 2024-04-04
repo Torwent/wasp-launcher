@@ -427,15 +427,7 @@ begin
   for fileName in files do
     DeleteFile(WaspClient.DownloadPath + fileName);
 
-  if script = WaspClient.Cache.Launcher then
-  begin
-    if Self.UpdateAfterLogin then
-      WaspClient.DownloadScript(script.ID, script.Revision)
-    if not WaspClient.DownloadScriptEx(script.ID, script.Revision) then
-      Exit;
-  end
-  else
-    WaspClient.DownloadScript(script.ID, script.Revision);
+  WaspClient.DownloadScript(script.ID, script.Revision);
 
   files := GetFiles(WaspClient.DownloadPath, 'simba');
   if Length(files) <> 1 then
@@ -500,12 +492,4 @@ begin
 
   AddOnTerminate(@Self.Free);
 end;
-
-
-function TWaspClient.Login(grantType: String; payload: TJSONObject): Boolean; override;
-begin
-  Result := inherited;
-  WaspUpdater.UpdateAfterLogin := not Result;
-end;
-
 
