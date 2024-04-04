@@ -463,7 +463,6 @@ begin
     Self.Cache.User := [];
     WaspConfig.Remove('refresh_token');
     Self.FreeUserData();
-
   except
     WriteLn('Error logging in: ', GetExceptionMessage());
     if response <> nil then
@@ -1072,7 +1071,7 @@ var
 begin
   revStr := PadL(ToStr(revision), 9, '0');
   url := ROUTE + id + '/' + revStr + '/script.simba';
-  DebugLn(Self.Name, 'Downloading ' + id + ' this might take a while.');
+  DebugLn(Self.Name, 'Downloading ' + id + ' rev. ' + ToStr(revision) + ' this might take a while.');
   if not Self.GETEx(url, Self.DownloadPath + id + '.simba') then
     TerminateScript('Something went wrong while trying to download: ' + url);
 end;

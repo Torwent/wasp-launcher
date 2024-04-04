@@ -431,12 +431,10 @@ begin
   begin
     if Self.UpdateAfterLogin then
       WaspClient.DownloadScript(script.ID, script.Revision)
-    else if not WaspClient.DownloadScriptEx(script.ID, script.Revision) then
-    begin
-      Self.UpdateAfterLogin := True;
+    if not WaspClient.DownloadScriptEx(script.ID, script.Revision) then
       Exit;
-    end;
-  end else
+  end
+  else
     WaspClient.DownloadScript(script.ID, script.Revision);
 
   files := GetFiles(WaspClient.DownloadPath, 'simba');
@@ -462,11 +460,14 @@ procedure TWaspUpdater.SelfUpdate();
 begin
   Self.UpdateScript(WaspClient.Cache.Launcher);
 
-  if FileExists(Self.Launcher.Path) and not DeleteFile(Self.Launcher.Path) then
-    TerminateScript('Failed to delete old launcher.');
+  if FileExists(Self.ScriptsPath + Self.Launcher.ID + '.simba') then
+  begin
+    if FileExists(Self.Launcher.Path) and not DeleteFile(Self.Launcher.Path) then
+      TerminateScript('Failed to delete old launcher.');
 
-  if not CopyFile(Self.ScriptsPath + Self.Launcher.ID + '.simba', Self.Launcher.Path) then
-    TerminateScript('Failed to copy updated launcher to it''s directory.');
+    if not CopyFile(Self.ScriptsPath + Self.Launcher.ID + '.simba', Self.Launcher.Path) then
+      TerminateScript('Failed to copy updated launcher to it''s directory.');
+  end;
 end;
 
 procedure TWaspUpdater.Free();
@@ -499,3 +500,12 @@ begin
 
   AddOnTerminate(@Self.Free);
 end;
+
+
+function TWaspClient.Login(grantType: String; payload: TJSONObject): Boolean; override;
+begin
+  Result := inherited;
+  WaspUpdater.UpdateAfterLogin := not Result;
+end;
+
+
