@@ -1,5 +1,5 @@
 {$DEFINE SCRIPT_ID := 'd563990c-4d31-4aba-b214-18e69171ed5e'}
-{$DEFINE SCRIPT_REVISION := '17'}
+{$DEFINE SCRIPT_REVISION := '18'}
 
 {.$DEFINE DEVELOPER_MODE}
 
@@ -2400,7 +2400,6 @@ begin
     Self.Cache.User := [];
     WaspConfig.Remove('refresh_token');
     Self.FreeUserData();
-
   except
     WriteLn('Error logging in: ', GetExceptionMessage());
     if response <> nil then
@@ -3009,7 +3008,7 @@ var
 begin
   revStr := PadL(ToStr(revision), 9, '0');
   url := ROUTE + id + '/' + revStr + '/script.simba';
-  DebugLn(Self.Name, 'Downloading ' + id + ' this might take a while.');
+  DebugLn(Self.Name, 'Downloading ' + id + ' rev. ' + ToStr(revision) + ' this might take a while.');
   if not Self.GETEx(url, Self.DownloadPath + id + '.simba') then
     TerminateScript('Something went wrong while trying to download: ' + url);
 end;
@@ -4334,17 +4333,7 @@ begin
   for fileName in files do
     DeleteFile(WaspClient.DownloadPath + fileName);
 
-  if script = WaspClient.Cache.Launcher then
-  begin
-    if Self.UpdateAfterLogin then
-      WaspClient.DownloadScript(script.ID, script.Revision)
-    else if not WaspClient.DownloadScriptEx(script.ID, script.Revision) then
-    begin
-      Self.UpdateAfterLogin := True;
-      Exit;
-    end;
-  end else
-    WaspClient.DownloadScript(script.ID, script.Revision);
+  WaspClient.DownloadScript(script.ID, script.Revision);
 
   files := GetFiles(WaspClient.DownloadPath, 'simba');
   if Length(files) <> 1 then
@@ -4369,11 +4358,14 @@ procedure TWaspUpdater.SelfUpdate();
 begin
   Self.UpdateScript(WaspClient.Cache.Launcher);
 
-  if FileExists(Self.Launcher.Path) and not DeleteFile(Self.Launcher.Path) then
-    TerminateScript('Failed to delete old launcher.');
+  if FileExists(Self.ScriptsPath + Self.Launcher.ID + '.simba') then
+  begin
+    if FileExists(Self.Launcher.Path) and not DeleteFile(Self.Launcher.Path) then
+      TerminateScript('Failed to delete old launcher.');
 
-  if not CopyFile(Self.ScriptsPath + Self.Launcher.ID + '.simba', Self.Launcher.Path) then
-    TerminateScript('Failed to copy updated launcher to it''s directory.');
+    if not CopyFile(Self.ScriptsPath + Self.Launcher.ID + '.simba', Self.Launcher.Path) then
+      TerminateScript('Failed to copy updated launcher to it''s directory.');
+  end;
 end;
 
 procedure TWaspUpdater.Free();
@@ -4408,6 +4400,7 @@ begin
 end;
 
 
+
 {$IFNDEF WS_FORM_INCLUDED}         
 {$DEFINE WS_FORM_INCLUDED}
 
@@ -4440,7 +4433,7 @@ var
   listBox: TListBox;
   i: Int32;
 begin
-  if WaspUpdater.UpdateAfterLogin then
+  if WaspUpdater.Launcher.Revision < WaspClient.Cache.Launcher.Revision then
   begin
     WaspUpdater.SelfUpdate();
     SimbaCloseCurrentTab();
@@ -5624,14 +5617,6 @@ begin
 
   WaspUpdater.Setup();
   GitHubClient.Setup();
-
-  if WaspUpdater.Launcher.Revision < WaspClient.Cache.Launcher.Revision then
-  begin
-    WaspUpdater.SelfUpdate();
-    SimbaCloseCurrentTab();
-    WriteLn(LineEnding + LineEnding + LineEnding + LineEnding + 'Wasp Launcher has been updated. Please run it again!' + LineEnding + LineEnding + LineEnding + LineEnding);
-    TerminateScript();
-  end;
 
   WaspForm.Run();
 end;
