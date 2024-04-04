@@ -214,6 +214,67 @@ begin
   end;
 end;
 
+
+procedure TImage.LoadFromFile(path: String);
+var
+  name, extension: String;
+begin
+  if Pos(APPPATH, path) = 0 then
+    path := APPPATH + path;
+
+  Self.getPicture().LoadFromFile(path);
+
+  name := ExtractFileName(path);
+  extension := ExtractFileExt(name);
+
+  name := 'image_' + StringReplace(LowerCase(name), extension, '', [rfReplaceAll]);
+  Self.SetName(name);
+end;
+
+procedure TControl.LoadFromFile(path: String);
+var
+  img: TImage;
+begin
+  img.Create(Self);
+  img.LoadFromFile(path);
+
+  img.SetBounds(0, 0, Self.getWidth(), Self.getHeight());
+  img.SetStretch(True);
+  img.SetProportional(True);
+
+  img.setAlign(alClient);
+end;
+
+procedure TControl.SwapImage(path: String);
+var
+  hi, i: Int32;
+  child: TControl;
+begin
+  hi := Self.getComponentCount()-1;
+
+  if hi < 0 then
+  begin
+    Self.LoadFromFile(path);
+    Exit;
+  end;
+
+  for i := 0 to hi do
+  begin
+    child := Self.GetComponent(i);
+    if 'image_' in child.getName() then
+      Break;
+    if i = hi then
+    begin
+      Self.LoadFromFile(path);
+      Exit;
+    end;
+  end;
+
+  TImage(child).LoadFromFile(path);
+end;
+
+
+
 type
   TDarkListBox = record
     OutterPanel: TPanel;
@@ -307,10 +368,10 @@ begin
     h := getHeight();
   end;
 
-  h -= 15;
+  h -= TControl.AdjustToDPI(15);
 
-  Self.InnerPanel.setWidth(w-4);
-  Self.InnerPanel.setHeight(h-4);
+  Self.InnerPanel.setWidth(w - TControl.AdjustToDPI(4));
+  Self.InnerPanel.setHeight(h - TControl.AdjustToDPI(4));
 
   Self.ListBox.setWidth(w);
   Self.ListBox.setHeight(h);

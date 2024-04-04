@@ -425,7 +425,10 @@ begin
   for fileName in files do
     DeleteFile(WaspClient.DownloadPath + fileName);
 
-  WaspClient.Download(script.ID, script.Revision);
+  if script = WaspClient.Cache.Launcher then
+    WaspClient.DownloadScriptEx(script.ID, script.Revision)
+  else
+    WaspClient.DownloadScript(script.ID, script.Revision);
 
   files := GetFiles(WaspClient.DownloadPath, 'simba');
   if Length(files) <> 1 then

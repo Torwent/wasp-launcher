@@ -358,6 +358,7 @@ type
     Schema: String;
     APIKey: String;
     DownloadPath: String;
+    AssetsPath: String;
 
     Cache: record
       User: record
@@ -386,7 +387,6 @@ type
 
       Free: Boolean;
     end;
-
   end;
 
 procedure TWaspClient.FreeUserData();
@@ -871,13 +871,13 @@ begin
 end;
 
 
-
 procedure TWaspClient.Setup();
 begin
   Self.Name := 'WaspClient';
   Self.Server := 'https://db.waspscripts.com/';
   Self.APIKey := 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVucWxwY2hvYm5peWx3cHNqY3FjIiwicm9sZSI6ImFub24iLCJpYXQiOjE2NjM5MzIxMDAsImV4cCI6MTk3OTUwODEwMH0.WUiK6CteSjnOT8A9AcbUHnYyvWwDxlwUwq_ueifPAxY';
   Self.DownloadPath := LAUNCHER_DATA + 'downloads' + DirectorySeparator;
+  Self.AssetsPath := LAUNCHER_DATA + 'assets' + DirectorySeparator;
 
   if not ForceDirectories(Self.DownloadPath) then
     TerminateScript('WaspClient can''t create downloads directory.');
@@ -891,7 +891,6 @@ begin
   Self.GetBundles();
   Self.GetFreeScripts();
 end;
-
 
 
 function TWaspClient.GetSubscribbedProducts(): TProductDataArray;
@@ -1065,7 +1064,7 @@ begin
 end;
 
 
-procedure TWaspClient.Download(id: String; revision: Int32);
+procedure TWaspClient.DownloadScript(id: String; revision: Int32);
 const
   ROUTE: String = 'storage/v1/object/authenticated/scripts/';
 var
@@ -1076,6 +1075,42 @@ begin
   DebugLn(Self.Name, 'Downloading ' + id + ' this might take a while.');
   if not Self.GETEx(url, Self.DownloadPath + id + '.simba') then
     TerminateScript('Something went wrong while trying to download: ' + url);
+end;
+
+procedure TWaspClient.DownloadScriptEx(id: String; revision: Int32);
+const
+  ROUTE: String = 'storage/v1/object/public/scripts/';
+var
+  url, revStr: String;
+begin
+  revStr := PadL(ToStr(revision), 9, '0');
+  url := ROUTE + id + '/' + revStr + '/script.simba';
+
+  DebugLn(Self.Name, 'Downloading ' + id + ' this might take a while.');
+  if not Self.GETEx(url, Self.DownloadPath + id + '.simba') then
+    TerminateScript('Something went wrong while trying to download: ' + url);
+end;
+
+
+procedure TWaspClient.DownloadImage(id, img: String);
+const
+  ROUTE: String = 'storage/v1/object/authenticated/imgs/scripts/';
+var
+  url: String;
+  path: String;
+begin
+  url := ROUTE + id + '/' + img + '.jpg';
+
+  path := Self.AssetsPath + id + DirectorySeparator;
+  if not ForceDirectories(path) then
+    TerminateScript('Failed to create assets path: ' + id);
+
+  if not Self.GETEx(url, path + img + '.jpg') then
+  begin
+    url := ROUTE + 'default/' + img + '.jpg';
+    if not Self.GETEx(url, path + img + '.jpg') then
+      TerminateScript('Something went wrong while trying to download: ' + url);
+  end;
 end;
 
 

@@ -30,13 +30,6 @@ var
   listBox: TListBox;
   i: Int32;
 begin
-  if WaspUpdater.Launcher.Revision < WaspClient.Cache.Launcher.Revision then
-  begin
-    WaspUpdater.SelfUpdate();
-    SimbaCloseCurrentTab();
-    Self.Form.Close();
-  end;
-
   Self.TokenTimer.setEnabled(False);
   msPanel := Self.Form.GetChild('main_panel');
   dPanel := Self.Form.GetChild('discord_panel');
@@ -127,7 +120,6 @@ var
   list: TListBox;
   script: TScriptData;
   scriptFile: TScriptFile;
-  proc: TSysProc;
 begin
   panel := TButton(sender).getOwner();
   list := panel.GetChild('scripts_listbox');
@@ -336,7 +328,7 @@ var
   main, panel: TPanel;
   text: TLabel;
   memo: TMemo;
-  button, start: TButton;
+  update, start, open: TButton;
   checkbox: TCheckBox;
   scriptData: TScriptData;
   scriptFile: TScriptFile;
@@ -368,35 +360,29 @@ begin
   else
     text.SetFontColor($18E982);
 
-  button := panel.GetChild('update_script_button');
-
+  update := panel.GetChild('update_script_button');
 
   if scriptFile.Revision = 0 then
-    button.setCaption('Install')
+    update.setCaption('Install')
   else if scriptFile.Revision <> scriptData.Revision then
-    button.setCaption('Update')
+    update.setCaption('Update')
   else
-    button.setCaption('Re-install');
+    update.setCaption('Re-install');
 
   start  := main.GetChild('script_start_button');
-  if scriptFile.Revision = 0 then
-    start.setEnabled(False)
-  else
-    start.setEnabled(True);
+  open  := main.GetChild('script_open_button');
+  start.setEnabled(scriptFile.Revision <> 0);
+  open.setEnabled(scriptFile.Revision <> 0);
 
   checkbox := panel.GetChild('update_script_checkbox');
-  if WaspConfig.GetBoolean('update_' + scriptData.ID) then
+
+  checkbox.SetChecked(WaspConfig.GetBoolean('update_' + scriptData.ID));
+  if checkbox.IsChecked() and (scriptFile.Revision <> scriptData.Revision) then
   begin
-    checkbox.SetChecked(True);
-    if scriptFile.Revision <> scriptData.Revision then
-    begin
-      WaspUpdater.UpdateScript(scriptData);
-      Self._OnScriptChange(sender);
-      Exit;
-    end;
-  end
-  else
-    checkbox.SetChecked(False);
+    WaspUpdater.UpdateScript(scriptData);
+    Self._OnScriptChange(sender);
+    Exit;
+  end;
 
   panel := main.GetChild('script_panel');
   text := panel.GetChild('script_name_label');
@@ -413,13 +399,15 @@ begin
     text.setCaption('Free');
     text.SetFontColor($F0F0F0);
   end;
-  text.setLeft(panel.getWidth() - text.GetTrueWidth());
-
-  text := panel.GetChild('script_description_label');
-  text.setCaption(scriptData.Description);
+  text.setLeft(panel.getWidth() - text.GetTrueWidth() - TControl.AdjustToDPI(5));
 
   memo := panel.GetChild('script_content_memo');
-  memo.setText(scriptData.Content);
+  memo.setText(scriptData.Description + LineEnding + LineEnding + scriptData.Content);
+
+  if not FileExists(WaspClient.AssetsPath + scriptData.ID + DirectorySeparator + 'banner.jpg') then
+    WaspClient.DownloadImage(scriptData.ID, 'banner');
+
+  panel.SwapImage(WaspClient.AssetsPath + scriptData.ID + DirectorySeparator + 'banner.jpg');
 end;
 
 
@@ -926,6 +914,7 @@ var
   panel, memoInnerPanel, memoOutterPanel: TPanel;
   text: TLabel;
   memo: TMemo;
+  img: TImage;
 begin
   panel.Create(parent);
   panel.setName('script_panel');
@@ -933,46 +922,51 @@ begin
   panel.SetLeft(topLeft.X);
   panel.SetTop(topLeft.Y);
   panel.setWidth(Self.Size.X - topLeft.X - TControl.AdjustToDPI(40));
-  panel.setHeight(Self.Size.Y - topLeft.Y - TControl.AdjustToDPI(100));
+  panel.setHeight(Self.Size.Y - topLeft.Y - TControl.AdjustToDPI(80));
   panel.setBevelWidth(0);
+
+  img.Create(panel);
+  img.SetBounds(0, 0, panel.getWidth(), TControl.AdjustToDPI(140));
+  img.SetStretch(True);
+  img.SetName('image_null');
 
   text.Create(panel);
   text.setName('script_name_label');
   text.SetFontSize(10);
   text.SetFontStyle([TFontStyle.fsBold]);
+  text.setLeft(TControl.AdjustToDPI(5));
+  text.SetTop(TControl.AdjustToDPI(115));
 
   text.Create(panel);
   text.setName('script_category_label');
-
-  text.Create(panel);
-  text.setName('script_description_label');
-  text.SetTop(20);
+  text.setLeft(-TControl.AdjustToDPI(5));
+  text.SetTop(TControl.AdjustToDPI(115));
 
   memoOutterPanel.Create(panel);
   memoOutterPanel.setName('script_omemo_panel');
   memoOutterPanel.setCaption('');
-  memoOutterPanel.SetTop(70);
+  memoOutterPanel.SetTop(TControl.AdjustToDPI(145));
   memoOutterPanel.setWidth(panel.getWidth());
-  memoOutterPanel.setHeight(panel.getHeight() - 70);
+  memoOutterPanel.setHeight(panel.getHeight() - memoOutterPanel.GetTop());
   memoOutterPanel.setBevelWidth(0);
   memoOutterPanel.setColor($505050);
 
   memoInnerPanel.Create(memoOutterPanel);
   memoInnerPanel.setName('script_imemo_panel');
   memoInnerPanel.setCaption('');
-  memoInnerPanel.SetTop(2);
-  memoInnerPanel.SetLeft(2);
-  memoInnerPanel.setWidth(memoOutterPanel.getWidth() - 4);
-  memoInnerPanel.setHeight(memoOutterPanel.getHeight() - 4);
+  memoInnerPanel.SetTop(TControl.AdjustToDPI(2));
+  memoInnerPanel.SetLeft(TControl.AdjustToDPI(2));
+  memoInnerPanel.setWidth(memoOutterPanel.getWidth() - TControl.AdjustToDPI(4));
+  memoInnerPanel.setHeight(memoOutterPanel.getHeight() - TControl.AdjustToDPI(4));
   memoInnerPanel.setBevelWidth(0);
   memoInnerPanel.setColor($303030);
 
   memo.Create(memoInnerPanel);
   memo.setName('script_content_memo');
-  memo.setLeft(-2);
-  memo.SetTop(-2);
-  memo.setWidth(memoInnerPanel.getWidth()+4);
-  memo.setHeight(memoInnerPanel.getHeight()+4);
+  memo.setLeft(-TControl.AdjustToDPI(2));
+  memo.SetTop(-TControl.AdjustToDPI(2));
+  memo.setWidth(memoInnerPanel.getWidth() + TControl.AdjustToDPI(4));
+  memo.setHeight(memoInnerPanel.getHeight() + TControl.AdjustToDPI(4));
   memo.setColor($303030);
   memo.SetFontColor($D5D5D5);
   memo.setScrollBars(TScrollStyle.ssAutoBoth);
@@ -1030,7 +1024,7 @@ begin
   scriptsList.SetLeft(id.getLeft());
   scriptsList.SetTop(id.GetTop() + id.getHeight() + TControl.AdjustToDPI(15));
   scriptsList.SetWidth(TControl.AdjustToDPI(260));
-  scriptsList.setHeight(Self.Size.Y - scriptsList.GetTop() - TControl.AdjustToDPI(100));
+  scriptsList.setHeight(Self.Size.Y - scriptsList.GetTop() - TControl.AdjustToDPI(80));
   scriptsList.ListBox.ListBox.setOnClick(@Self._OnScriptChange);
 
   button.Create(panel);
@@ -1064,7 +1058,11 @@ begin
   launcherRev.setLeft(Self.Size.X div 2 - launcherRev.GetTrueWidth() div 2);
 
   Self.SetupVersionsPanel(panel, user.GetTop());
-  Self.SetupScriptPanel(panel, [scriptsList.GetRight() + TControl.AdjustToDPI(30), scriptsList.GetTop() + TControl.AdjustToDPI(90)]);
+  Self.SetupScriptPanel(
+    panel,
+    [scriptsList.GetRight() + TControl.AdjustToDPI(30),
+     scriptsList.GetTop()   + TControl.AdjustToDPI(30)]
+  );
 end;
 
 

@@ -1,5 +1,5 @@
 {$DEFINE SCRIPT_ID := 'd563990c-4d31-4aba-b214-18e69171ed5e'}
-{$DEFINE SCRIPT_REVISION := '14'}
+{$DEFINE SCRIPT_REVISION := '15'}
 
 {.$DEFINE DEVELOPER_MODE}
 
@@ -13,6 +13,14 @@ begin
 
   WaspUpdater.Setup();
   GitHubClient.Setup();
+
+  if WaspUpdater.Launcher.Revision < WaspClient.Cache.Launcher.Revision then
+  begin
+    WaspUpdater.SelfUpdate();
+    SimbaCloseCurrentTab();
+    WriteLn(LineEnding + LineEnding + LineEnding + LineEnding + 'Wasp Launcher has been updated. Please run it again!' + LineEnding + LineEnding + LineEnding + LineEnding);
+    TerminateScript();
+  end;
 
   WaspForm.Run();
 end;
