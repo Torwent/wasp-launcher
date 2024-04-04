@@ -1077,7 +1077,7 @@ begin
     TerminateScript('Something went wrong while trying to download: ' + url);
 end;
 
-procedure TWaspClient.DownloadScriptEx(id: String; revision: Int32);
+function TWaspClient.DownloadScriptEx(id: String; revision: Int32): Boolean;
 const
   ROUTE: String = 'storage/v1/object/public/scripts/';
 var
@@ -1087,8 +1087,7 @@ begin
   url := ROUTE + id + '/' + revStr + '/script.simba';
 
   DebugLn(Self.Name, 'Downloading ' + id + ' this might take a while.');
-  if not Self.GETEx(url, Self.DownloadPath + id + '.simba') then
-    TerminateScript('Something went wrong while trying to download: ' + url);
+  Result := Self.GETEx(url, Self.DownloadPath + id + '.simba');
 end;
 
 

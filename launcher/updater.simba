@@ -34,6 +34,8 @@ type
 
     MonitorSRLT: TMonitor;
     MonitorWL: TMonitor;
+
+    UpdateAfterLogin: Boolean;
   end;
 
 var
@@ -426,8 +428,15 @@ begin
     DeleteFile(WaspClient.DownloadPath + fileName);
 
   if script = WaspClient.Cache.Launcher then
-    WaspClient.DownloadScriptEx(script.ID, script.Revision)
-  else
+  begin
+    if Self.UpdateAfterLogin then
+      WaspClient.DownloadScript(script.ID, script.Revision)
+    else if not WaspClient.DownloadScriptEx(script.ID, script.Revision) then
+    begin
+      Self.UpdateAfterLogin := True;
+      Exit;
+    end;
+  end else
     WaspClient.DownloadScript(script.ID, script.Revision);
 
   files := GetFiles(WaspClient.DownloadPath, 'simba');
