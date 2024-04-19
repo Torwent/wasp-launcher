@@ -1,5 +1,5 @@
 {$DEFINE SCRIPT_ID := 'd563990c-4d31-4aba-b214-18e69171ed5e'}
-{$DEFINE SCRIPT_REVISION := '18'}
+{$DEFINE SCRIPT_REVISION := '19'}
 
 {.$DEFINE DEVELOPER_MODE}
 
@@ -544,7 +544,6 @@ end;
 ```pascal
 function String.Replace(SubStr, ReplaceStr: String; Flags: TReplaceFlags=[rfReplaceAll]): String; constref;
 ```
-
 Replace [all by default] occurrences of the given SubStr with with ReplaceStr
 *)
 function String.Replace(SubStr, ReplaceStr: String; Flags: TReplaceFlags=[rfReplaceAll]): String; constref;
@@ -852,6 +851,23 @@ begin
   if Length(Self) <> 0 then
     Result := Self.Explode('.')[0];
 end;
+
+(*
+## String.Hex
+```pascal
+function String.Hex(): string; constref;
+```
+Returns the hexadecimal value that represents the string.
+*)
+function String.Hex(): string; constref;
+var
+  n: Integer;
+begin
+  Result := '';
+  for n := 1 to Length(Self) do
+    Result := LowerCase(Result + IntToHex(Ord(Self[n]), 2));
+end;
+
 
 //---| operator overloads bellow this |---------------------------------------\\
 (*
@@ -1371,6 +1387,12 @@ begin
   RunScript(path + name, params);
 end;
 
+function TJSONArray.High(): Int32;
+begin
+  if Self = nil then
+    Exit(-1);
+  Result := Self.length()-1;
+end;
 
 {$IFDEF WINDOWS}
 const
@@ -1431,13 +1453,6 @@ A full featured JSON config writer and reader.
 
 {$DEFINE WL_CONFIG_INCLUDED}
 
-
-function TJSONArray.High(): Int32;
-begin
-  if Self = nil then
-    Exit(-1);
-  Result := Self.length()-1;
-end;
 
 type
   TJSONArrayObject = record
@@ -1553,7 +1568,7 @@ begin
     jsonFile := ExtractFileName(jsonFile);
   end
   else
-    Self.Path := WL_DATAPATH + 'configs' + DirectorySeparator;
+    Self.Path := AppPath + 'Configs' + DirectorySeparator;
 
   if not ForceDirectories(Self.Path) then
     TerminateScript('Can''t create configs directory.');
@@ -1932,7 +1947,7 @@ begin
 end;
 
 var
-{$H-}WaspConfig: TWaspConfig;{$H+}
+  WaspConfig: TWaspConfig;
 
 
 
@@ -3372,8 +3387,7 @@ begin
   Self.ListBox.SetTop(-2);
   Self.ListBox.setWidth(Self.OutterPanel.getWidth());
   Self.ListBox.setHeight(Self.OutterPanel.getHeight());
-  Self.ListBox.setColor($303030);
-  Self.ListBox.SetFontColor($D5D5D5);
+
 end;
 
 
@@ -5407,6 +5421,29 @@ begin
 end;
 
 
+procedure TWaspForm.OnDrawItem(control: TWinControl; idx: Integer; rect: TRect; state: TOwnerDrawState);
+var
+  listbox: TListBox;
+  color, fColor: TColor;
+begin
+  listbox := control;
+  if idx mod 2 = 0 then color:=$303030
+  else color:=$282828;
+
+  if WaspClient.GetAllUserScripts()[idx].Categories.Contains('Premium') then
+    fColor := $4DB5FF
+  else
+    fColor := $F0F0F0;
+
+  listbox.getCanvas().getBrush().setColor(color);
+  listbox.getCanvas().FillRect(rect.Left, rect.Top, rect.Right, rect.Bottom);
+
+  listbox.getCanvas().GetFont().setColor(fColor);
+  listbox.getCanvas().getFont().setStyle([TFontStyle.fsBold]);
+  listbox.getCanvas().TextRect(rect, 2, rect.Top+2, listbox.getItems().getStrings(idx));
+end;
+
+
 procedure TWaspForm.SetupMainPanel(form: TForm);
   type TWaspForm = TWaspForm;
 
@@ -5459,6 +5496,8 @@ begin
   scriptsList.SetWidth(TControl.AdjustToDPI(260));
   scriptsList.setHeight(Self.Size.Y - scriptsList.GetTop() - TControl.AdjustToDPI(80));
   scriptsList.ListBox.ListBox.setOnClick(@Self._OnScriptChange);
+  scriptsList.ListBox.ListBox.setStyle(TListBoxStyle.lbOwnerDrawFixed);
+  scriptsList.ListBox.ListBox.setOnDrawItem(@Self.OnDrawItem);
 
   button.Create(panel);
   button.setName('logout_button');
