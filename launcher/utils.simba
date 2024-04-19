@@ -66,6 +66,12 @@ begin
   RunScript(path + name, params);
 end;
 
+function TJSONArray.High(): Int32;
+begin
+  if Self = nil then
+    Exit(-1);
+  Result := Self.length()-1;
+end;
 
 {$IFDEF WINDOWS}
 const

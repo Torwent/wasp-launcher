@@ -301,8 +301,7 @@ begin
   Self.ListBox.SetTop(-2);
   Self.ListBox.setWidth(Self.OutterPanel.getWidth());
   Self.ListBox.setHeight(Self.OutterPanel.getHeight());
-  Self.ListBox.setColor($303030);
-  Self.ListBox.SetFontColor($D5D5D5);
+
 end;
 
 

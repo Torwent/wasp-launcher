@@ -1005,6 +1005,29 @@ begin
 end;
 
 
+procedure TWaspForm.OnDrawItem(control: TWinControl; idx: Integer; rect: TRect; state: TOwnerDrawState);
+var
+  listbox: TListBox;
+  color, fColor: TColor;
+begin
+  listbox := control;
+  if idx mod 2 = 0 then color:=$303030
+  else color:=$282828;
+
+  if WaspClient.GetAllUserScripts()[idx].Categories.Contains('Premium') then
+    fColor := $4DB5FF
+  else
+    fColor := $F0F0F0;
+
+  listbox.getCanvas().getBrush().setColor(color);
+  listbox.getCanvas().FillRect(rect.Left, rect.Top, rect.Right, rect.Bottom);
+
+  listbox.getCanvas().GetFont().setColor(fColor);
+  listbox.getCanvas().getFont().setStyle([TFontStyle.fsBold]);
+  listbox.getCanvas().TextRect(rect, 2, rect.Top+2, listbox.getItems().getStrings(idx));
+end;
+
+
 procedure TWaspForm.SetupMainPanel(form: TForm);
   type TWaspForm = TWaspForm;
 
@@ -1057,6 +1080,8 @@ begin
   scriptsList.SetWidth(TControl.AdjustToDPI(260));
   scriptsList.setHeight(Self.Size.Y - scriptsList.GetTop() - TControl.AdjustToDPI(80));
   scriptsList.ListBox.ListBox.setOnClick(@Self._OnScriptChange);
+  scriptsList.ListBox.ListBox.setStyle(TListBoxStyle.lbOwnerDrawFixed);
+  scriptsList.ListBox.ListBox.setOnDrawItem(@Self.OnDrawItem);
 
   button.Create(panel);
   button.setName('logout_button');
