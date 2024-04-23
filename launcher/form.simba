@@ -29,7 +29,7 @@ var
   pass: TEdit;
   scripts: TScriptDataArray;
   listBox: TListBox;
-  i: Int32;
+  i, idx: Int32;
 begin
   if WaspUpdater.Launcher.Revision < WaspClient.Cache.Launcher.Revision then
   begin
@@ -58,10 +58,21 @@ begin
   listBox := msPanel.GetChild('scripts_listbox');
 
   listBox.Clear();
+  idx := -1;
   for i := 0 to High(scripts) do
+  begin
     listBox.getItems().Add(scripts[i].Name);
+    if scripts[i].ID = LauncherConfig.GetString('last_script') then
+      idx := i;
+  end;
 
-  listbox.setItemIndex(0);
+  if idx = -1 then
+  begin
+    listbox.setItemIndex(0);
+    LauncherConfig.Remove('last_script');
+  end
+  else
+    listbox.setItemIndex(0);
 
   msPanel.Show();
   loginPanel.Hide();
@@ -75,7 +86,7 @@ var
 begin
   loginPanel := Self.Form.GetChild('login_panel');
 
-  if WaspConfig.GetBoolean('use_discord') then
+  if LauncherConfig.GetBoolean('use_discord') then
     Self._DiscordButton(loginPanel.GetChild('discord_button'))
   else
     loginPanel.Show();
@@ -93,6 +104,7 @@ begin
   panel := TButton(sender).getOwner();
   list := panel.GetChild('scripts_listbox');
   script := WaspClient.GetAllUserScripts()[list.getItemIndex()];
+  LauncherConfig.Put('last_script', script.ID);
   scriptFile := WaspUpdater.GetScriptFile(script.ID);
   SimbaOpenInTab(scriptFile.Path);
   Self.Form.Close();
@@ -109,11 +121,12 @@ begin
   panel := TButton(sender).getOwner();
   list := panel.GetChild('scripts_listbox');
   script := WaspClient.GetAllUserScripts()[list.getItemIndex()];
+  LauncherConfig.Put('last_script', script.ID);
   scriptFile := WaspUpdater.GetScriptFile(script.ID);
   SimbaRunInTab(scriptFile.Path);
   Self.Form.Close();
 
-  for proc in {$H-}GetProcesses(){$H+} do
+  for proc in GetProcesses() do
     if proc.PID = GetSimbaPID() then
     begin
       ShowWindow(proc.Handle, 6); //6 = SW_MINIMIZE https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-showwindow
@@ -285,7 +298,7 @@ begin
 
   checkbox := panel.GetChild('update_script_checkbox');
 
-  checkbox.SetChecked(WaspConfig.GetBoolean('update_' + scriptData.ID));
+  checkbox.SetChecked(LauncherConfig.GetBoolean('update_' + scriptData.ID));
   if checkbox.IsChecked() and (scriptFile.Revision <> scriptData.Revision) then
   begin
     WaspUpdater.UpdateScript(scriptData);
@@ -368,7 +381,7 @@ procedure TWaspForm.SetupDiscordPanel(form: TForm);
   var
     lPanel, dPanel: TPanel;
   begin
-    WaspConfig.Put('use_discord', False);
+    LauncherConfig.Put('use_discord', False);
     dPanel := TButton(sender).getOwner();
     lPanel := Self.Form.GetChild('login_panel');
     lPanel.Show();
@@ -409,9 +422,9 @@ begin
   check.SetName('clipboard_');
   check.SetCaption('Read clipboard');
   check.SetTop(tokenEdit.GetTop());
-  if WaspConfig.JSON.has('clipboard_checkbox') then
+  if LauncherConfig.JSON.has('clipboard_checkbox') then
   begin
-    if WaspConfig.GetBoolean('clipboard_checkbox') then
+    if LauncherConfig.GetBoolean('clipboard_checkbox') then
       check.SetChecked(True);
   end
   else
@@ -436,7 +449,7 @@ begin
   cancel.setOnClick(@Self._CancelButton);
 end;
 
-procedure TWaspForm._OnTimer({$H-}sender: TObject);{$H+}
+procedure TWaspForm._OnTimer(sender: TObject);
 var
   panel: TPanel;
   caption: TLabel;
@@ -593,7 +606,7 @@ procedure TWaspForm.SetupLoginPanel(form: TForm);
     email := sender;
     str := LowerCase(Trim(email.getText()));
     if str.IsEmail() then
-      WaspConfig.Put('email', LowerCase(Trim(email.getText())));
+      LauncherConfig.Put('email', LowerCase(Trim(email.getText())));
   end;
 
   procedure TWaspForm._OnEmailChange(sender: TObject);
@@ -615,7 +628,7 @@ procedure TWaspForm.SetupLoginPanel(form: TForm);
   var
     lPanel, dPanel: TPanel;
   begin
-    WaspConfig.Put('use_discord', True);
+    LauncherConfig.Put('use_discord', True);
     lPanel := TButton(sender).getOwner();
 
     dPanel := Self.Form.GetChild('discord_panel');
@@ -642,7 +655,7 @@ begin
   panel.SetTop(Self.Size.Y div 2 - (panel.getHeight() - (panel.getHeight() div 10)));
   panel.setBevelWidth(0);
 
-  email := WaspConfig.GetString('email');
+  email := LauncherConfig.GetString('email');
   if email = '' then
     email := 'email@mail.com';
 
@@ -813,12 +826,12 @@ procedure TWaspForm.SetupVersionsPanel(parent: TPanel; top: Int32);
           begin
             list := Self.Form.GetChild('scripts_listbox');
             script := WaspClient.GetAllUserScripts()[list.getItemIndex()];
-            WaspConfig.Put('update_' + script.ID, IsChecked());
+            LauncherConfig.Put('update_' + script.ID, IsChecked());
           end;
 
           else
           begin
-            WaspConfig.Put(GetName(), IsChecked());
+            LauncherConfig.Put(GetName(), IsChecked());
             panel := TCheckBox(sender).getParent().getParent();
             button := panel.GetChild(GetName().Replace('checkbox', 'button'));
             {$IFNDEF DEVELOPER_MODE}
@@ -881,7 +894,7 @@ procedure TWaspForm.SetupVersionsPanel(parent: TPanel; top: Int32);
     check.SetCaption('Auto-update');
     check.setLeft(TControl.AdjustToDPI(90));
     check.SetTop(TControl.AdjustToDPI(2));
-    if WaspConfig.GetBoolean('update_srl_checkbox') then
+    if LauncherConfig.GetBoolean('update_srl_checkbox') then
       check.SetChecked(True);
     check.CheckBox.setOnChange(@Self._AutoUpdateToggle);
     Self._AutoUpdateToggle(check.CheckBox);
@@ -891,7 +904,7 @@ procedure TWaspForm.SetupVersionsPanel(parent: TPanel; top: Int32);
     check.SetCaption('Auto-update');
     check.SetLeft(TControl.AdjustToDPI(90));
     check.SetTop(TControl.AdjustToDPI(25));
-    if WaspConfig.GetBoolean('update_wl_checkbox') then
+    if LauncherConfig.GetBoolean('update_wl_checkbox') then
       check.SetChecked(True);
     check.CheckBox.setOnChange(@Self._AutoUpdateToggle);
     Self._AutoUpdateToggle(check.CheckBox);

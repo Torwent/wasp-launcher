@@ -113,12 +113,10 @@ type
 {$SCOPEDENUMS OFF}
 
 var
-{$H-}
   ShouldAppUseDarkMode: function(): LongBool;
   AllowDarkModeForWindow: function(hWnd: TOSWindow; allow: LongBool): LongBool;
   AllowDarkModeForApp: function(allow: LongBool): LongBool;
   SetPreferredAppMode: function(appMode: TPreferredAppMode): TPreferredAppMode;
   FlushMenuThemes: procedure();
   RefreshImmersiveColorPolicyState: procedure();
-{$H+}
 {$ENDIF}

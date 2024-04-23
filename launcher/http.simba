@@ -8,6 +8,9 @@ Responsible connecting to the internet.
   {$I core.simba}
 {$ENDIF}
 
+var
+  LauncherConfig: TJSONConfig;
+
 type
   THTTPClient = record
     Name: String;
@@ -432,7 +435,7 @@ end;
 procedure TWaspClient.SaveRefreshToken();
 begin
   if Self.Cache.User.RefreshToken <> '' then
-    WaspConfig.Put('refresh_token', Self.Cache.User.RefreshToken);
+    LauncherConfig.Put('refresh_token', Self.Cache.User.RefreshToken);
 end;
 
 
@@ -461,7 +464,7 @@ begin
     end;
 
     Self.Cache.User := [];
-    WaspConfig.Remove('refresh_token');
+    LauncherConfig.Remove('refresh_token');
     Self.FreeUserData();
   except
     WriteLn('Error logging in: ', GetExceptionMessage());
@@ -525,7 +528,7 @@ begin
     if Result then
     begin
       Self.FreeUserData();
-      WaspConfig.Remove('refresh_token');
+      LauncherConfig.Remove('refresh_token');
     end;
   except
     TerminateScript(GetExceptionMessage());
@@ -541,7 +544,7 @@ procedure TWaspClient.LoadRefreshToken();
 var
   token: String;
 begin
-  token := WaspConfig.GetString('refresh_token');
+  token := LauncherConfig.GetString('refresh_token');
   if (token <> '') then
   begin
     if Self.Login(token) then

@@ -1,5 +1,10 @@
 {$DEFINE WS_LAUNCHER}{$DEFINE WL_UTILS}{$DEFINE SRL_UTILS}
 
+{$IFNDEF WS_HINTS}
+  {$IFDEF HINTS}{$DEFINE WS_HINTS}{$ENDIF}
+  {$HINTS OFF}
+{$ENDIF}
+
 const
   SIMBA_DATA_DIR = AppPath + 'Data' + DirectorySeparator;
   WL_DATAPATH = SIMBA_DATA_DIR + 'WaspLib' + DirectorySeparator;
