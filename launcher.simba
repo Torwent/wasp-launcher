@@ -1,10 +1,15 @@
 {$DEFINE SCRIPT_ID := 'd563990c-4d31-4aba-b214-18e69171ed5e'}
-{$DEFINE SCRIPT_REVISION := '19'}
+{$DEFINE SCRIPT_REVISION := '20'}
 
 {.$DEFINE DEVELOPER_MODE}
 
 
 {$DEFINE WS_LAUNCHER}{$DEFINE WL_UTILS}{$DEFINE SRL_UTILS}
+
+{$IFNDEF WS_HINTS}
+  {$IFDEF HINTS}{$DEFINE WS_HINTS}{$ENDIF}
+  {$HINTS OFF}
+{$ENDIF}
 
 const
   SIMBA_DATA_DIR = AppPath + 'Data' + DirectorySeparator;
@@ -1434,14 +1439,12 @@ type
 {$SCOPEDENUMS OFF}
 
 var
-{$H-}
   ShouldAppUseDarkMode: function(): LongBool;
   AllowDarkModeForWindow: function(hWnd: TOSWindow; allow: LongBool): LongBool;
   AllowDarkModeForApp: function(allow: LongBool): LongBool;
   SetPreferredAppMode: function(appMode: TPreferredAppMode): TPreferredAppMode;
   FlushMenuThemes: procedure();
   RefreshImmersiveColorPolicyState: procedure();
-{$H+}
 {$ENDIF}
 
 
@@ -1492,15 +1495,15 @@ end;
 type
 (*
 (Config)=
-## type TWaspConfig
+## type TJSONConfig
 ```pascal
-TWaspConfig = record
+TJSONConfig = record
   Path: String;
   JSON: TJSONObject;
 end;
 ```
 *)
-  TWaspConfig = record
+  TJSONConfig = record
     Path: String;
     JSON: TJSONObject;
     _ArrayHelper: TJSONArrayObjectArray; //Don't touch.
@@ -1508,14 +1511,14 @@ end;
   end;
 
 (*
-## Config.GeTWaspConfig()
+## Config.GeTJSONConfig()
 ```pascal
-function TWaspConfig.GeTWaspConfig(): TJSONObject;
+function TJSONConfig.GeTJSONConfig(): TJSONObject;
 ```
-Helper method to return the current TWaspConfig.Path file as a TJSONObject.
+Helper method to return the current TJSONConfig.Path file as a TJSONObject.
 You probably don't need to use this directly.
 *)
-function TWaspConfig.GetConfig(): TJSONObject;
+function TJSONConfig.GetConfig(): TJSONObject;
 var
   str: String;
 begin
@@ -1535,13 +1538,13 @@ end;
 (*
 ## Config.Free()
 ```pascal
-procedure TWaspConfig.Free();
+procedure TJSONConfig.Free();
 ```
-Used to free your `TWaspConfig`.
+Used to free your `TJSONConfig`.
 It's automatically called on script termination, but you may call it sooner if
 you wish to unlock the ram used by this (which should be minimal).
 *)
-procedure TWaspConfig.Free();
+procedure TJSONConfig.Free();
 begin
   if not Self.IsSetup then
     Exit;
@@ -1556,11 +1559,11 @@ end;
 (*
 ## Config.Setup
 ```pascal
-procedure TWaspConfig.Setup(jsonFile: String);
+procedure TJSONConfig.Setup(jsonFile: String);
 ```
-Main method to setup your `TWaspConfig`
+Main method to setup your `TJSONConfig`
 *)
-procedure TWaspConfig.Setup(jsonFile: String = ScriptName);
+procedure TJSONConfig.Setup(jsonFile: String = ScriptName);
 begin
   if jsonFile.Contains(DirectorySeparator) then
   begin
@@ -1590,11 +1593,11 @@ end;
 (*
 ## Config.DeleteConfig()
 ```pascal
-procedure TWaspConfig.DeleteConfig();
+procedure TJSONConfig.DeleteConfig();
 ```
-Delete your `TWaspConfig` from disk.
+Delete your `TJSONConfig` from disk.
 *)
-procedure TWaspConfig.DeleteConfig();
+procedure TJSONConfig.DeleteConfig();
 begin
   if not DeleteFile(Self.Path) then
     TerminateScript('Failed to delete: ' + Self.Path);
@@ -1603,15 +1606,15 @@ end;
 (*
 ## Config.SaveConfig()
 ```pascal
-procedure TWaspConfig.SaveConfig();
+procedure TJSONConfig.SaveConfig();
 ```
-Used to save your `TWaspConfig`.
-By default, this is always called automatically whenever the config is modified by the {ref}`TWaspConfig.Put()` methods.
+Used to save your `TJSONConfig`.
+By default, this is always called automatically whenever the config is modified by the {ref}`TJSONConfig.Put()` methods.
 *)
-procedure TWaspConfig.SaveConfig();
+procedure TJSONConfig.SaveConfig();
 begin
   if Self.JSON = nil then
-    TerminateScript('You need to use TWaspConfig.Setup() before trying to save it into a config file.');
+    TerminateScript('You need to use TJSONConfig.Setup() before trying to save it into a config file.');
   if not WriteFileContents(Self.Path, json.toString(2), False) then
     TerminateScript('Failed to save config.');
 end;
@@ -1620,21 +1623,21 @@ end;
 (*
 ## Config.Put()
 ```pascal
-procedure TWaspConfig.Put(key, value: String; save: Boolean = True);
-procedure TWaspConfig.Put(key: String; value: Int32; save: Boolean = True); overload;
-procedure TWaspConfig.Put(key: String; value: Double; save: Boolean = True); overload;
-procedure TWaspConfig.Put(key: String; value: Boolean; save: Boolean = True); overload;
-procedure TWaspConfig.Put(key: String; values: TStringArray; save: Boolean = True); overload;
-procedure TWaspConfig.Put(key: String; values: TIntegerArray; save: Boolean = True); overload;
-procedure TWaspConfig.Put(key: String; values: TDoubleArray; save: Boolean = True); overload;
-procedure TWaspConfig.Put(key: String; values: TBoolArray; save: Boolean = True); overload;
-procedure TWaspConfig.Put(key: String; value: Pointer; save: Boolean = True); overload;
+procedure TJSONConfig.Put(key, value: String; save: Boolean = True);
+procedure TJSONConfig.Put(key: String; value: Int32; save: Boolean = True); overload;
+procedure TJSONConfig.Put(key: String; value: Double; save: Boolean = True); overload;
+procedure TJSONConfig.Put(key: String; value: Boolean; save: Boolean = True); overload;
+procedure TJSONConfig.Put(key: String; values: TStringArray; save: Boolean = True); overload;
+procedure TJSONConfig.Put(key: String; values: TIntegerArray; save: Boolean = True); overload;
+procedure TJSONConfig.Put(key: String; values: TDoubleArray; save: Boolean = True); overload;
+procedure TJSONConfig.Put(key: String; values: TBoolArray; save: Boolean = True); overload;
+procedure TJSONConfig.Put(key: String; value: Pointer; save: Boolean = True); overload;
 ```
-This should be self explanatory. Put a `key` and a `value` pair into your `TWaspConfig`.
+This should be self explanatory. Put a `key` and a `value` pair into your `TJSONConfig`.
 The `pointer` version of the method is the only one that might need a little bit more knowledge of
 Simba's lower JSON methods and/or pointers but you can use it to place a value that is another JSON object or a JSON array.
 *)
-procedure TWaspConfig.Put(key, value: String; save: Boolean = True);
+procedure TJSONConfig.Put(key, value: String; save: Boolean = True);
 begin
   if Self.JSON = nil then
     Exit;
@@ -1644,7 +1647,7 @@ begin
     Self.SaveConfig();
 end;
 
-procedure TWaspConfig.Put(key: String; value: Int32; save: Boolean = True); overload;
+procedure TJSONConfig.Put(key: String; value: Int32; save: Boolean = True); overload;
 begin
   if Self.JSON = nil then
     Exit;
@@ -1654,7 +1657,7 @@ begin
     Self.SaveConfig();
 end;
 
-procedure TWaspConfig.Put(key: String; value: Double; save: Boolean = True); overload;
+procedure TJSONConfig.Put(key: String; value: Double; save: Boolean = True); overload;
 begin
   if Self.JSON = nil then
     Exit;
@@ -1664,7 +1667,7 @@ begin
     Self.SaveConfig();
 end;
 
-procedure TWaspConfig.Put(key: String; value: Boolean; save: Boolean = True); overload;
+procedure TJSONConfig.Put(key: String; value: Boolean; save: Boolean = True); overload;
 begin
   if Self.JSON = nil then
     Exit;
@@ -1674,7 +1677,7 @@ begin
     Self.SaveConfig();
 end;
 
-procedure TWaspConfig.Put(key: String; values: TStringArray; save: Boolean = True); overload;
+procedure TJSONConfig.Put(key: String; values: TStringArray; save: Boolean = True); overload;
 var
   i, j: Int32;
 begin
@@ -1694,7 +1697,7 @@ begin
     Self.SaveConfig();
 end;
 
-procedure TWaspConfig.Put(key: String; values: TIntegerArray; save: Boolean = True); overload;
+procedure TJSONConfig.Put(key: String; values: TIntegerArray; save: Boolean = True); overload;
 var
   i, j: Int32;
 begin
@@ -1714,7 +1717,7 @@ begin
     Self.SaveConfig();
 end;
 
-procedure TWaspConfig.Put(key: String; values: TDoubleArray; save: Boolean = True); overload;
+procedure TJSONConfig.Put(key: String; values: TDoubleArray; save: Boolean = True); overload;
 var
   i, j: Int32;
 begin
@@ -1734,7 +1737,7 @@ begin
     Self.SaveConfig();
 end;
 
-procedure TWaspConfig.Put(key: String; values: TBoolArray; save: Boolean = True); overload;
+procedure TJSONConfig.Put(key: String; values: TBoolArray; save: Boolean = True); overload;
 var
   i, j: Int32;
 begin
@@ -1754,7 +1757,7 @@ begin
     Self.SaveConfig();
 end;
 
-procedure TWaspConfig.Put(key: String; value: Pointer; save: Boolean = True); overload;
+procedure TJSONConfig.Put(key: String; value: Pointer; save: Boolean = True); overload;
 begin
   if Self.JSON = nil then
     Exit;
@@ -1770,12 +1773,12 @@ end;
 (*
 ## Config.Has()
 ```pascal
-function TWaspConfig.Has(key: String; nullIsValid: Boolean = True): Boolean;
+function TJSONConfig.Has(key: String; nullIsValid: Boolean = True): Boolean;
 ```
 Checks if a key exists. `nullIsValid` is true by default when set to false
 this will return false if the key exists but is set to null.
 *)
-function TWaspConfig.Has(key: String; nullIsValid: Boolean = True): Boolean;
+function TJSONConfig.Has(key: String; nullIsValid: Boolean = True): Boolean;
 begin
   if Self.JSON = nil then
     Exit;
@@ -1789,22 +1792,22 @@ end;
 (*
 ## Config.Get()
 ```pascal
-function TWaspConfig.GetString(key: String): String;
-function TWaspConfig.GetInt(key: String): Int32;
-function TWaspConfig.GetDouble(key: String): Double;
-function TWaspConfig.GetBoolean(key: String): Boolean;
-function TWaspConfig.GetNull(key: String): Boolean;
-function TWaspConfig.GetStringArray(key: String): TStringArray;
-function TWaspConfig.GetIntArray(key: String): TIntegerArray;
-function TWaspConfig.GetDoubleArray(key: String): TDoubleArray;
-function TWaspConfig.GetBooleanArray(key: String): TBoolArray;
-function TWaspConfig.GetObject(key: String): TJSONObject;
+function TJSONConfig.GetString(key: String): String;
+function TJSONConfig.GetInt(key: String): Int32;
+function TJSONConfig.GetDouble(key: String): Double;
+function TJSONConfig.GetBoolean(key: String): Boolean;
+function TJSONConfig.GetNull(key: String): Boolean;
+function TJSONConfig.GetStringArray(key: String): TStringArray;
+function TJSONConfig.GetIntArray(key: String): TIntegerArray;
+function TJSONConfig.GetDoubleArray(key: String): TDoubleArray;
+function TJSONConfig.GetBooleanArray(key: String): TBoolArray;
+function TJSONConfig.GetObject(key: String): TJSONObject;
 ```
-This should be self explanatory. Returns the value of a `key` in your `TWaspConfig`.
+This should be self explanatory. Returns the value of a `key` in your `TJSONConfig`.
 The `Object` version of the method is the only one that might need a little bit more knowledge of
 Simba's lower JSON methods and/or pointers but you can use it to return a JSON object or a TJSONArray of TJSONObjects.
 *)
-function TWaspConfig.GetString(key: String): String;
+function TJSONConfig.GetString(key: String): String;
 begin
   if Self.JSON = nil then
     Exit;
@@ -1812,7 +1815,7 @@ begin
     Result := Self.JSON.getString(key);
 end;
 
-function TWaspConfig.GetInt(key: String): Int32;
+function TJSONConfig.GetInt(key: String): Int32;
 begin
   if Self.JSON = nil then
     Exit;
@@ -1820,7 +1823,7 @@ begin
     Result := Self.JSON.getInt(key);
 end;
 
-function TWaspConfig.GetDouble(key: String): Double;
+function TJSONConfig.GetDouble(key: String): Double;
 begin
   if Self.JSON = nil then
     Exit;
@@ -1828,7 +1831,7 @@ begin
     Result := Self.JSON.getDouble(key);
 end;
 
-function TWaspConfig.GetBoolean(key: String): Boolean;
+function TJSONConfig.GetBoolean(key: String): Boolean;
 begin
   if Self.JSON = nil then
     Exit;
@@ -1836,14 +1839,14 @@ begin
     Result := Self.JSON.getBoolean(key);
 end;
 
-function TWaspConfig.GetNull(key: String): Boolean;
+function TJSONConfig.GetNull(key: String): Boolean;
 begin
   if Self.JSON = nil then
     Exit;
   Result := not Self.JSON.has(key) or Self.JSON.isNull(key);
 end;
 
-function TWaspConfig.GetStringArray(key: String): TStringArray;
+function TJSONConfig.GetStringArray(key: String): TStringArray;
 var
   tmp: TJSONArray;
   i: Int32;
@@ -1858,7 +1861,7 @@ begin
   end;
 end;
 
-function TWaspConfig.GetIntArray(key: String): TIntegerArray;
+function TJSONConfig.GetIntArray(key: String): TIntegerArray;
 var
   tmp: TJSONArray;
   i: Int32;
@@ -1873,7 +1876,7 @@ begin
   end;
 end;
 
-function TWaspConfig.GetDoubleArray(key: String): TDoubleArray;
+function TJSONConfig.GetDoubleArray(key: String): TDoubleArray;
 var
   tmp: TJSONArray;
   i: Int32;
@@ -1888,7 +1891,7 @@ begin
   end;
 end;
 
-function TWaspConfig.GetBooleanArray(key: String): TBoolArray;
+function TJSONConfig.GetBooleanArray(key: String): TBoolArray;
 var
   tmp: TJSONArray;
   i: Int32;
@@ -1903,7 +1906,7 @@ begin
   end;
 end;
 
-function TWaspConfig.GetObject(key: String): TJSONObject;
+function TJSONConfig.GetObject(key: String): TJSONObject;
 begin
   if Self.JSON = nil then
     Exit;
@@ -1915,14 +1918,14 @@ end;
 (*
 ## Config.Remove()
 ```pascal
-procedure TWaspConfig.Remove(key: String);
+procedure TJSONConfig.Remove(key: String);
 ```
-Remove a `key` and it's respective `value` from your `TWaspConfig`.
+Remove a `key` and it's respective `value` from your `TJSONConfig`.
 *)
-procedure TWaspConfig.Remove(key: String);
+procedure TJSONConfig.Remove(key: String);
 begin
   if Self.JSON = nil then
-    TerminateScript('You need to use TWaspConfig.Setup() before trying to delete a key on it.');
+    TerminateScript('You need to use TJSONConfig.Setup() before trying to delete a key on it.');
   Self.JSON.remove(key);
   Self.SaveConfig();
 end;
@@ -1930,24 +1933,118 @@ end;
 (*
 ## Config.ToString()
 ```pascal
-function TWaspConfig.ToString(indentFactor: Int32 = 2): String;
+function TJSONConfig.ToString(indentFactor: Int32 = 2): String;
 ```
-Returns a string version of your `TWaspConfig`.
+Returns a string version of your `TJSONConfig`.
 
 Example:
 ```pascal
 WriteLn MyConfig.ToString();
 ```
 *)
-function TWaspConfig.ToString(indentFactor: Int32 = 2): String;
+function TJSONConfig.ToString(indentFactor: Int32 = 2): String;
 begin
   if Self.JSON = nil then
     Exit;
   Result := Self.JSON.ToString(indentFactor);
 end;
 
+type TWaspConfig = TJSONConfig;
+
+type
+(*
+## INIConfig Methods Description
+
+- `Setup(FileName: String)`: Initializes the configuration path for the INI file.
+- `Put(Section, KeyName, Value: String)`: Stores a key-value pair in a specified section.
+- `Get(Section, KeyName: String)`: Retrieves the value associated with a key from a section.
+- `GetKeys(Section: String)`: Lists all keys within a specified section.
+- `DeleteConfig()`: Deletes the configuration file.
+
+## Example Usage
+
+ConfigINI.Setup('MyScriptSettings.ini'); // Set file path
+
+ConfigINI.Put('GUISettings', 'UsePoolPOH', 'True'); // Write setting
+writeln(ConfigINI.Get('GUISettings', 'UsePoolPOH')); // Read setting
+
+writeln(ConfigINI.GetKeys('GUISettings')); // List all keys in 'GUISettings'
+*)
+  TINIConfig = record
+    Path: String;
+    FileName: String;
+  end;
+
+// Initializes configuration path and filename
+procedure TINIConfig.Setup(ConfigName: String);
+begin
+  if ConfigName.Contains(DirectorySeparator) then
+  begin
+    Self.Path := ExtractFilePath(ConfigName);
+    ConfigName := ExtractFileName(ConfigName);
+  end
+  else
+    Self.Path := AppPath + 'Configs' + DirectorySeparator;
+
+  if not ForceDirectories(Self.Path) then
+    TerminateScript('Can''t create configs directory.');
+
+  if not ConfigName.EndsWith('.ini') then
+    ConfigName += '.ini';
+  Self.Path += ConfigName;
+end;
+
+// Writes a single key-value pair to a specified section
+procedure TINIConfig.Put(Section, KeyName, Value: String);
+begin
+  WriteINI(Section, KeyName, Value, Self.Path);
+end;
+
+// Retrieves a single value by key from a specified section
+function TINIConfig.Get(Section, KeyName: String): String;
+begin
+  Result := ReadINI(Section, KeyName, Self.Path);
+end;
+
+// Removes a single key-value pair from a specified section
+procedure TINIConfig.Remove(Section, KeyName: String);
+begin
+  if not FileExists(Self.Path) then
+    RaiseException('File does not exist: ' + Self.Path);
+  DeleteINI(Section, KeyName, Self.Path);
+end;
+
+// Deletes the entire configuration file
+procedure TINIConfig.DeleteConfig();
+begin
+  if FileExists(Self.Path) then
+    DeleteFile(Self.Path)
+  else
+    RaiseException('File does not exist: ' + Self.Path);
+end;
+
+// Retrieves all keys from a specified section
+function TINIConfig.GetKeys(Section: String): TStringArray;
 var
-  WaspConfig: TWaspConfig;
+  FileContent: TStringArray;
+var
+  i: Int32;
+  InSection: Boolean;
+begin
+  if not FileExists(Self.Path) then
+    RaiseException('File does not exist: ' + Self.Path);
+
+  FileContent := ReadFileContents(Self.Path).Split(#10);
+  while i < Length(FileContent) do begin
+    FileContent[i] := FileContent[i].Trim;
+    if FileContent[i].StartsWith('[') and FileContent[i].EndsWith(']') then begin
+      InSection := FileContent[i].Between('[', ']') = Section;
+    end else if InSection and FileContent[i].Contains('=') then begin
+      Result += FileContent[i].Before('=').Trim;
+    end;
+    Inc(i);
+  end;
+end;
 
 
 
@@ -1959,6 +2056,9 @@ Responsible connecting to the internet.
 
 {$DEFINE WS_HTTP_INCLUDED}
 
+
+var
+  LauncherConfig: TJSONConfig;
 
 type
   THTTPClient = record
@@ -2384,7 +2484,7 @@ end;
 procedure TWaspClient.SaveRefreshToken();
 begin
   if Self.Cache.User.RefreshToken <> '' then
-    WaspConfig.Put('refresh_token', Self.Cache.User.RefreshToken);
+    LauncherConfig.Put('refresh_token', Self.Cache.User.RefreshToken);
 end;
 
 
@@ -2413,7 +2513,7 @@ begin
     end;
 
     Self.Cache.User := [];
-    WaspConfig.Remove('refresh_token');
+    LauncherConfig.Remove('refresh_token');
     Self.FreeUserData();
   except
     WriteLn('Error logging in: ', GetExceptionMessage());
@@ -2477,7 +2577,7 @@ begin
     if Result then
     begin
       Self.FreeUserData();
-      WaspConfig.Remove('refresh_token');
+      LauncherConfig.Remove('refresh_token');
     end;
   except
     TerminateScript(GetExceptionMessage());
@@ -2493,7 +2593,7 @@ procedure TWaspClient.LoadRefreshToken();
 var
   token: String;
 begin
-  token := WaspConfig.GetString('refresh_token');
+  token := LauncherConfig.GetString('refresh_token');
   if (token <> '') then
   begin
     if Self.Login(token) then
@@ -4445,7 +4545,7 @@ var
   pass: TEdit;
   scripts: TScriptDataArray;
   listBox: TListBox;
-  i: Int32;
+  i, idx: Int32;
 begin
   if WaspUpdater.Launcher.Revision < WaspClient.Cache.Launcher.Revision then
   begin
@@ -4474,10 +4574,21 @@ begin
   listBox := msPanel.GetChild('scripts_listbox');
 
   listBox.Clear();
+  idx := -1;
   for i := 0 to High(scripts) do
+  begin
     listBox.getItems().Add(scripts[i].Name);
+    if scripts[i].ID = LauncherConfig.GetString('last_script') then
+      idx := i;
+  end;
 
-  listbox.setItemIndex(0);
+  if idx = -1 then
+  begin
+    listbox.setItemIndex(0);
+    LauncherConfig.Remove('last_script');
+  end
+  else
+    listbox.setItemIndex(0);
 
   msPanel.Show();
   loginPanel.Hide();
@@ -4491,7 +4602,7 @@ var
 begin
   loginPanel := Self.Form.GetChild('login_panel');
 
-  if WaspConfig.GetBoolean('use_discord') then
+  if LauncherConfig.GetBoolean('use_discord') then
     Self._DiscordButton(loginPanel.GetChild('discord_button'))
   else
     loginPanel.Show();
@@ -4509,6 +4620,7 @@ begin
   panel := TButton(sender).getOwner();
   list := panel.GetChild('scripts_listbox');
   script := WaspClient.GetAllUserScripts()[list.getItemIndex()];
+  LauncherConfig.Put('last_script', script.ID);
   scriptFile := WaspUpdater.GetScriptFile(script.ID);
   SimbaOpenInTab(scriptFile.Path);
   Self.Form.Close();
@@ -4525,11 +4637,12 @@ begin
   panel := TButton(sender).getOwner();
   list := panel.GetChild('scripts_listbox');
   script := WaspClient.GetAllUserScripts()[list.getItemIndex()];
+  LauncherConfig.Put('last_script', script.ID);
   scriptFile := WaspUpdater.GetScriptFile(script.ID);
   SimbaRunInTab(scriptFile.Path);
   Self.Form.Close();
 
-  for proc in {$H-}GetProcesses(){$H+} do
+  for proc in GetProcesses() do
     if proc.PID = GetSimbaPID() then
     begin
       ShowWindow(proc.Handle, 6); //6 = SW_MINIMIZE https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-showwindow
@@ -4701,7 +4814,7 @@ begin
 
   checkbox := panel.GetChild('update_script_checkbox');
 
-  checkbox.SetChecked(WaspConfig.GetBoolean('update_' + scriptData.ID));
+  checkbox.SetChecked(LauncherConfig.GetBoolean('update_' + scriptData.ID));
   if checkbox.IsChecked() and (scriptFile.Revision <> scriptData.Revision) then
   begin
     WaspUpdater.UpdateScript(scriptData);
@@ -4784,7 +4897,7 @@ procedure TWaspForm.SetupDiscordPanel(form: TForm);
   var
     lPanel, dPanel: TPanel;
   begin
-    WaspConfig.Put('use_discord', False);
+    LauncherConfig.Put('use_discord', False);
     dPanel := TButton(sender).getOwner();
     lPanel := Self.Form.GetChild('login_panel');
     lPanel.Show();
@@ -4825,9 +4938,9 @@ begin
   check.SetName('clipboard_');
   check.SetCaption('Read clipboard');
   check.SetTop(tokenEdit.GetTop());
-  if WaspConfig.JSON.has('clipboard_checkbox') then
+  if LauncherConfig.JSON.has('clipboard_checkbox') then
   begin
-    if WaspConfig.GetBoolean('clipboard_checkbox') then
+    if LauncherConfig.GetBoolean('clipboard_checkbox') then
       check.SetChecked(True);
   end
   else
@@ -4852,7 +4965,7 @@ begin
   cancel.setOnClick(@Self._CancelButton);
 end;
 
-procedure TWaspForm._OnTimer({$H-}sender: TObject);{$H+}
+procedure TWaspForm._OnTimer(sender: TObject);
 var
   panel: TPanel;
   caption: TLabel;
@@ -5009,7 +5122,7 @@ procedure TWaspForm.SetupLoginPanel(form: TForm);
     email := sender;
     str := LowerCase(Trim(email.getText()));
     if str.IsEmail() then
-      WaspConfig.Put('email', LowerCase(Trim(email.getText())));
+      LauncherConfig.Put('email', LowerCase(Trim(email.getText())));
   end;
 
   procedure TWaspForm._OnEmailChange(sender: TObject);
@@ -5031,7 +5144,7 @@ procedure TWaspForm.SetupLoginPanel(form: TForm);
   var
     lPanel, dPanel: TPanel;
   begin
-    WaspConfig.Put('use_discord', True);
+    LauncherConfig.Put('use_discord', True);
     lPanel := TButton(sender).getOwner();
 
     dPanel := Self.Form.GetChild('discord_panel');
@@ -5058,7 +5171,7 @@ begin
   panel.SetTop(Self.Size.Y div 2 - (panel.getHeight() - (panel.getHeight() div 10)));
   panel.setBevelWidth(0);
 
-  email := WaspConfig.GetString('email');
+  email := LauncherConfig.GetString('email');
   if email = '' then
     email := 'email@mail.com';
 
@@ -5229,12 +5342,12 @@ procedure TWaspForm.SetupVersionsPanel(parent: TPanel; top: Int32);
           begin
             list := Self.Form.GetChild('scripts_listbox');
             script := WaspClient.GetAllUserScripts()[list.getItemIndex()];
-            WaspConfig.Put('update_' + script.ID, IsChecked());
+            LauncherConfig.Put('update_' + script.ID, IsChecked());
           end;
 
           else
           begin
-            WaspConfig.Put(GetName(), IsChecked());
+            LauncherConfig.Put(GetName(), IsChecked());
             panel := TCheckBox(sender).getParent().getParent();
             button := panel.GetChild(GetName().Replace('checkbox', 'button'));
             {$IFNDEF DEVELOPER_MODE}
@@ -5297,7 +5410,7 @@ procedure TWaspForm.SetupVersionsPanel(parent: TPanel; top: Int32);
     check.SetCaption('Auto-update');
     check.setLeft(TControl.AdjustToDPI(90));
     check.SetTop(TControl.AdjustToDPI(2));
-    if WaspConfig.GetBoolean('update_srl_checkbox') then
+    if LauncherConfig.GetBoolean('update_srl_checkbox') then
       check.SetChecked(True);
     check.CheckBox.setOnChange(@Self._AutoUpdateToggle);
     Self._AutoUpdateToggle(check.CheckBox);
@@ -5307,7 +5420,7 @@ procedure TWaspForm.SetupVersionsPanel(parent: TPanel; top: Int32);
     check.SetCaption('Auto-update');
     check.SetLeft(TControl.AdjustToDPI(90));
     check.SetTop(TControl.AdjustToDPI(25));
-    if WaspConfig.GetBoolean('update_wl_checkbox') then
+    if LauncherConfig.GetBoolean('update_wl_checkbox') then
       check.SetChecked(True);
     check.CheckBox.setOnChange(@Self._AutoUpdateToggle);
     Self._AutoUpdateToggle(check.CheckBox);
@@ -5651,7 +5764,7 @@ var
 begin
   ClearDebug();
 
-  WaspConfig.Setup(AppPath + 'Configs' + DirectorySeparator + 'launcher.json');
+  LauncherConfig.Setup(AppPath + 'Configs' + DirectorySeparator + 'launcher.json');
   WaspClient.Setup();
 
   WaspUpdater.Setup();
