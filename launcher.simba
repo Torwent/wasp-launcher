@@ -1,5 +1,5 @@
 {$DEFINE SCRIPT_ID := 'd563990c-4d31-4aba-b214-18e69171ed5e'}
-{$DEFINE SCRIPT_REVISION := '20'}
+{$DEFINE SCRIPT_REVISION := '21'}
 
 {.$DEFINE DEVELOPER_MODE}
 
@@ -304,7 +304,6 @@ const
 ```pascal
 function String.Len(): Int32; constref;
 ```
-
 Returns the length of the string
 *)
 function String.Len: Int32; constref;
@@ -406,7 +405,6 @@ end;
 ```pascal
 function String.Startswith(Prefix: String): Boolean; constref;
 ```
-
 Returns `True` if the string starts with the given string `Prefix`
 *)
 function String.StartsWith(Prefix: String): Boolean; constref;
@@ -419,7 +417,6 @@ end;
 ```pascal
 function String.Endswith(Suffix: String): Boolean; constref;
 ```
-
 Returns `True` if the string ends with the given string `Suffix`
 *)
 function String.EndsWith(Suffix: String): Boolean; constref;
@@ -440,7 +437,6 @@ end;
 ```pascal
 function String.Capitalize(): String; constref;
 ```
-
 Returns the string with every word captalized
 *)
 function String.Capitalize(): String; constref;
@@ -453,7 +449,6 @@ end;
 ```pascal
 function String.Upper(): String; constref;
 ```
-
 Returns the string with every character converted to uppercase
 *)
 function String.Upper(): String; constref;
@@ -501,7 +496,6 @@ end;
 ```pascal
 function String.Before(SubStr: String): String; constref;
 ```
-
 Copy the string from before the first occurrence of SubStr
 *)
 function String.Before(SubStr: String): String; constref;
@@ -536,7 +530,6 @@ end;
 ```pascal
 function String.Count(Str: String): Int32; constref;
 ```
-
 Count the number of occurrences of the given string.
 *)
 function String.Count(Str: String): Int32;
@@ -606,7 +599,6 @@ end;
 ```pascal
 function String.StripL(Chars:String = STR_WHITESPACE): String; constref;
 ```
-
 Return a copy of the string with leading characters removed.
 *}
 function String.StripL(Chars:String = STR_WHITESPACE): String; constref;
@@ -623,7 +615,6 @@ end;
 ```pascal
 function String.StripR(Chars:String = STR_WHITESPACE): String; constref;
 ```
-
 Return a copy of the string with trailing characters removed.
 *}
 function String.StripR(Chars:String = STR_WHITESPACE): String; constref;
@@ -639,7 +630,6 @@ end;
 ```pascal
 function String.IsAlphaNum(): Boolean; constref;
 ```
-
 Test if a string only contains alpha numerical characters.
 *)
 function String.IsAlphaNum(): Boolean; constref;
@@ -666,7 +656,6 @@ end;
 ```pascal
 function String.IsDigit(): Boolean; constref;
 ```
-
 Test if a sting is a digit
 *)
 function String.IsDigit(): Boolean; constref;
@@ -695,7 +684,6 @@ end;
 ```pascal
 function String.IsFloat(): Boolean; constref;
 ```
-
 Test if a string is a floating point number
 *)
 function String.IsFloat(): Boolean; constref;
@@ -735,7 +723,6 @@ end;
 ```pascal
 function String.IsAlpha(): Boolean; constref;
 ```
-
 Test if a string only contains letters a-zA-Z
 *)
 function String.IsAlpha(): Boolean; constref;
@@ -774,7 +761,6 @@ end;
 ```pascal
 function String.ExtractNumbers(): TExtendedArray; constref;
 ```
-
 Extract all the numbers found in the string, as there could be floating point numbers 
 as well it reutnrs a TExtendedArray.
 *)
@@ -810,7 +796,6 @@ end;
 ```pascal
 function String.ExtractNumbersEx(): TExtendedArray; constref;
 ```
-
 Extract all the numbers found in the string, this time every number 
 ends up in each their index. For example ``'1234'`` would return ``[1,2,3,4]``
 *)
@@ -835,7 +820,6 @@ end;
 ```pascal
 function String.FileExt(): String; constref;
 ```
-
 Returns the file extension
 *)
 function String.FileExt(): String; constref;
@@ -880,7 +864,6 @@ end;
 ```pascal
 operator * (left:String; Right:Int32): String;
 ```
-
 Replicates the string the given amount of times. So ``'ho!' * 3`` would generate ``ho!ho!ho!``
 *)
 operator * (left: String; Right: Int32): String;
@@ -906,7 +889,6 @@ end;
 ```pascal
 operator in (left:String; Right:String): Boolean;
 ```
-
 Returns ``True`` if the string exists in the other string. So ``'hell' in 'hello world'`` would be ``True`` 
 *)
 operator in (left:Char; Right:String): Boolean;
@@ -1145,6 +1127,28 @@ begin
 end;
 
 
+(*
+## String.Case
+```pascal
+function String.CamelCase(): String; constref;
+function String.SnakeCase(): String; constref;
+function String.UpperSnakeCase(): String; constref;
+function String.KebabCase(): String; constref;
+function String.PascalCase(): String; constref;
+function String.SentenceCase(): String; constref;
+function String.TitleCase(): String; constref;
+```
+Returns the string with different forms of capitalization.
+
+Example
+```pascal
+var
+  str: String = 'HELLO WORLD';
+begin
+  WriteLn str.TitleCase(); //Prints 'Hello World'
+end;
+```
+*)
 function String.CamelCase(): String; constref;
 var
   i, len: Int32;
@@ -1234,7 +1238,7 @@ function String.SentenceCase(): String; constref;
 begin
   if Length(Self) = 0 then
     Exit;
-  Result := Self;
+  Result := LowerCase(Self);
   Result[1] := UpCase(Result[1]);
 end;
 
@@ -1262,6 +1266,17 @@ begin
 end;
 
 
+(*
+## String.Is
+```pascal
+function String.IsURL(): Boolean;
+function String.IsEmail(): Boolean;
+function String.IsUUID(): Boolean;
+function String.IsUUIDV4(): Boolean;
+function String.IsRefreshToken(): Boolean;
+```
+Checks if a string is a certain "thing" with some predefined regex patterns.
+*)
 function String.IsURL(): Boolean;
 const
   REGEX: String = '^https?:\/\/(?:www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b(?:[-a-zA-Z0-9()@:%_\+.~#?&\/=]*)$';
@@ -1272,6 +1287,13 @@ end;
 function String.IsEmail(): Boolean;
 const
   REGEX: String = '^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$';
+begin
+  Result := ExecRegExpr(REGEX, System.Trim(Self));
+end;
+
+function String.IsTime(): Boolean;
+const
+  REGEX = '(?:[01]\d|2[0-3])([:.\-_\ \''])?(?:[0-5]\d)([:.\-_\ \''])?(?:[0-5]\d)';
 begin
   Result := ExecRegExpr(REGEX, System.Trim(Self));
 end;
@@ -1457,68 +1479,62 @@ A full featured JSON config writer and reader.
 {$DEFINE WL_CONFIG_INCLUDED}
 
 
-type
-  TJSONArrayObject = record
-    Key: String;
-    JSONArray: TJSONArray;
-  end;
-
-  TJSONArrayObjectArray = array of TJSONArrayObject;
-
-function TJSONArrayObjectArray.Find(key: String): Int32;
+function TJSONObject.put(key: string; Value: Boolean): TJSONObject; constref; override;
 begin
-  for Result := 0 to High(Self) do
-    if Self[Result].Key = key then
-      Exit;
-  Result := -1;
+  Self.Remove(key);
+  Result := inherited(key, value);
 end;
 
-function TJSONArrayObjectArray.Put(key: String): Int32;
+function TJSONObject.put(key: string; Value: Double): TJSONObject; constref; override;
 begin
-  Result := Length(Self);
-  Self += [key, nil];
+  Self.Remove(key);
+  Result := inherited(key, value);
 end;
 
-function TJSONArrayObjectArray.Get(key: String): Int32;
+function TJSONObject.put(key: string; Value: Integer): TJSONObject; constref; override;
 begin
-  Result := Self.Find(key);
-  if Result > -1 then
-  begin
-    Self[Result].JSONArray.Free();
-    Self[Result].JSONArray := nil;
-    Exit;
-  end;
-  Result := Self.Put(key);
+  Self.Remove(key);
+  Result := inherited(key, value);
 end;
 
+function TJSONObject.put(key: string; Value: String): TJSONObject; constref; override;
+begin
+  Self.Remove(key);
+  Result := inherited(key, value);
+end;
+
+function TJSONObject.put(key: string; Value: Pointer): TJSONObject; constref; override;
+begin
+  Self.Remove(key);
+  Result := inherited(key, value);
+end;
 
 type
 (*
-(Config)=
-## type TJSONConfig
+(TConfigJSON)=
+## type TConfigJSON
 ```pascal
-TJSONConfig = record
+TConfigJSON = record
   Path: String;
   JSON: TJSONObject;
 end;
 ```
 *)
-  TJSONConfig = record
+  TConfigJSON = record
     Path: String;
     JSON: TJSONObject;
-    _ArrayHelper: TJSONArrayObjectArray; //Don't touch.
     IsSetup, OnTerminate: Boolean;       //Don't touch.
   end;
 
 (*
-## Config.GeTJSONConfig()
+## TConfigJSON.GetConfig
 ```pascal
-function TJSONConfig.GeTJSONConfig(): TJSONObject;
+function TConfigJSON.GetConfig(): TJSONObject;
 ```
-Helper method to return the current TJSONConfig.Path file as a TJSONObject.
+Helper method to return the current TConfigJSON.Path file as a TJSONObject.
 You probably don't need to use this directly.
 *)
-function TJSONConfig.GetConfig(): TJSONObject;
+function TConfigJSON.GetConfig(): TJSONObject;
 var
   str: String;
 begin
@@ -1536,34 +1552,33 @@ begin
 end;
 
 (*
-## Config.Free()
+## TConfigJSON.Free
 ```pascal
-procedure TJSONConfig.Free();
+procedure TConfigJSON.Free();
 ```
-Used to free your `TJSONConfig`.
+Used to free your `TConfigJSON`.
 It's automatically called on script termination, but you may call it sooner if
 you wish to unlock the ram used by this (which should be minimal).
 *)
-procedure TJSONConfig.Free();
+procedure TConfigJSON.Free();
 begin
   if not Self.IsSetup then
     Exit;
 
   Self.JSON.Free();
   Self.JSON := nil;
-  Self._ArrayHelper := [];
 
   Self.IsSetup := False;
 end;
 
 (*
-## Config.Setup
+## TConfigJSON.Setup
 ```pascal
-procedure TJSONConfig.Setup(jsonFile: String);
+procedure TConfigJSON.Setup(jsonFile: String);
 ```
-Main method to setup your `TJSONConfig`
+Main method to setup your `TConfigJSON`
 *)
-procedure TJSONConfig.Setup(jsonFile: String = ScriptName);
+procedure TConfigJSON.Setup(jsonFile: String = ScriptName);
 begin
   if jsonFile.Contains(DirectorySeparator) then
   begin
@@ -1591,194 +1606,103 @@ begin
 end;
 
 (*
-## Config.DeleteConfig()
+## TConfigJSON.DeleteConfig
 ```pascal
-procedure TJSONConfig.DeleteConfig();
+procedure TConfigJSON.DeleteConfig();
 ```
-Delete your `TJSONConfig` from disk.
+Delete your `TConfigJSON` from disk.
 *)
-procedure TJSONConfig.DeleteConfig();
+procedure TConfigJSON.DeleteConfig();
 begin
   if not DeleteFile(Self.Path) then
     TerminateScript('Failed to delete: ' + Self.Path);
 end;
 
 (*
-## Config.SaveConfig()
+## TConfigJSON.SaveConfig
 ```pascal
-procedure TJSONConfig.SaveConfig();
+procedure TConfigJSON.SaveConfig();
 ```
-Used to save your `TJSONConfig`.
-By default, this is always called automatically whenever the config is modified by the {ref}`TJSONConfig.Put()` methods.
+Used to save your `TConfigJSON`.
+By default, this is always called automatically whenever the config is modified by the {ref}`TConfigJSON.Put()` methods.
 *)
-procedure TJSONConfig.SaveConfig();
+procedure TConfigJSON.SaveConfig();
 begin
   if Self.JSON = nil then
-    TerminateScript('You need to use TJSONConfig.Setup() before trying to save it into a config file.');
+    TerminateScript('You need to use TConfigJSON.Setup() before trying to save it into a config file.');
   if not WriteFileContents(Self.Path, json.toString(2), False) then
     TerminateScript('Failed to save config.');
 end;
 
 
 (*
-## Config.Put()
+## TConfigJSON.Put
 ```pascal
-procedure TJSONConfig.Put(key, value: String; save: Boolean = True);
-procedure TJSONConfig.Put(key: String; value: Int32; save: Boolean = True); overload;
-procedure TJSONConfig.Put(key: String; value: Double; save: Boolean = True); overload;
-procedure TJSONConfig.Put(key: String; value: Boolean; save: Boolean = True); overload;
-procedure TJSONConfig.Put(key: String; values: TStringArray; save: Boolean = True); overload;
-procedure TJSONConfig.Put(key: String; values: TIntegerArray; save: Boolean = True); overload;
-procedure TJSONConfig.Put(key: String; values: TDoubleArray; save: Boolean = True); overload;
-procedure TJSONConfig.Put(key: String; values: TBoolArray; save: Boolean = True); overload;
-procedure TJSONConfig.Put(key: String; value: Pointer; save: Boolean = True); overload;
+procedure TConfigJSON.Put(key, value: String; save: Boolean = True);
+procedure TConfigJSON.Put(key: String; value: Int32; save: Boolean = True); overload;
+procedure TConfigJSON.Put(key: String; value: Double; save: Boolean = True); overload;
+procedure TConfigJSON.Put(key: String; value: Boolean; save: Boolean = True); overload;
+procedure TConfigJSON.Put(key: String; value: Pointer; save: Boolean = True); overload;
 ```
-This should be self explanatory. Put a `key` and a `value` pair into your `TJSONConfig`.
+This should be self explanatory. Put a `key` and a `value` pair into your `TConfigJSON`.
 The `pointer` version of the method is the only one that might need a little bit more knowledge of
 Simba's lower JSON methods and/or pointers but you can use it to place a value that is another JSON object or a JSON array.
 *)
-procedure TJSONConfig.Put(key, value: String; save: Boolean = True);
+procedure TConfigJSON.Put(key, value: String; save: Boolean = True);
 begin
   if Self.JSON = nil then
     Exit;
-  Self.JSON.Remove(key);
   Self.JSON.Put(key, value);
   if save then
     Self.SaveConfig();
 end;
 
-procedure TJSONConfig.Put(key: String; value: Int32; save: Boolean = True); overload;
+procedure TConfigJSON.Put(key: String; value: Int32; save: Boolean = True); overload;
 begin
   if Self.JSON = nil then
     Exit;
-  Self.JSON.Remove(key);
   Self.JSON.Put(key, value);
   if save then
     Self.SaveConfig();
 end;
 
-procedure TJSONConfig.Put(key: String; value: Double; save: Boolean = True); overload;
+procedure TConfigJSON.Put(key: String; value: Double; save: Boolean = True); overload;
 begin
   if Self.JSON = nil then
     Exit;
-  Self.JSON.Remove(key);
   Self.JSON.Put(key, value);
   if save then
     Self.SaveConfig();
 end;
 
-procedure TJSONConfig.Put(key: String; value: Boolean; save: Boolean = True); overload;
+procedure TConfigJSON.Put(key: String; value: Boolean; save: Boolean = True); overload;
 begin
   if Self.JSON = nil then
     Exit;
-  Self.JSON.Remove(key);
   Self.JSON.Put(key, value);
   if save then
     Self.SaveConfig();
 end;
 
-procedure TJSONConfig.Put(key: String; values: TStringArray; save: Boolean = True); overload;
-var
-  i, j: Int32;
+procedure TConfigJSON.Put(key: String; value: Pointer; save: Boolean = True); overload;
 begin
   if Self.JSON = nil then
     Exit;
-
-  i := Self._ArrayHelper.Get(key);
-  Self._ArrayHelper[i].JSONArray.Init();
-
-  for j := 0 to High(values) do
-    Self._ArrayHelper[i].JSONArray.Put(values[j]);
-
-  Self.JSON.Remove(key);
-  Self.JSON.Put(key, Self._ArrayHelper[i].JSONArray);
-
-  if save then
-    Self.SaveConfig();
-end;
-
-procedure TJSONConfig.Put(key: String; values: TIntegerArray; save: Boolean = True); overload;
-var
-  i, j: Int32;
-begin
-  if Self.JSON = nil then
-    Exit;
-
-  i := Self._ArrayHelper.Get(key);
-  Self._ArrayHelper[i].JSONArray.Init();
-
-  for j := 0 to High(values) do
-    Self._ArrayHelper[i].JSONArray.Put(values[j]);
-
-  Self.JSON.Remove(key);
-  Self.JSON.Put(key, Self._ArrayHelper[i].JSONArray);
-
-  if save then
-    Self.SaveConfig();
-end;
-
-procedure TJSONConfig.Put(key: String; values: TDoubleArray; save: Boolean = True); overload;
-var
-  i, j: Int32;
-begin
-  if Self.JSON = nil then
-    Exit;
-
-  i := Self._ArrayHelper.Get(key);
-  Self._ArrayHelper[i].JSONArray.Init();
-
-  for j := 0 to High(values) do
-    Self._ArrayHelper[i].JSONArray.Put(values[j]);
-
-  Self.JSON.Remove(key);
-  Self.JSON.Put(key, Self._ArrayHelper[i].JSONArray);
-
-  if save then
-    Self.SaveConfig();
-end;
-
-procedure TJSONConfig.Put(key: String; values: TBoolArray; save: Boolean = True); overload;
-var
-  i, j: Int32;
-begin
-  if Self.JSON = nil then
-    Exit;
-
-  i := Self._ArrayHelper.Get(key);
-  Self._ArrayHelper[i].JSONArray.Init();
-
-  for j := 0 to High(values) do
-    Self._ArrayHelper[i].JSONArray.Put(values[j]);
-
-  Self.JSON.Remove(key);
-  Self.JSON.Put(key, Self._ArrayHelper[i].JSONArray);
-
-  if save then
-    Self.SaveConfig();
-end;
-
-procedure TJSONConfig.Put(key: String; value: Pointer; save: Boolean = True); overload;
-begin
-  if Self.JSON = nil then
-    Exit;
-
-  Self.JSON.Remove(key);
   Self.JSON.put(key, value);
-
   if save then
     Self.SaveConfig();
 end;
 
 
 (*
-## Config.Has()
+## TConfigJSON.Has
 ```pascal
-function TJSONConfig.Has(key: String; nullIsValid: Boolean = True): Boolean;
+function TConfigJSON.Has(key: String; nullIsValid: Boolean = True): Boolean;
 ```
 Checks if a key exists. `nullIsValid` is true by default when set to false
 this will return false if the key exists but is set to null.
 *)
-function TJSONConfig.Has(key: String; nullIsValid: Boolean = True): Boolean;
+function TConfigJSON.Has(key: String; nullIsValid: Boolean = True): Boolean;
 begin
   if Self.JSON = nil then
     Exit;
@@ -1790,24 +1714,21 @@ end;
 
 
 (*
-## Config.Get()
+## TConfigJSON.Get
 ```pascal
-function TJSONConfig.GetString(key: String): String;
-function TJSONConfig.GetInt(key: String): Int32;
-function TJSONConfig.GetDouble(key: String): Double;
-function TJSONConfig.GetBoolean(key: String): Boolean;
-function TJSONConfig.GetNull(key: String): Boolean;
-function TJSONConfig.GetStringArray(key: String): TStringArray;
-function TJSONConfig.GetIntArray(key: String): TIntegerArray;
-function TJSONConfig.GetDoubleArray(key: String): TDoubleArray;
-function TJSONConfig.GetBooleanArray(key: String): TBoolArray;
-function TJSONConfig.GetObject(key: String): TJSONObject;
+function TConfigJSON.GetString(key: String): String;
+function TConfigJSON.GetInt(key: String): Int32;
+function TConfigJSON.GetDouble(key: String): Double;
+function TConfigJSON.GetBoolean(key: String): Boolean;
+function TConfigJSON.GetNull(key: String): Boolean;
+function TConfigJSON.GetObject(key: String): TJSONObject;
+function TConfigJSON.GetArray(key: String): TJSONArray;
 ```
-This should be self explanatory. Returns the value of a `key` in your `TJSONConfig`.
+This should be self explanatory. Returns the value of a `key` in your `TConfigJSON`.
 The `Object` version of the method is the only one that might need a little bit more knowledge of
 Simba's lower JSON methods and/or pointers but you can use it to return a JSON object or a TJSONArray of TJSONObjects.
 *)
-function TJSONConfig.GetString(key: String): String;
+function TConfigJSON.GetString(key: String): String;
 begin
   if Self.JSON = nil then
     Exit;
@@ -1815,7 +1736,7 @@ begin
     Result := Self.JSON.getString(key);
 end;
 
-function TJSONConfig.GetInt(key: String): Int32;
+function TConfigJSON.GetInt(key: String): Int32;
 begin
   if Self.JSON = nil then
     Exit;
@@ -1823,7 +1744,7 @@ begin
     Result := Self.JSON.getInt(key);
 end;
 
-function TJSONConfig.GetDouble(key: String): Double;
+function TConfigJSON.GetDouble(key: String): Double;
 begin
   if Self.JSON = nil then
     Exit;
@@ -1831,7 +1752,7 @@ begin
     Result := Self.JSON.getDouble(key);
 end;
 
-function TJSONConfig.GetBoolean(key: String): Boolean;
+function TConfigJSON.GetBoolean(key: String): Boolean;
 begin
   if Self.JSON = nil then
     Exit;
@@ -1839,74 +1760,14 @@ begin
     Result := Self.JSON.getBoolean(key);
 end;
 
-function TJSONConfig.GetNull(key: String): Boolean;
+function TConfigJSON.GetNull(key: String): Boolean;
 begin
   if Self.JSON = nil then
     Exit;
   Result := not Self.JSON.has(key) or Self.JSON.isNull(key);
 end;
 
-function TJSONConfig.GetStringArray(key: String): TStringArray;
-var
-  tmp: TJSONArray;
-  i: Int32;
-begin
-  if Self.JSON = nil then
-    Exit;
-  if Self.JSON.has(key) and not Self.JSON.isNull(key) then
-  begin
-    tmp := Self.JSON.getJSONArray(key);
-    for i := 0 to tmp.length()-1 do
-      Result += tmp.getString(i);
-  end;
-end;
-
-function TJSONConfig.GetIntArray(key: String): TIntegerArray;
-var
-  tmp: TJSONArray;
-  i: Int32;
-begin
-  if Self.JSON = nil then
-    Exit;
-  if Self.JSON.has(key) and not Self.JSON.isNull(key) then
-  begin
-    tmp := Self.JSON.getJSONArray(key);
-    for i := 0 to tmp.length()-1 do
-      Result += tmp.getInt(i);
-  end;
-end;
-
-function TJSONConfig.GetDoubleArray(key: String): TDoubleArray;
-var
-  tmp: TJSONArray;
-  i: Int32;
-begin
-  if Self.JSON = nil then
-    Exit;
-  if Self.JSON.has(key) and not Self.JSON.isNull(key) then
-  begin
-    tmp := Self.JSON.getJSONArray(key);
-    for i := 0 to tmp.length()-1 do
-      Result += tmp.getDouble(i);
-  end;
-end;
-
-function TJSONConfig.GetBooleanArray(key: String): TBoolArray;
-var
-  tmp: TJSONArray;
-  i: Int32;
-begin
-  if Self.JSON = nil then
-    Exit;
-  if Self.JSON.has(key) and not Self.JSON.isNull(key) then
-  begin
-    tmp := Self.JSON.getJSONArray(key);
-    for i := 0 to tmp.length()-1 do
-      Result += tmp.getBoolean(i);
-  end;
-end;
-
-function TJSONConfig.GetObject(key: String): TJSONObject;
+function TConfigJSON.GetObject(key: String): TJSONObject;
 begin
   if Self.JSON = nil then
     Exit;
@@ -1914,69 +1775,86 @@ begin
     Result := Self.JSON.getJSONObject(key);
 end;
 
-
-(*
-## Config.Remove()
-```pascal
-procedure TJSONConfig.Remove(key: String);
-```
-Remove a `key` and it's respective `value` from your `TJSONConfig`.
-*)
-procedure TJSONConfig.Remove(key: String);
+function TConfigJSON.GetArray(key: String): TJSONArray;
 begin
   if Self.JSON = nil then
-    TerminateScript('You need to use TJSONConfig.Setup() before trying to delete a key on it.');
+    Exit;
+  if Self.JSON.has(key) and not Self.JSON.isNull(key) then
+    Result := Self.JSON.getJSONArray(key);
+end;
+
+
+(*
+## TConfigJSON.Remove
+```pascal
+procedure TConfigJSON.Remove(key: String);
+```
+Remove a `key` and it's respective `value` from your `TConfigJSON`.
+*)
+procedure TConfigJSON.Remove(key: String);
+begin
+  if Self.JSON = nil then
+    TerminateScript('You need to use TConfigJSON.Setup() before trying to delete a key on it.');
   Self.JSON.remove(key);
   Self.SaveConfig();
 end;
 
+
 (*
-## Config.ToString()
+## TConfigJSON.ToString
 ```pascal
-function TJSONConfig.ToString(indentFactor: Int32 = 2): String;
+function TConfigJSON.ToString(indentFactor: Int32 = 2): String;
 ```
-Returns a string version of your `TJSONConfig`.
+Returns a string version of your `TConfigJSON`.
 
 Example:
 ```pascal
 WriteLn MyConfig.ToString();
 ```
 *)
-function TJSONConfig.ToString(indentFactor: Int32 = 2): String;
+function TConfigJSON.ToString(indentFactor: Int32 = 2): String;
 begin
   if Self.JSON = nil then
     Exit;
   Result := Self.JSON.ToString(indentFactor);
 end;
 
-type TWaspConfig = TJSONConfig;
-
 type
 (*
-## INIConfig Methods Description
-
-- `Setup(FileName: String)`: Initializes the configuration path for the INI file.
-- `Put(Section, KeyName, Value: String)`: Stores a key-value pair in a specified section.
-- `Get(Section, KeyName: String)`: Retrieves the value associated with a key from a section.
-- `GetKeys(Section: String)`: Lists all keys within a specified section.
-- `DeleteConfig()`: Deletes the configuration file.
-
-## Example Usage
-
+(TConfigINI)=
+## type TConfigINI
+```pascal
+TConfigINI = record
+  Path: String;
+  FileName: String;
+end;
+```
+Example:
+```pascal
 ConfigINI.Setup('MyScriptSettings.ini'); // Set file path
-
 ConfigINI.Put('GUISettings', 'UsePoolPOH', 'True'); // Write setting
-writeln(ConfigINI.Get('GUISettings', 'UsePoolPOH')); // Read setting
-
-writeln(ConfigINI.GetKeys('GUISettings')); // List all keys in 'GUISettings'
+WriteLn(ConfigINI.Get('GUISettings', 'UsePoolPOH')); // Read setting
+WriteLn(ConfigINI.GetKeys('GUISettings')); // List all keys in 'GUISettings'
+```
 *)
-  TINIConfig = record
+  TConfigINI = record
     Path: String;
     FileName: String;
   end;
 
-// Initializes configuration path and filename
-procedure TINIConfig.Setup(ConfigName: String);
+(*
+## TConfigINI.Setup
+```pascal
+procedure TConfigINI.Setup(ConfigName: String);
+```
+Initializes configuration path and filename.
+
+Example:
+```pascal
+ConfigINI.Setup('MyScriptSettings.ini');
+```
+*)
+procedure TConfigINI.Setup(ConfigName: String);
 begin
   if ConfigName.Contains(DirectorySeparator) then
   begin
@@ -1994,37 +1872,55 @@ begin
   Self.Path += ConfigName;
 end;
 
-// Writes a single key-value pair to a specified section
-procedure TINIConfig.Put(Section, KeyName, Value: String);
+
+(*
+## TConfigINI.Put
+```pascal
+procedure TConfigINI.Put(Section, KeyName, Value: String);
+```
+Writes a single key-value pair to a specified section.
+
+Example:
+```pascal
+ConfigINI.Put('GUISettings', 'UsePoolPOH', 'True');
+```
+*)
+procedure TConfigINI.Put(Section, KeyName, Value: String);
 begin
   WriteINI(Section, KeyName, Value, Self.Path);
 end;
 
-// Retrieves a single value by key from a specified section
-function TINIConfig.Get(Section, KeyName: String): String;
+
+(*
+## TConfigINI.Get
+```pascal
+function TConfigINI.Get(Section, KeyName: String): String;
+```
+Retrieves a single value by key from a specified section.
+
+Example:
+```pascal
+WriteLn(ConfigINI.Get('GUISettings', 'UsePoolPOH'));
+```
+*)
+function TConfigINI.Get(Section, KeyName: String): String;
 begin
   Result := ReadINI(Section, KeyName, Self.Path);
 end;
 
-// Removes a single key-value pair from a specified section
-procedure TINIConfig.Remove(Section, KeyName: String);
-begin
-  if not FileExists(Self.Path) then
-    RaiseException('File does not exist: ' + Self.Path);
-  DeleteINI(Section, KeyName, Self.Path);
-end;
+(*
+## TConfigINI.GetKeys
+```pascal
+function TConfigINI.GetKeys(Section: String): TStringArray;
+```
+Retrieves all keys from a specified section.
 
-// Deletes the entire configuration file
-procedure TINIConfig.DeleteConfig();
-begin
-  if FileExists(Self.Path) then
-    DeleteFile(Self.Path)
-  else
-    RaiseException('File does not exist: ' + Self.Path);
-end;
-
-// Retrieves all keys from a specified section
-function TINIConfig.GetKeys(Section: String): TStringArray;
+Example:
+```pascal
+WriteLn(ConfigINI.GetKeys('GUISettings'));
+```
+*)
+function TConfigINI.GetKeys(Section: String): TStringArray;
 var
   FileContent: TStringArray;
 var
@@ -2047,6 +1943,46 @@ begin
 end;
 
 
+(*
+## TConfigINI.Remove
+```pascal
+procedure TConfigINI.Remove(Section, KeyName: String);
+```
+Removes a single key-value pair from a specified section.
+
+Example:
+```pascal
+ConfigINI.Remove('GUISettings', 'UsePoolPOH'));
+```
+*)
+procedure TConfigINI.Remove(Section, KeyName: String);
+begin
+  if not FileExists(Self.Path) then
+    RaiseException('File does not exist: ' + Self.Path);
+  DeleteINI(Section, KeyName, Self.Path);
+end;
+
+
+(*
+## TConfigINI.DeleteConfig
+```pascal
+procedure TConfigINI.DeleteConfig();
+```
+Deletes the entire configuration file.
+
+Example:
+```pascal
+ConfigINI.DeleteConfig();
+```
+*)
+procedure TConfigINI.DeleteConfig();
+begin
+  if FileExists(Self.Path) then
+    DeleteFile(Self.Path)
+  else
+    RaiseException('File does not exist: ' + Self.Path);
+end;
+
 
 {$IFNDEF WS_HTTP_INCLUDED}         
 (*
@@ -2058,7 +1994,7 @@ Responsible connecting to the internet.
 
 
 var
-  LauncherConfig: TJSONConfig;
+  LauncherConfig: TConfigJSON;
 
 type
   THTTPClient = record
@@ -2255,21 +2191,26 @@ function TGitHubClient.GetDownloaderContent(): String;
 begin
   Result += "var" + LineEnding;
   Result += "  timeout: TTimer;" + LineEnding;
-  Result += "  httpClient: Int32;" + LineEnding;
+  Result += "  http: Int32;" + LineEnding;
   Result += "  url, pkg: String;" + LineEnding;
-  Result += "  freed: Boolean;" + LineEnding + LineEnding;
+  Result += "  t: UInt64;" + LineEnding + LineEnding;
   Result += "procedure OnTimer(sender: TObject);" + LineEnding;
   Result += "begin" + LineEnding;
-  Result += "  TTimer(sender).setEnabled(False);" + LineEnding;
+  Result += "  WriteLn('[AsyncDownloader]: Downloading ', pkg, '...');" + LineEnding + LineEnding;
+  Result += "  if GetTickCount() > t then" + LineEnding;
+  Result += "  begin" + LineEnding;
+  Result += "    WriteLn('[AsyncDownloader]: If this has taken over 5 minutes please restart Simba.');" + LineEnding;
+  Result += "    WriteLn('[AsyncDownloader]: If you are rate limited you need to wait 1 hour.');" + LineEnding;
+  Result += "    t := GetTickCount() + 120000;" + LineEnding;
+  Result += "  end;" + LineEnding;
   Result += "end;" + LineEnding + LineEnding;
-  Result += "procedure OnStop(sender: TObject);" + LineEnding;
+  Result += "procedure Free();" + LineEnding;
   Result += "begin" + LineEnding;
-  Result += "  WriteLn(pkg, ' download timed out!');" + LineEnding;
-  Result += "  WriteLn(' You might be rate limited by github and will need to wait a little bit.');" + LineEnding;
-  Result += "  freed := True;" + LineEnding + LineEnding;
-  Result += "  TTimer(sender).Free();" + LineEnding;
-  Result += "  FreeHTTPClient(httpClient); TerminateScript();" + LineEnding;
-  Result += "end;" + LineEnding + LineEnding + LineEnding;
+  Result += "  timeout.setEnabled(False);" + LineEnding;
+  Result += "  timeout.Free();" + LineEnding;
+  Result += "  FreeHTTPClient(http);" + LineEnding;
+  Result += "  CloseFile(CreateFile(Scripts/launcher/' + 'downloader-' + LowerCase(pkg) + '.done'));" + LineEnding;
+  Result += "end;" + LineEnding + LineEnding;
   Result += "procedure RunTimer();" + LineEnding;
   Result += "begin" + LineEnding;
   Result += "  timeout.setOnTimer(@OnTimer);" + LineEnding;
@@ -2278,31 +2219,26 @@ begin
   Result += "begin" + LineEnding;
   Result += "  url := GetProcessParameter('url');" + LineEnding;
   Result += "  pkg := GetProcessParameter('pkg');" + LineEnding + LineEnding;
+  Result += "  if FileExists(Scripts/launcher/' + 'downloader-' + LowerCase(pkg) + '.done') then" + LineEnding;
+  Result += "    DeleteFile(Scripts/launcher/' + 'downloader-' + LowerCase(pkg) + '.done');" + LineEnding + LineEnding;
   Result += "  timeout.Init(nil);" + LineEnding;
-  Result += "  timeout.SetName('async_downloader_timout');" + LineEnding;
-  Result += "  timeout.setInterval(120000);" + LineEnding;
-  Result += "  timeout.setOnStopTimer(@OnStop);" + LineEnding;
-  Result += "  httpClient := InitializeHTTPClient(True);" + LineEnding + LineEnding;
-  Result += "  WriteLn('[AsyncDownloader]: Downloading ', pkg, ', this might take a few seconds.');" + LineEnding + LineEnding;
+  Result += "  timeout.SetName('downloader_timeout');" + LineEnding;
+  Result += "  timeout.SetInterval(20000);" + LineEnding;
+  Result += "  http := InitializeHTTPClient(True);" + LineEnding;
+  Result += "  Sync(@RunTimer);" + LineEnding;
+  Result += "  AddOnTerminate(@Free);" + LineEnding + LineEnding;
+  Result += "  WriteLn('[AsyncDownloader]: Downloading ', pkg, ', this might take a while.');" + LineEnding;
+  Result += "  t := GetTickCount() + 120000;" + LineEnding + LineEnding;
   Result += "  try" + LineEnding;
-  Result += "    Sync(@RunTimer);" + LineEnding;
-  Result += "    if GetHTTPPageEx(httpClient, url, GetProcessParameter('destination')) = 200 then" + LineEnding;
+  Result += "    if GetHTTPPageEx(http, url, GetProcessParameter('destination')) = 200 then" + LineEnding;
   Result += "      WriteLn('[AsyncDownloader]: ' + pkg + ' downloaded.')" + LineEnding;
   Result += "    else" + LineEnding;
   Result += "      WriteLn('[AsyncDownloader]: Failed to download: ' + url);" + LineEnding;
   Result += "  except" + LineEnding;
-  Result += "    WriteLn(GetExceptionMessage());" + LineEnding;
-  Result += "  finally" + LineEnding;
-  Result += "    if not freed then" + LineEnding;
-  Result += "    begin" + LineEnding;
-  Result += "      FreeHTTPClient(httpClient);" + LineEnding;
-  Result += "      timeout.setEnabled(False);" + LineEnding;
-  Result += "      timeout.Free();" + LineEnding;
-  Result += "    end;" + LineEnding;
+  Result += "    WriteLn('[AsyncDownloader]: Error: ', GetExceptionMessage());" + LineEnding;
   Result += "  end;" + LineEnding;
   Result += "end;" + LineEnding;
 end;
-
 
 procedure TGitHubClient.Download(pkg: String);
 var
@@ -2316,7 +2252,7 @@ begin
       TerminateScript('Unrecognized package to download: ' + pkg);
   end;
 
-  WriteAsyncFile(pkg + '-downloader.simba', Self.GetDownloaderContent());
+  WriteAsyncFile(pkg + '-downloader.simba', Self.GetDownloaderContent(), False);
   params := ['url=' + url,'destination="'+ Self.DownloadPath + pkg + '.zip"', 'pkg=' + pkg];
   RunAsyncFile(pkg + '-downloader.simba', params);
 end;
@@ -4064,8 +4000,20 @@ var
 procedure TMonitor.NextState(); forward;
 
 procedure TMonitor._OnTimer(sender: TObject);
+var
+  fileName: String;
 begin
-  if not FileExists(LAUNCHER_DATA + 'async' + DirectorySeparator + Self.CurrentFile) then
+  if Self.CurrentFile.Contains('downloader') then
+    fileName := 'downloader-'
+  else if Self.CurrentFile.Contains('unzipper') then
+    fileName := 'unzipper-'
+  else if Self.CurrentFile.Contains('mover') then
+    fileName := 'mover-';
+
+  fileName := fileName + LowerCase(Self.Package) + '.done';
+  fileName := LAUNCHER_DATA + 'async' + DirectorySeparator + fileName;
+
+  if FileExists(fileName) and DeleteFile(fileName) then
   begin
     TTimer(sender).SetEnabled(False);
     Self.NextState();
@@ -4098,7 +4046,7 @@ begin
     begin
       Self.CurrentFile := Self.Package + '-unzipper.simba';
 
-      WriteAsyncFile(Self.CurrentFile, WaspUpdater.GetUnzipperContent());
+      WriteAsyncFile(Self.CurrentFile, WaspUpdater.GetUnzipperContent(), False);
       params := ['path=' + GitHubClient.DownloadPath, 'name=' + Self.Package];
       RunAsyncFile(Self.CurrentFile, params);
 
@@ -4113,7 +4061,7 @@ begin
     begin
       Self.CurrentFile := Self.Package + '-mover.simba';
 
-      WriteAsyncFile(Self.CurrentFile, WaspUpdater.GetMoverContent());
+      WriteAsyncFile(Self.CurrentFile, WaspUpdater.GetMoverContent(), False);
       params := ['origin=' + GitHubClient.DownloadPath, 'pkg=' + Self.Package];
       RunAsyncFile(Self.CurrentFile, params);
 
@@ -4181,27 +4129,36 @@ end;
 
 function TWaspUpdater.GetUnzipperContent(): String;
 begin
-  Result += "var path, name: String;" + LineEnding;
+  Result += "var" + LineEnding;
+  Result += "  path, name: String;" + LineEnding + LineEnding;
+  Result += "procedure Free();" + LineEnding;
+  Result += "begin" + LineEnding;
+  Result += "  CloseFile(CreateFile(Scripts/launcher/' + 'unzipper-' + LowerCase(name) + '.done'));" + LineEnding;
+  Result += "end;" + LineEnding + LineEnding;
   Result += "begin" + LineEnding;
   Result += "  path := GetProcessParameter('path');" + LineEnding;
-  Result += "  name := GetProcessParameter('name');" + LineEnding;
-  Result += "  WriteLn('[AsyncUnzipper]: Unzipping ', name, ', this might take a while.');" + LineEnding;
+  Result += "  name := GetProcessParameter('name');" + LineEnding + LineEnding;
+  Result += "  if FileExists(Scripts/launcher/' + 'downloader-' + LowerCase(name) + '.done') then" + LineEnding;
+  Result += "    DeleteFile(Scripts/launcher/' + 'downloader-' + LowerCase(name) + '.done');" + LineEnding + LineEnding;
+  Result += "  AddOnTerminate(@Free);" + LineEnding + LineEnding;
+  Result += "  WriteLn('[AsyncUnzipper]: Unzipping ', name, ', this might take a while.');" + LineEnding + LineEnding;
   Result += "  try" + LineEnding;
   Result += "    UnZipFile(path + name + '.zip', path + name);" + LineEnding;
   Result += "    DeleteFile(path + name + '.zip');" + LineEnding;
   Result += "  except" + LineEnding;
-  Result += "    WriteLn(GetExceptionMessage());" + LineEnding;
+  Result += "    WriteLn('[AsyncUnzipper]: Error: ', GetExceptionMessage());" + LineEnding;
   Result += "  end;" + LineEnding;
   Result += "end;" + LineEnding;
 end;
 
 function TWaspUpdater.GetMoverContent(): String;
 begin
-  Result += "const SEP = DirectorySeparator;" + LineEnding + LineEnding;
+  Result += "const" + LineEnding;
+  Result += "  SEP = DirectorySeparator;" + LineEnding + LineEnding;
   Result += "procedure TerminateScript(reason: String); overload;" + LineEnding;
   Result += "begin" + LineEnding;
   Result += "  WriteLn('[AsyncMover]: Terminating: ' + reason);" + LineEnding;
-  Result += "  begin DeleteFile(ScriptFile); TerminateScript(); end;" + LineEnding;
+  Result += "  TerminateScript();" + LineEnding;
   Result += "end;" + LineEnding + LineEnding;
   Result += "function BackupFile(filePath: String): Boolean;" + LineEnding;
   Result += "var" + LineEnding;
@@ -4251,23 +4208,13 @@ begin
   Result += "    for plugin in FindFiles(path, False) do" + LineEnding;
   Result += "      if IsFileLocked(plugin) then" + LineEnding;
   Result += "        Result += plugin;" + LineEnding;
-  Result += "end;" + LineEnding + LineEnding;
-  Result += "procedure KillClients();" + LineEnding;
+  Result += "end;" + LineEnding + LineEnding + LineEnding;
+  Result += "procedure KillWindowByClass(name: String);" + LineEnding;
   Result += "var" + LineEnding;
   Result += "  window: TOSWindow;" + LineEnding;
   Result += "begin" + LineEnding;
-  Result += "  for window in GetWindows().GetByClass('SunAwtCanvas') do" + LineEnding;
+  Result += "  for window in GetWindows().GetByClass(name) do" + LineEnding;
   Result += "    window.Kill();" + LineEnding;
-  Result += "end;" + LineEnding + LineEnding;
-  Result += "procedure KillJLaunchers();" + LineEnding;
-  Result += "var" + LineEnding;
-  Result += "  window: TOSWindow;" + LineEnding;
-  Result += "begin" + LineEnding;
-  Result += "  for window in GetWindows().GetByClass('Jagex Launcher') do" + LineEnding;
-  Result += "  begin" + LineEnding;
-  Result += "    window.Kill();" + LineEnding;
-  Result += "    Break;" + LineEnding;
-  Result += "  end;" + LineEnding;
   Result += "end;" + LineEnding + LineEnding;
   Result += "procedure KillSimbas();" + LineEnding;
   Result += "var" + LineEnding;
@@ -4281,8 +4228,8 @@ begin
   Result += "    TerminateScript('You need to close all Simba windows to update SRL.');" + LineEnding + LineEnding;
   Result += "  for win in simbas do" + LineEnding;
   Result += "    win.Kill();" + LineEnding + LineEnding;
-  Result += "  begin DeleteFile(ScriptFile); TerminateScript(); end;" + LineEnding;
-  Result += "end;" + LineEnding + LineEnding;
+  Result += "  TerminateScript();" + LineEnding;
+  Result += "end;" + LineEnding + LineEnding + LineEnding;
   Result += "procedure UnlockPlugins();" + LineEnding;
   Result += "var" + LineEnding;
   Result += "  locked: TStringArray;" + LineEnding;
@@ -4294,11 +4241,11 @@ begin
   Result += "  if MessageDlg('Close RuneScape', 'RS Clients need to be closed to update this package.'," + LineEnding;
   Result += "     TMsgDlgType.mtConfirmation, [mbOK, mbAbort]) = 3 then" + LineEnding;
   Result += "    TerminateScript('You need to close your RS Clients to update SRL.');" + LineEnding + LineEnding;
-  Result += "  KillClients();" + LineEnding + LineEnding;
+  Result += "  KillWindowByClass('SunAwtCanvas');" + LineEnding + LineEnding;
   Result += "  for plugin in locked do" + LineEnding;
   Result += "    if IsFileLocked(plugin) then" + LineEnding;
   Result += "    begin" + LineEnding;
-  Result += "      KillJLaunchers();" + LineEnding;
+  Result += "      KillWindowByClass('Jagex Launcher');" + LineEnding;
   Result += "      Break;" + LineEnding;
   Result += "    end;" + LineEnding + LineEnding;
   Result += "  for plugin in locked do" + LineEnding;
@@ -4359,16 +4306,22 @@ begin
   Result += "  DelDirectory(origin + pkg);" + LineEnding;
   Result += "end;" + LineEnding + LineEnding;
   Result += "var" + LineEnding;
-  Result += "  pkg: String;" + LineEnding;
+  Result += "  pkg: String;" + LineEnding + LineEnding;
+  Result += "procedure Free();" + LineEnding;
+  Result += "begin" + LineEnding;
+  Result += "  CloseFile(CreateFile(Scripts/launcher/' + 'mover-' + LowerCase(pkg) + '.done'));" + LineEnding;
+  Result += "end;" + LineEnding + LineEnding;
   Result += "begin" + LineEnding;
   Result += "  pkg := GetProcessParameter('pkg');" + LineEnding + LineEnding;
+  Result += "  if FileExists(Scripts/launcher/' + 'mover-' + LowerCase(pkg) + '.done') then" + LineEnding;
+  Result += "    DeleteFile(Scripts/launcher/' + 'mover-' + LowerCase(pkg) + '.done');" + LineEnding + LineEnding;
+  Result += "  AddOnTerminate(@Free);" + LineEnding + LineEnding;
   Result += "  case LowerCase(pkg) of" + LineEnding;
   Result += "    'srl-t', 'srlt', 'srl': UnlockPlugins();" + LineEnding;
   Result += "  end;" + LineEnding + LineEnding;
-  Result += "  WriteLn('[AsyncMover]: Moving ', pkg, ' files, this will take a few seconds.');" + LineEnding;
+  Result += "  WriteLn('[AsyncMover]: Moving ', pkg, ' files, this will take a while.');" + LineEnding;
   Result += "  MoveFiles(GetProcessParameter('origin'), pkg);" + LineEnding;
-  Result += "end;" + LineEnding + LineEnding + LineEnding;
-  Result += "begin DeleteFile(ScriptFile); end;" + LineEnding;
+  Result += "end;" + LineEnding;
 end;
 
 procedure TWaspUpdater.Update(pkg: String; caption, button: TComponent);
