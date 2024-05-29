@@ -9,7 +9,7 @@ Responsible connecting to the internet.
 {$ENDIF}
 
 var
-  LauncherConfig: TJSONConfig;
+  LauncherConfig: TConfigJSON;
 
 type
   THTTPClient = record
@@ -206,21 +206,26 @@ function TGitHubClient.GetDownloaderContent(): String;
 begin
   Result += "var" + LineEnding;
   Result += "  timeout: TTimer;" + LineEnding;
-  Result += "  httpClient: Int32;" + LineEnding;
+  Result += "  http: Int32;" + LineEnding;
   Result += "  url, pkg: String;" + LineEnding;
-  Result += "  freed: Boolean;" + LineEnding + LineEnding;
+  Result += "  t: UInt64;" + LineEnding + LineEnding;
   Result += "procedure OnTimer(sender: TObject);" + LineEnding;
   Result += "begin" + LineEnding;
-  Result += "  TTimer(sender).setEnabled(False);" + LineEnding;
+  Result += "  WriteLn('[AsyncDownloader]: Downloading ', pkg, '...');" + LineEnding + LineEnding;
+  Result += "  if GetTickCount() > t then" + LineEnding;
+  Result += "  begin" + LineEnding;
+  Result += "    WriteLn('[AsyncDownloader]: If this has taken over 5 minutes please restart Simba.');" + LineEnding;
+  Result += "    WriteLn('[AsyncDownloader]: If you are rate limited you need to wait 1 hour.');" + LineEnding;
+  Result += "    t := GetTickCount() + 120000;" + LineEnding;
+  Result += "  end;" + LineEnding;
   Result += "end;" + LineEnding + LineEnding;
-  Result += "procedure OnStop(sender: TObject);" + LineEnding;
+  Result += "procedure Free();" + LineEnding;
   Result += "begin" + LineEnding;
-  Result += "  WriteLn(pkg, ' download timed out!');" + LineEnding;
-  Result += "  WriteLn(' You might be rate limited by github and will need to wait a little bit.');" + LineEnding;
-  Result += "  freed := True;" + LineEnding + LineEnding;
-  Result += "  TTimer(sender).Free();" + LineEnding;
-  Result += "  FreeHTTPClient(httpClient); TerminateScript();" + LineEnding;
-  Result += "end;" + LineEnding + LineEnding + LineEnding;
+  Result += "  timeout.setEnabled(False);" + LineEnding;
+  Result += "  timeout.Free();" + LineEnding;
+  Result += "  FreeHTTPClient(http);" + LineEnding;
+  Result += "  CloseFile(CreateFile({$macro CURRENT_DIRECTORY} + 'downloader-' + LowerCase(pkg) + '.done'));" + LineEnding;
+  Result += "end;" + LineEnding + LineEnding;
   Result += "procedure RunTimer();" + LineEnding;
   Result += "begin" + LineEnding;
   Result += "  timeout.setOnTimer(@OnTimer);" + LineEnding;
@@ -229,31 +234,26 @@ begin
   Result += "begin" + LineEnding;
   Result += "  url := GetProcessParameter('url');" + LineEnding;
   Result += "  pkg := GetProcessParameter('pkg');" + LineEnding + LineEnding;
+  Result += "  if FileExists({$macro CURRENT_DIRECTORY} + 'downloader-' + LowerCase(pkg) + '.done') then" + LineEnding;
+  Result += "    DeleteFile({$macro CURRENT_DIRECTORY} + 'downloader-' + LowerCase(pkg) + '.done');" + LineEnding + LineEnding;
   Result += "  timeout.Init(nil);" + LineEnding;
-  Result += "  timeout.SetName('async_downloader_timout');" + LineEnding;
-  Result += "  timeout.setInterval(120000);" + LineEnding;
-  Result += "  timeout.setOnStopTimer(@OnStop);" + LineEnding;
-  Result += "  httpClient := InitializeHTTPClient(True);" + LineEnding + LineEnding;
-  Result += "  WriteLn('[AsyncDownloader]: Downloading ', pkg, ', this might take a few seconds.');" + LineEnding + LineEnding;
+  Result += "  timeout.SetName('downloader_timeout');" + LineEnding;
+  Result += "  timeout.SetInterval(20000);" + LineEnding;
+  Result += "  http := InitializeHTTPClient(True);" + LineEnding;
+  Result += "  Sync(@RunTimer);" + LineEnding;
+  Result += "  AddOnTerminate(@Free);" + LineEnding + LineEnding;
+  Result += "  WriteLn('[AsyncDownloader]: Downloading ', pkg, ', this might take a while.');" + LineEnding;
+  Result += "  t := GetTickCount() + 120000;" + LineEnding + LineEnding;
   Result += "  try" + LineEnding;
-  Result += "    Sync(@RunTimer);" + LineEnding;
-  Result += "    if GetHTTPPageEx(httpClient, url, GetProcessParameter('destination')) = 200 then" + LineEnding;
+  Result += "    if GetHTTPPageEx(http, url, GetProcessParameter('destination')) = 200 then" + LineEnding;
   Result += "      WriteLn('[AsyncDownloader]: ' + pkg + ' downloaded.')" + LineEnding;
   Result += "    else" + LineEnding;
   Result += "      WriteLn('[AsyncDownloader]: Failed to download: ' + url);" + LineEnding;
   Result += "  except" + LineEnding;
-  Result += "    WriteLn(GetExceptionMessage());" + LineEnding;
-  Result += "  finally" + LineEnding;
-  Result += "    if not freed then" + LineEnding;
-  Result += "    begin" + LineEnding;
-  Result += "      FreeHTTPClient(httpClient);" + LineEnding;
-  Result += "      timeout.setEnabled(False);" + LineEnding;
-  Result += "      timeout.Free();" + LineEnding;
-  Result += "    end;" + LineEnding;
+  Result += "    WriteLn('[AsyncDownloader]: Error: ', GetExceptionMessage());" + LineEnding;
   Result += "  end;" + LineEnding;
   Result += "end;" + LineEnding;
 end;
-
 
 procedure TGitHubClient.Download(pkg: String);
 var
@@ -267,7 +267,7 @@ begin
       TerminateScript('Unrecognized package to download: ' + pkg);
   end;
 
-  WriteAsyncFile(pkg + '-downloader.simba', Self.GetDownloaderContent());
+  WriteAsyncFile(pkg + '-downloader.simba', Self.GetDownloaderContent(), False);
   params := ['url=' + url,'destination="'+ Self.DownloadPath + pkg + '.zip"', 'pkg=' + pkg];
   RunAsyncFile(pkg + '-downloader.simba', params);
 end;

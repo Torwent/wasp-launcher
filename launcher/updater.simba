@@ -44,8 +44,20 @@ var
 procedure TMonitor.NextState(); forward;
 
 procedure TMonitor._OnTimer(sender: TObject);
+var
+  fileName: String;
 begin
-  if not FileExists(LAUNCHER_DATA + 'async' + DirectorySeparator + Self.CurrentFile) then
+  if Self.CurrentFile.Contains('downloader') then
+    fileName := 'downloader-'
+  else if Self.CurrentFile.Contains('unzipper') then
+    fileName := 'unzipper-'
+  else if Self.CurrentFile.Contains('mover') then
+    fileName := 'mover-';
+
+  fileName := fileName + LowerCase(Self.Package) + '.done';
+  fileName := LAUNCHER_DATA + 'async' + DirectorySeparator + fileName;
+
+  if FileExists(fileName) and DeleteFile(fileName) then
   begin
     TTimer(sender).SetEnabled(False);
     Self.NextState();
@@ -78,7 +90,7 @@ begin
     begin
       Self.CurrentFile := Self.Package + '-unzipper.simba';
 
-      WriteAsyncFile(Self.CurrentFile, WaspUpdater.GetUnzipperContent());
+      WriteAsyncFile(Self.CurrentFile, WaspUpdater.GetUnzipperContent(), False);
       params := ['path=' + GitHubClient.DownloadPath, 'name=' + Self.Package];
       RunAsyncFile(Self.CurrentFile, params);
 
@@ -93,7 +105,7 @@ begin
     begin
       Self.CurrentFile := Self.Package + '-mover.simba';
 
-      WriteAsyncFile(Self.CurrentFile, WaspUpdater.GetMoverContent());
+      WriteAsyncFile(Self.CurrentFile, WaspUpdater.GetMoverContent(), False);
       params := ['origin=' + GitHubClient.DownloadPath, 'pkg=' + Self.Package];
       RunAsyncFile(Self.CurrentFile, params);
 
@@ -161,27 +173,36 @@ end;
 
 function TWaspUpdater.GetUnzipperContent(): String;
 begin
-  Result += "var path, name: String;" + LineEnding;
+  Result += "var" + LineEnding;
+  Result += "  path, name: String;" + LineEnding + LineEnding;
+  Result += "procedure Free();" + LineEnding;
+  Result += "begin" + LineEnding;
+  Result += "  CloseFile(CreateFile({$macro CURRENT_DIRECTORY} + 'unzipper-' + LowerCase(name) + '.done'));" + LineEnding;
+  Result += "end;" + LineEnding + LineEnding;
   Result += "begin" + LineEnding;
   Result += "  path := GetProcessParameter('path');" + LineEnding;
-  Result += "  name := GetProcessParameter('name');" + LineEnding;
-  Result += "  WriteLn('[AsyncUnzipper]: Unzipping ', name, ', this might take a while.');" + LineEnding;
+  Result += "  name := GetProcessParameter('name');" + LineEnding + LineEnding;
+  Result += "  if FileExists({$macro CURRENT_DIRECTORY} + 'downloader-' + LowerCase(name) + '.done') then" + LineEnding;
+  Result += "    DeleteFile({$macro CURRENT_DIRECTORY} + 'downloader-' + LowerCase(name) + '.done');" + LineEnding + LineEnding;
+  Result += "  AddOnTerminate(@Free);" + LineEnding + LineEnding;
+  Result += "  WriteLn('[AsyncUnzipper]: Unzipping ', name, ', this might take a while.');" + LineEnding + LineEnding;
   Result += "  try" + LineEnding;
   Result += "    UnZipFile(path + name + '.zip', path + name);" + LineEnding;
   Result += "    DeleteFile(path + name + '.zip');" + LineEnding;
   Result += "  except" + LineEnding;
-  Result += "    WriteLn(GetExceptionMessage());" + LineEnding;
+  Result += "    WriteLn('[AsyncUnzipper]: Error: ', GetExceptionMessage());" + LineEnding;
   Result += "  end;" + LineEnding;
   Result += "end;" + LineEnding;
 end;
 
 function TWaspUpdater.GetMoverContent(): String;
 begin
-  Result += "const SEP = DirectorySeparator;" + LineEnding + LineEnding;
+  Result += "const" + LineEnding;
+  Result += "  SEP = DirectorySeparator;" + LineEnding + LineEnding;
   Result += "procedure TerminateScript(reason: String); overload;" + LineEnding;
   Result += "begin" + LineEnding;
   Result += "  WriteLn('[AsyncMover]: Terminating: ' + reason);" + LineEnding;
-  Result += "  begin DeleteFile(ScriptFile); TerminateScript(); end;" + LineEnding;
+  Result += "  TerminateScript();" + LineEnding;
   Result += "end;" + LineEnding + LineEnding;
   Result += "function BackupFile(filePath: String): Boolean;" + LineEnding;
   Result += "var" + LineEnding;
@@ -231,23 +252,13 @@ begin
   Result += "    for plugin in FindFiles(path, False) do" + LineEnding;
   Result += "      if IsFileLocked(plugin) then" + LineEnding;
   Result += "        Result += plugin;" + LineEnding;
-  Result += "end;" + LineEnding + LineEnding;
-  Result += "procedure KillClients();" + LineEnding;
+  Result += "end;" + LineEnding + LineEnding + LineEnding;
+  Result += "procedure KillWindowByClass(name: String);" + LineEnding;
   Result += "var" + LineEnding;
   Result += "  window: TOSWindow;" + LineEnding;
   Result += "begin" + LineEnding;
-  Result += "  for window in GetWindows().GetByClass('SunAwtCanvas') do" + LineEnding;
+  Result += "  for window in GetWindows().GetByClass(name) do" + LineEnding;
   Result += "    window.Kill();" + LineEnding;
-  Result += "end;" + LineEnding + LineEnding;
-  Result += "procedure KillJLaunchers();" + LineEnding;
-  Result += "var" + LineEnding;
-  Result += "  window: TOSWindow;" + LineEnding;
-  Result += "begin" + LineEnding;
-  Result += "  for window in GetWindows().GetByClass('Jagex Launcher') do" + LineEnding;
-  Result += "  begin" + LineEnding;
-  Result += "    window.Kill();" + LineEnding;
-  Result += "    Break;" + LineEnding;
-  Result += "  end;" + LineEnding;
   Result += "end;" + LineEnding + LineEnding;
   Result += "procedure KillSimbas();" + LineEnding;
   Result += "var" + LineEnding;
@@ -261,8 +272,8 @@ begin
   Result += "    TerminateScript('You need to close all Simba windows to update SRL.');" + LineEnding + LineEnding;
   Result += "  for win in simbas do" + LineEnding;
   Result += "    win.Kill();" + LineEnding + LineEnding;
-  Result += "  begin DeleteFile(ScriptFile); TerminateScript(); end;" + LineEnding;
-  Result += "end;" + LineEnding + LineEnding;
+  Result += "  TerminateScript();" + LineEnding;
+  Result += "end;" + LineEnding + LineEnding + LineEnding;
   Result += "procedure UnlockPlugins();" + LineEnding;
   Result += "var" + LineEnding;
   Result += "  locked: TStringArray;" + LineEnding;
@@ -274,11 +285,11 @@ begin
   Result += "  if MessageDlg('Close RuneScape', 'RS Clients need to be closed to update this package.'," + LineEnding;
   Result += "     TMsgDlgType.mtConfirmation, [mbOK, mbAbort]) = 3 then" + LineEnding;
   Result += "    TerminateScript('You need to close your RS Clients to update SRL.');" + LineEnding + LineEnding;
-  Result += "  KillClients();" + LineEnding + LineEnding;
+  Result += "  KillWindowByClass('SunAwtCanvas');" + LineEnding + LineEnding;
   Result += "  for plugin in locked do" + LineEnding;
   Result += "    if IsFileLocked(plugin) then" + LineEnding;
   Result += "    begin" + LineEnding;
-  Result += "      KillJLaunchers();" + LineEnding;
+  Result += "      KillWindowByClass('Jagex Launcher');" + LineEnding;
   Result += "      Break;" + LineEnding;
   Result += "    end;" + LineEnding + LineEnding;
   Result += "  for plugin in locked do" + LineEnding;
@@ -339,16 +350,22 @@ begin
   Result += "  DelDirectory(origin + pkg);" + LineEnding;
   Result += "end;" + LineEnding + LineEnding;
   Result += "var" + LineEnding;
-  Result += "  pkg: String;" + LineEnding;
+  Result += "  pkg: String;" + LineEnding + LineEnding;
+  Result += "procedure Free();" + LineEnding;
+  Result += "begin" + LineEnding;
+  Result += "  CloseFile(CreateFile({$macro CURRENT_DIRECTORY} + 'mover-' + LowerCase(pkg) + '.done'));" + LineEnding;
+  Result += "end;" + LineEnding + LineEnding;
   Result += "begin" + LineEnding;
   Result += "  pkg := GetProcessParameter('pkg');" + LineEnding + LineEnding;
+  Result += "  if FileExists({$macro CURRENT_DIRECTORY} + 'mover-' + LowerCase(pkg) + '.done') then" + LineEnding;
+  Result += "    DeleteFile({$macro CURRENT_DIRECTORY} + 'mover-' + LowerCase(pkg) + '.done');" + LineEnding + LineEnding;
+  Result += "  AddOnTerminate(@Free);" + LineEnding + LineEnding;
   Result += "  case LowerCase(pkg) of" + LineEnding;
   Result += "    'srl-t', 'srlt', 'srl': UnlockPlugins();" + LineEnding;
   Result += "  end;" + LineEnding + LineEnding;
-  Result += "  WriteLn('[AsyncMover]: Moving ', pkg, ' files, this will take a few seconds.');" + LineEnding;
+  Result += "  WriteLn('[AsyncMover]: Moving ', pkg, ' files, this will take a while.');" + LineEnding;
   Result += "  MoveFiles(GetProcessParameter('origin'), pkg);" + LineEnding;
-  Result += "end;" + LineEnding + LineEnding + LineEnding;
-  Result += "begin DeleteFile(ScriptFile); end;" + LineEnding;
+  Result += "end;" + LineEnding;
 end;
 
 procedure TWaspUpdater.Update(pkg: String; caption, button: TComponent);
