@@ -1,5 +1,5 @@
 {$DEFINE SCRIPT_ID := 'd563990c-4d31-4aba-b214-18e69171ed5e'}
-{$DEFINE SCRIPT_REVISION := '21'}
+{$DEFINE SCRIPT_REVISION := '22'}
 
 {.$DEFINE DEVELOPER_MODE}
 
@@ -2209,7 +2209,7 @@ begin
   Result += "  timeout.setEnabled(False);" + LineEnding;
   Result += "  timeout.Free();" + LineEnding;
   Result += "  FreeHTTPClient(http);" + LineEnding;
-  Result += "  CloseFile(CreateFile(Scripts/launcher/' + 'downloader-' + LowerCase(pkg) + '.done'));" + LineEnding;
+  Result += "  CloseFile(CreateFile({$MACRO CURRENT_DIRECTORY} + 'downloader-' + LowerCase(pkg) + '.done'));" + LineEnding;
   Result += "end;" + LineEnding + LineEnding;
   Result += "procedure RunTimer();" + LineEnding;
   Result += "begin" + LineEnding;
@@ -2219,8 +2219,8 @@ begin
   Result += "begin" + LineEnding;
   Result += "  url := GetProcessParameter('url');" + LineEnding;
   Result += "  pkg := GetProcessParameter('pkg');" + LineEnding + LineEnding;
-  Result += "  if FileExists(Scripts/launcher/' + 'downloader-' + LowerCase(pkg) + '.done') then" + LineEnding;
-  Result += "    DeleteFile(Scripts/launcher/' + 'downloader-' + LowerCase(pkg) + '.done');" + LineEnding + LineEnding;
+  Result += "  if FileExists({$MACRO CURRENT_DIRECTORY} + 'downloader-' + LowerCase(pkg) + '.done') then" + LineEnding;
+  Result += "    DeleteFile({$MACRO CURRENT_DIRECTORY} + 'downloader-' + LowerCase(pkg) + '.done');" + LineEnding + LineEnding;
   Result += "  timeout.Init(nil);" + LineEnding;
   Result += "  timeout.SetName('downloader_timeout');" + LineEnding;
   Result += "  timeout.SetInterval(20000);" + LineEnding;
@@ -4133,13 +4133,13 @@ begin
   Result += "  path, name: String;" + LineEnding + LineEnding;
   Result += "procedure Free();" + LineEnding;
   Result += "begin" + LineEnding;
-  Result += "  CloseFile(CreateFile(Scripts/launcher/' + 'unzipper-' + LowerCase(name) + '.done'));" + LineEnding;
+  Result += "  CloseFile(CreateFile({$MACRO CURRENT_DIRECTORY} + 'unzipper-' + LowerCase(name) + '.done'));" + LineEnding;
   Result += "end;" + LineEnding + LineEnding;
   Result += "begin" + LineEnding;
   Result += "  path := GetProcessParameter('path');" + LineEnding;
   Result += "  name := GetProcessParameter('name');" + LineEnding + LineEnding;
-  Result += "  if FileExists(Scripts/launcher/' + 'downloader-' + LowerCase(name) + '.done') then" + LineEnding;
-  Result += "    DeleteFile(Scripts/launcher/' + 'downloader-' + LowerCase(name) + '.done');" + LineEnding + LineEnding;
+  Result += "  if FileExists({$MACRO CURRENT_DIRECTORY} + 'downloader-' + LowerCase(name) + '.done') then" + LineEnding;
+  Result += "    DeleteFile({$MACRO CURRENT_DIRECTORY} + 'downloader-' + LowerCase(name) + '.done');" + LineEnding + LineEnding;
   Result += "  AddOnTerminate(@Free);" + LineEnding + LineEnding;
   Result += "  WriteLn('[AsyncUnzipper]: Unzipping ', name, ', this might take a while.');" + LineEnding + LineEnding;
   Result += "  try" + LineEnding;
@@ -4309,12 +4309,12 @@ begin
   Result += "  pkg: String;" + LineEnding + LineEnding;
   Result += "procedure Free();" + LineEnding;
   Result += "begin" + LineEnding;
-  Result += "  CloseFile(CreateFile(Scripts/launcher/' + 'mover-' + LowerCase(pkg) + '.done'));" + LineEnding;
+  Result += "  CloseFile(CreateFile({$MACRO CURRENT_DIRECTORY} + 'mover-' + LowerCase(pkg) + '.done'));" + LineEnding;
   Result += "end;" + LineEnding + LineEnding;
   Result += "begin" + LineEnding;
   Result += "  pkg := GetProcessParameter('pkg');" + LineEnding + LineEnding;
-  Result += "  if FileExists(Scripts/launcher/' + 'mover-' + LowerCase(pkg) + '.done') then" + LineEnding;
-  Result += "    DeleteFile(Scripts/launcher/' + 'mover-' + LowerCase(pkg) + '.done');" + LineEnding + LineEnding;
+  Result += "  if FileExists({$MACRO CURRENT_DIRECTORY} + 'mover-' + LowerCase(pkg) + '.done') then" + LineEnding;
+  Result += "    DeleteFile({$MACRO CURRENT_DIRECTORY} + 'mover-' + LowerCase(pkg) + '.done');" + LineEnding + LineEnding;
   Result += "  AddOnTerminate(@Free);" + LineEnding + LineEnding;
   Result += "  case LowerCase(pkg) of" + LineEnding;
   Result += "    'srl-t', 'srlt', 'srl': UnlockPlugins();" + LineEnding;
