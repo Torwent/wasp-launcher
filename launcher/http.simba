@@ -209,7 +209,7 @@ begin
   Result += "  http: Int32;" + LineEnding;
   Result += "  url, pkg: String;" + LineEnding;
   Result += "  t: UInt64;" + LineEnding + LineEnding;
-  Result += "procedure OnTimer(sender: TObject);" + LineEnding;
+  Result += "procedure OnTimer({$H-}sender: TObject);{$H+}" + LineEnding;
   Result += "begin" + LineEnding;
   Result += "  WriteLn('[AsyncDownloader]: Downloading ', pkg, '...');" + LineEnding + LineEnding;
   Result += "  if GetTickCount() > t then" + LineEnding;
