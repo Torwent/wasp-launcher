@@ -18,54 +18,6 @@ begin
   WriteLn(SRL.TimeStamp() + ':[' + name + ']: ' + text);
 end;
 
-
-procedure DeleteAsyncFile(name: String);
-var
-  path: String;
-begin
-  if not name.EndsWith('.simba') then
-    name += '.simba';
-  path := LAUNCHER_DATA + 'async' + DirectorySeparator + name;
-  if FileExists(path) and not DeleteFile(path) then
-    TerminateScript('Failed to delete async file: ' + name);
-end;
-
-procedure WriteAsyncFile(name, content: String; autoDelete: Boolean = True);
-var
-  path: String;
-begin
-  if not name.EndsWith('.simba') then
-    name += '.simba';
-  DeleteAsyncFile(name);
-
-  path := LAUNCHER_DATA + 'async' + DirectorySeparator;
-
-  if not ForceDirectories(path) then
-    TerminateScript('Failed to create async files directory.');
-
-  if autoDelete then
-  begin
-    content := content.Replace('TerminateScript();', 'begin DeleteFile(ScriptFile); TerminateScript(); end;');
-    content := content.Replace('TerminateScript;', 'begin DeleteFile(ScriptFile); TerminateScript(); end;');
-    content := content.Replace('FreeHTTPClient(httpClient); begin DeleteFile(ScriptFile); TerminateScript(); end;', 'DeleteFile(ScriptFile); FreeHTTPClient(httpClient); TerminateScript();');
-    content += LineEnding + LineEnding + 'begin DeleteFile(ScriptFile); end;';
-  end;
-
-  if not WriteFileContents(path + name, content, False) then
-    TerminateScript('Failed to write async file: ' + name);
-end;
-
-procedure RunAsyncFile(name: String; params: TStringArray);
-var
-  path: String;
-begin
-  if not name.EndsWith('.simba') then
-    name += '.simba';
-  path := LAUNCHER_DATA + 'async' + DirectorySeparator;
-
-  RunScript(path + name, params);
-end;
-
 function TJSONArray.High(): Int32;
 begin
   if Self = nil then

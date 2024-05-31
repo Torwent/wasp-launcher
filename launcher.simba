@@ -1,5 +1,5 @@
 {$DEFINE SCRIPT_ID := 'd563990c-4d31-4aba-b214-18e69171ed5e'}
-{$DEFINE SCRIPT_REVISION := '23'}
+{$DEFINE SCRIPT_REVISION := '24'}
 
 {.$DEFINE DEVELOPER_MODE}
 
@@ -286,6 +286,129 @@ end;
 {$ENDIF}
 
 
+{$IFNDEF SRL_FILE_INCLUDED}        
+{$DEFINE SRL_FILE_INCLUDED}
+
+
+function BackupFile(filePath: String): Boolean;
+var
+  f: Int32;
+  contents: String;
+begin
+  f := OpenFile(filePath, False);
+  if not ReadFileString(f, contents, FileSize(f)) then
+    Exit;
+
+  CloseFile(f);
+  Result := WriteFileContents(filePath + '.bak', contents, False);
+end;
+
+function RestoreFile(filePath: String): Boolean;
+var
+  f: Int32;
+  contents: String;
+begin
+  f := OpenFile(filePath + '.bak', False);
+  if not ReadFileString(f, contents, FileSize(f)) then
+    Exit;
+
+  CloseFile(f);
+  Result := WriteFileContents(filePath, contents, False);
+  DeleteFile(filePath + '.bak');
+end;
+
+function DirectoryIsEmpty(const directory: String): Boolean;
+begin
+  Result := (FindFiles(directory, False) = []) and (FindDirectories(directory, False) = []);
+end;
+
+function DeleteFiles(const directory: String; skip: TStringArray = []): Boolean;
+  function _SkipFile(dir: String): Boolean;
+  var
+    s: String;
+  begin
+    for s in skip do
+      if dir.Contains(s) then
+        Exit(True);
+  end;
+
+var
+  f, s: String;
+begin
+  for f in FindFiles(directory, True) do
+  begin
+    if _SkipFile(f) then
+      Continue;
+
+    if not DeleteFile(f) then
+      Exit;
+  end;
+
+  Result := True;
+end;
+
+function DeleteSubDirectories(const directory: String; deleteRoot: Boolean; skip: TStringArray = []): Boolean;
+
+  function _SkipDirectory(dir: String): Boolean;
+  var
+    s: String;
+  begin
+    for s in skip do
+      if dir.Contains(s) then
+        Exit(True);
+  end;
+
+  function _GetParent(dir: String): String;
+  var
+    strings: TStringArray;
+  begin
+    strings := dir.Explode(DirectorySeparator);
+    SetLength(strings, High(strings));
+    Result := strings.Merge(DirectorySeparator);
+  end;
+
+var
+  directories, parents: TStringArray;
+  i: Int32;
+begin
+  directories := FindDirectories(directory, True);
+
+  while directories <> [] do
+  begin
+    for i := High(directories) downto 0 do
+    begin
+      if _SkipDirectory(directories[i]) then
+      begin
+        parents += _GetParent(directories[i]);
+        Delete(directories, i, 1);
+        deleteRoot := False;
+        Continue;
+      end;
+
+      if not parents.Contains(directories[i]) and not DeleteDirectory(directories[i], False) then
+        Exit;
+      Delete(directories, i, 1);
+    end;
+  end;
+
+  Result := not deleteRoot or DeleteDirectory(directory, False);
+end;
+
+function RMDir(const directory: String; deleteRoot: Boolean; skip: TStringArray = []): Boolean;
+begin
+  if not DeleteFiles(directory, skip) then
+    Exit;
+
+  Result := DeleteSubDirectories(directory, deleteRoot, skip);
+end;
+
+function RMDir(path: String): Boolean; overload;
+begin
+  Result := RMDir(path, True, []);
+end;
+
+
+
 {$IFNDEF SRL_STRING_INCLUDED}      
 {$DEFINE SRL_STRING_INCLUDED}
 
@@ -306,7 +429,7 @@ function String.Len(): Int32; constref;
 ```
 Returns the length of the string
 *)
-function String.Len: Int32; constref;
+function String.Len(): Int32; constref;
 begin
   Result := Length(Self);
 end;
@@ -547,6 +670,20 @@ Replace [all by default] occurrences of the given SubStr with with ReplaceStr
 function String.Replace(SubStr, ReplaceStr: String; Flags: TReplaceFlags=[rfReplaceAll]): String; constref;
 begin
   Result := StringReplace(Self, SubStr, ReplaceStr, Flags);
+end;
+
+function String.ReplaceAll(SubStrReplaceStrArray: array of TStringArray; Flags: TReplaceFlags=[rfReplaceAll]): String; constref;
+var
+  i: Int32;
+begin
+  Result := Self;
+  for i := 0 to High(SubStrReplaceStrArray) do
+  begin
+    if Length(SubStrReplaceStrArray[i]) <> 2 then
+      raise 'SubStrReplaceStrArray children should have only 2 elements, a SubStr and a ReplaceStr.';
+
+    Result := StringReplace(Result, SubStrReplaceStrArray[i,0], SubStrReplaceStrArray[i,1], Flags);
+  end;
 end;
 
 
@@ -1366,54 +1503,6 @@ begin
   WriteLn(SRL.TimeStamp() + ':[' + name + ']: ' + text);
 end;
 
-
-procedure DeleteAsyncFile(name: String);
-var
-  path: String;
-begin
-  if not name.EndsWith('.simba') then
-    name += '.simba';
-  path := LAUNCHER_DATA + 'async' + DirectorySeparator + name;
-  if FileExists(path) and not DeleteFile(path) then
-    TerminateScript('Failed to delete async file: ' + name);
-end;
-
-procedure WriteAsyncFile(name, content: String; autoDelete: Boolean = True);
-var
-  path: String;
-begin
-  if not name.EndsWith('.simba') then
-    name += '.simba';
-  DeleteAsyncFile(name);
-
-  path := LAUNCHER_DATA + 'async' + DirectorySeparator;
-
-  if not ForceDirectories(path) then
-    TerminateScript('Failed to create async files directory.');
-
-  if autoDelete then
-  begin
-    content := content.Replace('TerminateScript();', 'begin DeleteFile(ScriptFile); TerminateScript(); end;');
-    content := content.Replace('TerminateScript;', 'begin DeleteFile(ScriptFile); TerminateScript(); end;');
-    content := content.Replace('FreeHTTPClient(httpClient); begin DeleteFile(ScriptFile); TerminateScript(); end;', 'DeleteFile(ScriptFile); FreeHTTPClient(httpClient); TerminateScript();');
-    content += LineEnding + LineEnding + 'begin DeleteFile(ScriptFile); end;';
-  end;
-
-  if not WriteFileContents(path + name, content, False) then
-    TerminateScript('Failed to write async file: ' + name);
-end;
-
-procedure RunAsyncFile(name: String; params: TStringArray);
-var
-  path: String;
-begin
-  if not name.EndsWith('.simba') then
-    name += '.simba';
-  path := LAUNCHER_DATA + 'async' + DirectorySeparator;
-
-  RunScript(path + name, params);
-end;
-
 function TJSONArray.High(): Int32;
 begin
   if Self = nil then
@@ -1470,6 +1559,386 @@ var
 {$ENDIF}
 
 
+{$IFNDEF WS_ASYNC_INCLUDED}        
+{$DEFINE WS_ASYNC_INCLUDED}
+
+
+type
+  EMonitorState = (NONE, DOWNLOAD, UNZIP, CLEAN);
+
+  TMonitor = record
+    Package: String;
+    CurrentFile: String;
+    State: EMonitorState;
+    IsSetup: Boolean;
+
+    Caption: TLabel;
+    Button: TButton;
+    Timer: TTimer;
+  end;
+
+  TWaspAsync = record
+    Path: String;
+  end;
+
+procedure TWaspAsync.Write(name, content: String);
+begin
+  if not WriteFileContents(Self.Path + name, content, False) then
+    TerminateScript('WaspAsync: Failed to write async file: ' + name);
+end;
+
+procedure TWaspAsync.Run(name: String; params: TStringArray);
+begin
+  if not name.EndsWith('.simba') then
+    name += '.simba';
+  RunScript(Self.Path + name, params);
+end;
+
+
+function TWaspAsync.GetDownloaderContent(): String;
+begin
+  Result += "var" + LineEnding;
+  Result += "  timeout: TTimer;" + LineEnding;
+  Result += "  http: Int32;" + LineEnding;
+  Result += "  url, pkg: String;" + LineEnding;
+  Result += "  t: UInt64;" + LineEnding + LineEnding;
+  Result += "procedure OnTimer({$H-}sender: TObject);{$H+}" + LineEnding;
+  Result += "begin" + LineEnding;
+  Result += "  WriteLn('[AsyncDownloader]: Downloading ', pkg, '...');" + LineEnding + LineEnding;
+  Result += "  if GetTickCount() > t then" + LineEnding;
+  Result += "  begin" + LineEnding;
+  Result += "    WriteLn('[AsyncDownloader]: If this has taken over 5 minutes please restart Simba.');" + LineEnding;
+  Result += "    WriteLn('[AsyncDownloader]: If you are rate limited you need to wait 1 hour.');" + LineEnding;
+  Result += "    t := GetTickCount() + 120000;" + LineEnding;
+  Result += "  end;" + LineEnding;
+  Result += "end;" + LineEnding + LineEnding;
+  Result += "procedure Free();" + LineEnding;
+  Result += "begin" + LineEnding;
+  Result += "  timeout.setEnabled(False);" + LineEnding;
+  Result += "  timeout.Free();" + LineEnding;
+  Result += "  FreeHTTPClient(http);" + LineEnding;
+  Result += "  CloseFile(CreateFile({$MACRO CURRENT_DIRECTORY} + 'downloader-' + LowerCase(pkg) + '.done'));" + LineEnding;
+  Result += "end;" + LineEnding + LineEnding;
+  Result += "procedure RunTimer();" + LineEnding;
+  Result += "begin" + LineEnding;
+  Result += "  timeout.setOnTimer(@OnTimer);" + LineEnding;
+  Result += "  timeout.setEnabled(True);" + LineEnding;
+  Result += "end;" + LineEnding + LineEnding;
+  Result += "begin" + LineEnding;
+  Result += "  url := GetProcessParameter('url');" + LineEnding;
+  Result += "  pkg := GetProcessParameter('pkg');" + LineEnding + LineEnding;
+  Result += "  if FileExists({$MACRO CURRENT_DIRECTORY} + 'downloader-' + LowerCase(pkg) + '.done') then" + LineEnding;
+  Result += "    DeleteFile({$MACRO CURRENT_DIRECTORY} + 'downloader-' + LowerCase(pkg) + '.done');" + LineEnding + LineEnding;
+  Result += "  timeout.Init(nil);" + LineEnding;
+  Result += "  timeout.SetName('downloader_timeout');" + LineEnding;
+  Result += "  timeout.SetInterval(20000);" + LineEnding;
+  Result += "  http := InitializeHTTPClient(True);" + LineEnding;
+  Result += "  Sync(@RunTimer);" + LineEnding;
+  Result += "  AddOnTerminate(@Free);" + LineEnding + LineEnding;
+  Result += "  WriteLn('[AsyncDownloader]: Downloading ', pkg, ', this might take a while.');" + LineEnding;
+  Result += "  t := GetTickCount() + 120000;" + LineEnding + LineEnding;
+  Result += "  try" + LineEnding;
+  Result += "    if GetHTTPPageEx(http, url, GetProcessParameter('destination')) = 200 then" + LineEnding;
+  Result += "      WriteLn('[AsyncDownloader]: ' + pkg + ' downloaded.')" + LineEnding;
+  Result += "    else" + LineEnding;
+  Result += "      WriteLn('[AsyncDownloader]: Failed to download: ' + url);" + LineEnding;
+  Result += "  except" + LineEnding;
+  Result += "    WriteLn('[AsyncDownloader]: Error: ', GetExceptionMessage());" + LineEnding;
+  Result += "  end;" + LineEnding;
+  Result += "end;" + LineEnding;
+end;
+
+function TWaspAsync.GetUnzipperContent(): String;
+begin
+  Result += "var" + LineEnding;
+  Result += "  path, name: String;" + LineEnding + LineEnding;
+  Result += "procedure Free();" + LineEnding;
+  Result += "begin" + LineEnding;
+  Result += "  CloseFile(CreateFile({$MACRO CURRENT_DIRECTORY} + 'unzipper-' + LowerCase(name) + '.done'));" + LineEnding;
+  Result += "end;" + LineEnding + LineEnding;
+  Result += "begin" + LineEnding;
+  Result += "  path := GetProcessParameter('path');" + LineEnding;
+  Result += "  name := GetProcessParameter('name');" + LineEnding + LineEnding;
+  Result += "  if FileExists({$MACRO CURRENT_DIRECTORY} + 'downloader-' + LowerCase(name) + '.done') then" + LineEnding;
+  Result += "    DeleteFile({$MACRO CURRENT_DIRECTORY} + 'downloader-' + LowerCase(name) + '.done');" + LineEnding + LineEnding;
+  Result += "  AddOnTerminate(@Free);" + LineEnding + LineEnding;
+  Result += "  WriteLn('[AsyncUnzipper]: Unzipping ', name, ', this might take a while.');" + LineEnding + LineEnding;
+  Result += "  try" + LineEnding;
+  Result += "    UnZipFile(path + name + '.zip', path + name);" + LineEnding;
+  Result += "    DeleteFile(path + name + '.zip');" + LineEnding;
+  Result += "  except" + LineEnding;
+  Result += "    WriteLn('[AsyncUnzipper]: Error: ', GetExceptionMessage());" + LineEnding;
+  Result += "  end;" + LineEnding;
+  Result += "end;" + LineEnding;
+end;
+
+function TWaspAsync.GetMoverContent(): String;
+begin
+  Result += "const" + LineEnding;
+  Result += "  SEP = DirectorySeparator;" + LineEnding + LineEnding;
+  Result += "procedure TerminateScript(reason: String); overload;" + LineEnding;
+  Result += "begin" + LineEnding;
+  Result += "  WriteLn('[AsyncMover]: Terminating: ' + reason);" + LineEnding;
+  Result += "  TerminateScript();" + LineEnding;
+  Result += "end;" + LineEnding + LineEnding + LineEnding;
+  Result += "function TStringArray.Find(const value: String): Integer; constref;" + LineEnding;
+  Result += "begin" + LineEnding;
+  Result += "  for Result := 0 to High(Self) do" + LineEnding;
+  Result += "    if value = Self[Result] then" + LineEnding;
+  Result += "      Exit;" + LineEnding;
+  Result += "  Result := -1;" + LineEnding;
+  Result += "end;" + LineEnding + LineEnding;
+  Result += "function TStringArray.Contains(const value: String): Boolean; constref;" + LineEnding;
+  Result += "begin" + LineEnding;
+  Result += "  Result := Self.Find(value) > -1;" + LineEnding;
+  Result += "end;" + LineEnding + LineEnding;
+  Result += "function TStringArray.Merge(glue:String=''): String; constref;" + LineEnding;
+  Result += "var" + LineEnding;
+  Result += "  i:Int32;" + LineEnding;
+  Result += "begin" + LineEnding;
+  Result += "  if Length(Self) = 0 then" + LineEnding;
+  Result += "    Exit();" + LineEnding + LineEnding;
+  Result += "  Result := Self[0];" + LineEnding;
+  Result += "  for i:=1 to High(Self) do" + LineEnding;
+  Result += "    Result += glue + Self[i];" + LineEnding;
+  Result += "end;" + LineEnding + LineEnding;
+  Result += "function BackupFile(filePath: String): Boolean;" + LineEnding;
+  Result += "var" + LineEnding;
+  Result += "  f: Int32;" + LineEnding;
+  Result += "  contents: String;" + LineEnding;
+  Result += "begin" + LineEnding;
+  Result += "  f := OpenFile(filePath, False);" + LineEnding;
+  Result += "  if not ReadFileString(f, contents, FileSize(f)) then" + LineEnding;
+  Result += "    Exit;" + LineEnding + LineEnding;
+  Result += "  CloseFile(f);" + LineEnding;
+  Result += "  Result := WriteFileContents(filePath + '.bak', contents, False);" + LineEnding;
+  Result += "end;" + LineEnding + LineEnding;
+  Result += "function RestoreFile(filePath: String): Boolean;" + LineEnding;
+  Result += "var" + LineEnding;
+  Result += "  f: Int32;" + LineEnding;
+  Result += "  contents: String;" + LineEnding;
+  Result += "begin" + LineEnding;
+  Result += "  f := OpenFile(filePath + '.bak', False);" + LineEnding;
+  Result += "  if not ReadFileString(f, contents, FileSize(f)) then" + LineEnding;
+  Result += "    Exit;" + LineEnding + LineEnding;
+  Result += "  CloseFile(f);" + LineEnding;
+  Result += "  Result := WriteFileContents(filePath, contents, False);" + LineEnding;
+  Result += "  DeleteFile(filePath + '.bak');" + LineEnding;
+  Result += "end;" + LineEnding + LineEnding;
+  Result += "function DirectoryIsEmpty(const directory: String): Boolean;" + LineEnding;
+  Result += "begin" + LineEnding;
+  Result += "  Result := (FindFiles(directory, False) = []) and (FindDirectories(directory, False) = []);" + LineEnding;
+  Result += "end;" + LineEnding + LineEnding;
+  Result += "function DeleteFiles(const directory: String; skip: TStringArray = []): Boolean;" + LineEnding;
+  Result += "  function _SkipFile(dir: String): Boolean;" + LineEnding;
+  Result += "  var" + LineEnding;
+  Result += "    s: String;" + LineEnding;
+  Result += "  begin" + LineEnding;
+  Result += "    for s in skip do" + LineEnding;
+  Result += "      if Pos(s, dir) > 0 then" + LineEnding;
+  Result += "        Exit(True);" + LineEnding;
+  Result += "  end;" + LineEnding + LineEnding;
+  Result += "var" + LineEnding;
+  Result += "  f: String;" + LineEnding;
+  Result += "begin" + LineEnding;
+  Result += "  for f in FindFiles(directory, True) do" + LineEnding;
+  Result += "  begin" + LineEnding;
+  Result += "    if _SkipFile(f) then" + LineEnding;
+  Result += "      Continue;" + LineEnding + LineEnding;
+  Result += "    if not DeleteFile(f) then" + LineEnding;
+  Result += "      Exit;" + LineEnding;
+  Result += "  end;" + LineEnding + LineEnding;
+  Result += "  Result := True;" + LineEnding;
+  Result += "end;" + LineEnding + LineEnding;
+  Result += "function DeleteSubDirectories(const directory: String; deleteRoot: Boolean; skip: TStringArray = []): Boolean;" + LineEnding + LineEnding;
+  Result += "  function _SkipDirectory(dir: String): Boolean;" + LineEnding;
+  Result += "  var" + LineEnding;
+  Result += "    s: String;" + LineEnding;
+  Result += "  begin" + LineEnding;
+  Result += "    for s in skip do" + LineEnding;
+  Result += "      if Pos(s, dir) > 0 then" + LineEnding;
+  Result += "        Exit(True);" + LineEnding;
+  Result += "  end;" + LineEnding + LineEnding;
+  Result += "  function _GetParent(dir: String): String;" + LineEnding;
+  Result += "  var" + LineEnding;
+  Result += "    strings: TStringArray;" + LineEnding;
+  Result += "  begin" + LineEnding;
+  Result += "    strings := Explode(DirectorySeparator, dir);" + LineEnding;
+  Result += "    SetLength(strings, High(strings));" + LineEnding;
+  Result += "    Result := strings.Merge(DirectorySeparator);" + LineEnding;
+  Result += "  end;" + LineEnding + LineEnding;
+  Result += "var" + LineEnding;
+  Result += "  directories, parents: TStringArray;" + LineEnding;
+  Result += "  i: Int32;" + LineEnding;
+  Result += "begin" + LineEnding;
+  Result += "  directories := FindDirectories(directory, True);" + LineEnding + LineEnding;
+  Result += "  while directories <> [] do" + LineEnding;
+  Result += "  begin" + LineEnding;
+  Result += "    for i := High(directories) downto 0 do" + LineEnding;
+  Result += "    begin" + LineEnding;
+  Result += "      if _SkipDirectory(directories[i]) then" + LineEnding;
+  Result += "      begin" + LineEnding;
+  Result += "        parents += _GetParent(directories[i]);" + LineEnding;
+  Result += "        Delete(directories, i, 1);" + LineEnding;
+  Result += "        deleteRoot := False;" + LineEnding;
+  Result += "        Continue;" + LineEnding;
+  Result += "      end;" + LineEnding + LineEnding;
+  Result += "      if not parents.Contains(directories[i]) and not DeleteDirectory(directories[i], False) then" + LineEnding;
+  Result += "        Exit;" + LineEnding;
+  Result += "      Delete(directories, i, 1);" + LineEnding;
+  Result += "    end;" + LineEnding;
+  Result += "  end;" + LineEnding + LineEnding;
+  Result += "  Result := not deleteRoot or DeleteDirectory(directory, False);" + LineEnding;
+  Result += "end;" + LineEnding + LineEnding;
+  Result += "function RMDir(const directory: String; deleteRoot: Boolean; skip: TStringArray = []): Boolean;" + LineEnding;
+  Result += "begin" + LineEnding;
+  Result += "  if not DeleteFiles(directory, skip) then" + LineEnding;
+  Result += "    Exit;" + LineEnding + LineEnding;
+  Result += "  Result := DeleteSubDirectories(directory, deleteRoot, skip);" + LineEnding;
+  Result += "end;" + LineEnding + LineEnding + LineEnding;
+  Result += "function IsFileLocked(path: String): Boolean;" + LineEnding;
+  Result += "begin" + LineEnding;
+  Result += "  if not FileExists(path) then" + LineEnding;
+  Result += "    Exit;" + LineEnding + LineEnding;
+  Result += "  if not BackupFile(path) then" + LineEnding;
+  Result += "    TerminateScript('Failed to backup file: ' + path);" + LineEnding + LineEnding;
+  Result += "  Result := not DeleteFile(path);" + LineEnding + LineEnding;
+  Result += "  if Result then" + LineEnding;
+  Result += "    DeleteFile(path + '.bak')" + LineEnding;
+  Result += "  else if not RestoreFile(path) then" + LineEnding;
+  Result += "    TerminateScript('Failed to restore file: ' + path);" + LineEnding;
+  Result += "end;" + LineEnding + LineEnding;
+  Result += "function FindLockedPlugins(): TStringArray;" + LineEnding;
+  Result += "const" + LineEnding;
+  Result += "  PATHS = [" + LineEnding;
+  Result += "    IncludePath + 'SRL'   + SEP + 'plugins' + SEP + 'libremoteinput' + SEP," + LineEnding;
+  Result += "    IncludePath + 'SRL-T' + SEP + 'plugins' + SEP + 'libremoteinput' + SEP" + LineEnding;
+  Result += "  ];" + LineEnding;
+  Result += "var" + LineEnding;
+  Result += "  path, plugin: String;" + LineEnding;
+  Result += "begin" + LineEnding;
+  Result += "  for path in PATHS do" + LineEnding;
+  Result += "    for plugin in FindFiles(path, False) do" + LineEnding;
+  Result += "      if IsFileLocked(plugin) then" + LineEnding;
+  Result += "        Result += plugin;" + LineEnding;
+  Result += "end;" + LineEnding + LineEnding + LineEnding;
+  Result += "procedure KillWindowByClass(name: String);" + LineEnding;
+  Result += "var" + LineEnding;
+  Result += "  window: TOSWindow;" + LineEnding;
+  Result += "begin" + LineEnding;
+  Result += "  for window in GetWindows().GetByClass(name) do" + LineEnding;
+  Result += "    window.Kill();" + LineEnding;
+  Result += "end;" + LineEnding + LineEnding;
+  Result += "procedure KillSimbas();" + LineEnding;
+  Result += "var" + LineEnding;
+  Result += "  windows, simbas: TOSWindowArray;" + LineEnding;
+  Result += "  win: TOSWindow;" + LineEnding;
+  Result += "begin" + LineEnding;
+  Result += "  windows := GetWindows();" + LineEnding;
+  Result += "  simbas := windows.GetByTitleAndClass('Output,File Browser,Editor,Function List', 'Window');" + LineEnding + LineEnding;
+  Result += "  if MessageDlg('Close Simba', 'Simba needs to be restarted.'," + LineEnding;
+  Result += "     TMsgDlgType.mtConfirmation, [mbOK, mbAbort]) = 3 then" + LineEnding;
+  Result += "    TerminateScript('You need to close all Simba windows to update SRL.');" + LineEnding + LineEnding;
+  Result += "  for win in simbas do" + LineEnding;
+  Result += "    win.Kill();" + LineEnding + LineEnding;
+  Result += "  TerminateScript();" + LineEnding;
+  Result += "end;" + LineEnding + LineEnding + LineEnding;
+  Result += "procedure UnlockPlugins();" + LineEnding;
+  Result += "var" + LineEnding;
+  Result += "  locked: TStringArray;" + LineEnding;
+  Result += "  plugin: String;" + LineEnding;
+  Result += "begin" + LineEnding;
+  Result += "  locked := FindLockedPlugins();" + LineEnding;
+  Result += "  if locked = [] then" + LineEnding;
+  Result += "    Exit;" + LineEnding + LineEnding;
+  Result += "  if MessageDlg('Close RuneScape', 'RS Clients need to be closed to update this package.'," + LineEnding;
+  Result += "     TMsgDlgType.mtConfirmation, [mbOK, mbAbort]) = 3 then" + LineEnding;
+  Result += "    TerminateScript('You need to close your RS Clients to update SRL.');" + LineEnding + LineEnding;
+  Result += "  KillWindowByClass('SunAwtCanvas');" + LineEnding + LineEnding;
+  Result += "  for plugin in locked do" + LineEnding;
+  Result += "    if IsFileLocked(plugin) then" + LineEnding;
+  Result += "    begin" + LineEnding;
+  Result += "      KillWindowByClass('Jagex Launcher');" + LineEnding;
+  Result += "      Break;" + LineEnding;
+  Result += "    end;" + LineEnding + LineEnding;
+  Result += "  for plugin in locked do" + LineEnding;
+  Result += "    if IsFileLocked(plugin) then" + LineEnding;
+  Result += "    begin" + LineEnding;
+  Result += "      KillSimbas();" + LineEnding;
+  Result += "      Break;" + LineEnding;
+  Result += "    end;" + LineEnding;
+  Result += "end;" + LineEnding + LineEnding + LineEnding;
+  Result += "procedure MoveFiles(origin, pkg: String);" + LineEnding;
+  Result += "var" + LineEnding;
+  Result += "  paths, files: TStringArray;" + LineEnding;
+  Result += "  path, f, fPath, destination: String;" + LineEnding;
+  Result += "begin" + LineEnding;
+  Result += "  paths := GetDirectories(origin + pkg + SEP);" + LineEnding;
+  Result += "  if Length(paths) <> 1 then" + LineEnding;
+  Result += "    TerminateScript('The ' + pkg + ' download is empty or has unexpected things inside.');" + LineEnding + LineEnding;
+  Result += "  destination := IncludePath + pkg + SEP;" + LineEnding;
+  Result += "  if DirectoryExists(destination) and not RMDir(destination, True, ['.git']) then" + LineEnding;
+  Result += "    TerminateScript('Failed to delete old ' + pkg + ' library');" + LineEnding;
+  Result += "  if not ForceDirectories(destination) then" + LineEnding;
+  Result += "    TerminateScript('Failed to create path: ' + destination);" + LineEnding + LineEnding;
+  Result += "  path := origin + pkg + SEP + paths[0] + SEP;" + LineEnding;
+  Result += "  files := FindFiles(path, True);" + LineEnding + LineEnding;
+  Result += "  for f in files do" + LineEnding;
+  Result += "  begin" + LineEnding;
+  Result += "    fPath := Replace(f, path, '', [rfReplaceAll]);" + LineEnding;
+  Result += "    if Pos(SEP + '.git' + SEP, fPath) > 0 then" + LineEnding;
+  Result += "      Continue;" + LineEnding + LineEnding;
+  Result += "    if not ForceDirectories(destination + ExtractFilePath(fPath)) then" + LineEnding;
+  Result += "      TerminateScript('Failed to create path: ' + destination + ExtractFilePath(fPath));" + LineEnding + LineEnding;
+  Result += "    if not CopyFile(f, destination + fPath, False) then" + LineEnding;
+  Result += "      TerminateScript('Failed to copy file: ' + fPath);" + LineEnding + LineEnding;
+  Result += "    DeleteFile(f);" + LineEnding;
+  Result += "    if (FindFiles(ExtractFilePath(f), True) = []) and (FindDirectories(ExtractFilePath(f), True) = []) then" + LineEnding;
+  Result += "      DeleteDirectory(ExtractFilePath(f), False);" + LineEnding;
+  Result += "  end;" + LineEnding + LineEnding;
+  Result += "  RMDir(origin + pkg, True);" + LineEnding;
+  Result += "end;" + LineEnding + LineEnding;
+  Result += "var" + LineEnding;
+  Result += "  pkg: String;" + LineEnding + LineEnding;
+  Result += "procedure Free();" + LineEnding;
+  Result += "begin" + LineEnding;
+  Result += "  CloseFile(CreateFile({$MACRO CURRENT_DIRECTORY} + 'mover-' + LowerCase(pkg) + '.done'));" + LineEnding;
+  Result += "end;" + LineEnding + LineEnding;
+  Result += "begin" + LineEnding;
+  Result += "  pkg := GetProcessParameter('pkg');" + LineEnding + LineEnding;
+  Result += "  if FileExists({$MACRO CURRENT_DIRECTORY} + 'mover-' + LowerCase(pkg) + '.done') then" + LineEnding;
+  Result += "    DeleteFile({$MACRO CURRENT_DIRECTORY} + 'mover-' + LowerCase(pkg) + '.done');" + LineEnding + LineEnding;
+  Result += "  AddOnTerminate(@Free);" + LineEnding + LineEnding;
+  Result += "  case LowerCase(pkg) of" + LineEnding;
+  Result += "    'srl-t', 'srlt', 'srl': UnlockPlugins();" + LineEnding;
+  Result += "  end;" + LineEnding + LineEnding;
+  Result += "  WriteLn('[AsyncMover]: Moving ', pkg, ' files, this will take a while.');" + LineEnding;
+  Result += "  MoveFiles(GetProcessParameter('origin'), pkg);" + LineEnding;
+  Result += "end;" + LineEnding;
+end;
+
+procedure TWaspAsync.Setup();
+begin
+  Self.Path := LAUNCHER_DATA + 'async' + DirectorySeparator;
+
+  if not RMDir(Self.Path, True) then
+    TerminateScript('WaspAsync failed to delete old files. Please manually delete :' + Self.Path);
+
+  if not RMDir(LAUNCHER_DATA + 'downloads') then
+    TerminateScript('WaspAsync failed to delete old files. Please manually delete :' + LAUNCHER_DATA + 'downloads' + DirectorySeparator);
+
+  if not ForceDirectories(Self.Path) then
+    TerminateScript('WaspAsync can''t create async directory.');
+
+  Self.Write('downloader.simba', Self.GetDownloaderContent());
+  Self.Write('unzipper.simba', Self.GetUnzipperContent());
+  Self.Write('mover.simba', Self.GetMoverContent());
+end;
+
+var
+  WaspAsync: TWaspAsync;
+
+
 {$IFNDEF WS_CONFIG_INCLUDED}       
 (*
 # Config
@@ -1508,6 +1977,56 @@ begin
   Self.Remove(key);
   Result := inherited(key, value);
 end;
+
+
+function TJSONObject.toString(): String; constref; override;
+begin
+  Result := inherited;
+  Result := Result.ReplaceAll(
+              [
+                ['\u003A', ':'], ['\u0020', ' '],
+                ['},{', '},' + LineEnding + '  {'],
+                ['[{', '[' + LineEnding + '  {'],
+                ['}]', '}' + LineEnding + ']']
+              ]);
+end;
+
+function TJSONObject.toString(indentFactor: Integer): String; constref; override;
+begin
+  Result := inherited(indentFactor);
+  Result := Result.ReplaceAll(
+              [
+                ['\u003A', ':'], ['\u0020', ' '],
+                ['},{', '},' + LineEnding + '  {'],
+                ['[{', '[' + LineEnding + '  {'],
+                ['}]', '}' + LineEnding + ']']
+              ]);
+end;
+
+function TJSONArray.toString(): String; constref; override;
+begin
+  Result := inherited;
+  Result := Result.ReplaceAll(
+              [
+                ['\u003A', ':'], ['\u0020', ' '],
+                ['},{', '},' + LineEnding + '  {'],
+                ['[{', '[' + LineEnding + '  {'],
+                ['}]', '}' + LineEnding + ']']
+              ]);
+end;
+
+function TJSONArray.toString(indentFactor: Integer): String; constref; override;
+begin
+  Result := inherited(indentFactor);
+  Result := Result.ReplaceAll(
+              [
+                ['\u003A', ':'], ['\u0020', ' '],
+                ['},{', '},' + LineEnding + '  {'],
+                ['[{', '[' + LineEnding + '  {'],
+                ['}]', '}' + LineEnding + ']']
+              ]);
+end;
+
 
 type
 (*
@@ -1630,7 +2149,8 @@ procedure TConfigJSON.SaveConfig();
 begin
   if Self.JSON = nil then
     TerminateScript('You need to use TConfigJSON.Setup() before trying to save it into a config file.');
-  if not WriteFileContents(Self.Path, json.toString(2), False) then
+
+  if not WriteFileContents(Self.Path, json.ToString(1), False) then
     TerminateScript('Failed to save config.');
 end;
 
@@ -2187,59 +2707,6 @@ begin
 end;
 
 
-function TGitHubClient.GetDownloaderContent(): String;
-begin
-  Result += "var" + LineEnding;
-  Result += "  timeout: TTimer;" + LineEnding;
-  Result += "  http: Int32;" + LineEnding;
-  Result += "  url, pkg: String;" + LineEnding;
-  Result += "  t: UInt64;" + LineEnding + LineEnding;
-  Result += "procedure OnTimer({$H-}sender: TObject);{$H+}" + LineEnding;
-  Result += "begin" + LineEnding;
-  Result += "  WriteLn('[AsyncDownloader]: Downloading ', pkg, '...');" + LineEnding + LineEnding;
-  Result += "  if GetTickCount() > t then" + LineEnding;
-  Result += "  begin" + LineEnding;
-  Result += "    WriteLn('[AsyncDownloader]: If this has taken over 5 minutes please restart Simba.');" + LineEnding;
-  Result += "    WriteLn('[AsyncDownloader]: If you are rate limited you need to wait 1 hour.');" + LineEnding;
-  Result += "    t := GetTickCount() + 120000;" + LineEnding;
-  Result += "  end;" + LineEnding;
-  Result += "end;" + LineEnding + LineEnding;
-  Result += "procedure Free();" + LineEnding;
-  Result += "begin" + LineEnding;
-  Result += "  timeout.setEnabled(False);" + LineEnding;
-  Result += "  timeout.Free();" + LineEnding;
-  Result += "  FreeHTTPClient(http);" + LineEnding;
-  Result += "  CloseFile(CreateFile({$MACRO CURRENT_DIRECTORY} + 'downloader-' + LowerCase(pkg) + '.done'));" + LineEnding;
-  Result += "end;" + LineEnding + LineEnding;
-  Result += "procedure RunTimer();" + LineEnding;
-  Result += "begin" + LineEnding;
-  Result += "  timeout.setOnTimer(@OnTimer);" + LineEnding;
-  Result += "  timeout.setEnabled(True);" + LineEnding;
-  Result += "end;" + LineEnding + LineEnding;
-  Result += "begin" + LineEnding;
-  Result += "  url := GetProcessParameter('url');" + LineEnding;
-  Result += "  pkg := GetProcessParameter('pkg');" + LineEnding + LineEnding;
-  Result += "  if FileExists({$MACRO CURRENT_DIRECTORY} + 'downloader-' + LowerCase(pkg) + '.done') then" + LineEnding;
-  Result += "    DeleteFile({$MACRO CURRENT_DIRECTORY} + 'downloader-' + LowerCase(pkg) + '.done');" + LineEnding + LineEnding;
-  Result += "  timeout.Init(nil);" + LineEnding;
-  Result += "  timeout.SetName('downloader_timeout');" + LineEnding;
-  Result += "  timeout.SetInterval(20000);" + LineEnding;
-  Result += "  http := InitializeHTTPClient(True);" + LineEnding;
-  Result += "  Sync(@RunTimer);" + LineEnding;
-  Result += "  AddOnTerminate(@Free);" + LineEnding + LineEnding;
-  Result += "  WriteLn('[AsyncDownloader]: Downloading ', pkg, ', this might take a while.');" + LineEnding;
-  Result += "  t := GetTickCount() + 120000;" + LineEnding + LineEnding;
-  Result += "  try" + LineEnding;
-  Result += "    if GetHTTPPageEx(http, url, GetProcessParameter('destination')) = 200 then" + LineEnding;
-  Result += "      WriteLn('[AsyncDownloader]: ' + pkg + ' downloaded.')" + LineEnding;
-  Result += "    else" + LineEnding;
-  Result += "      WriteLn('[AsyncDownloader]: Failed to download: ' + url);" + LineEnding;
-  Result += "  except" + LineEnding;
-  Result += "    WriteLn('[AsyncDownloader]: Error: ', GetExceptionMessage());" + LineEnding;
-  Result += "  end;" + LineEnding;
-  Result += "end;" + LineEnding;
-end;
-
 procedure TGitHubClient.Download(pkg: String);
 var
   url: String;
@@ -2252,9 +2719,8 @@ begin
       TerminateScript('Unrecognized package to download: ' + pkg);
   end;
 
-  WriteAsyncFile(pkg + '-downloader.simba', Self.GetDownloaderContent(), False);
   params := ['url=' + url,'destination="'+ Self.DownloadPath + pkg + '.zip"', 'pkg=' + pkg];
-  RunAsyncFile(pkg + '-downloader.simba', params);
+  WaspAsync.Run('downloader', params);
 end;
 
 
@@ -3968,19 +4434,6 @@ type
 
   TScriptFileArray = array of TScriptFile;
 
-  EUpdaterState = (NONE, DOWNLOAD, UNZIP, CLEAN);
-
-  TMonitor = record
-    Package: String;
-    CurrentFile: String;
-    State: EUpdaterState;
-    IsSetup: Boolean;
-
-    Caption: TLabel;
-    Button: TButton;
-    Timer: TTimer;
-  end;
-
   TWaspUpdater = record
     Name: String;
     Launcher: TScriptFile;
@@ -4003,15 +4456,7 @@ procedure TMonitor._OnTimer(sender: TObject);
 var
   fileName: String;
 begin
-  if Self.CurrentFile.Contains('downloader') then
-    fileName := 'downloader-'
-  else if Self.CurrentFile.Contains('unzipper') then
-    fileName := 'unzipper-'
-  else if Self.CurrentFile.Contains('mover') then
-    fileName := 'mover-';
-
-  fileName := fileName + LowerCase(Self.Package) + '.done';
-  fileName := LAUNCHER_DATA + 'async' + DirectorySeparator + fileName;
+  fileName := WaspAsync.Path + Self.CurrentFile;
 
   if FileExists(fileName) and DeleteFile(fileName) then
   begin
@@ -4024,14 +4469,14 @@ procedure TMonitor.NextState();
 var
   params: TStringArray;
 begin
-  Self.State := EUpdaterState(Ord(Self.State) + 1);
-  if Self.State > High(EUpdaterState) then
-    Self.State := EUpdaterState.NONE;
+  Self.State := EMonitorState(Ord(Self.State) + 1);
+  if Self.State > High(EMonitorState) then
+    Self.State := EMonitorState.NONE;
 
   case Self.State of
-    EUpdaterState.DOWNLOAD:
+    EMonitorState.DOWNLOAD:
     begin
-      Self.CurrentFile := Self.Package + '-downloader.simba';
+      Self.CurrentFile := 'downloader-' + LowerCase(Self.Package) + '.done';
       GitHubClient.Download(Self.Package);
 
       Self.Caption.setCaption('Downloading');
@@ -4042,13 +4487,11 @@ begin
       Self.Timer.SetEnabled(True);
     end;
 
-    EUpdaterState.UNZIP:
+    EMonitorState.UNZIP:
     begin
-      Self.CurrentFile := Self.Package + '-unzipper.simba';
-
-      WriteAsyncFile(Self.CurrentFile, WaspUpdater.GetUnzipperContent(), False);
+      Self.CurrentFile := 'unzipper-' + LowerCase(Self.Package) + '.done';
       params := ['path=' + GitHubClient.DownloadPath, 'name=' + Self.Package];
-      RunAsyncFile(Self.CurrentFile, params);
+      WaspAsync.Run('unzipper', params);
 
       Self.Caption.setCaption('Unzipping');
       Self.Caption.SetFontColor($00CCAA);
@@ -4057,13 +4500,11 @@ begin
       Self.Timer.SetEnabled(True);
     end;
 
-    EUpdaterState.CLEAN:
+    EMonitorState.CLEAN:
     begin
-      Self.CurrentFile := Self.Package + '-mover.simba';
-
-      WriteAsyncFile(Self.CurrentFile, WaspUpdater.GetMoverContent(), False);
+      Self.CurrentFile := 'mover-' + LowerCase(Self.Package) + '.done';
       params := ['origin=' + GitHubClient.DownloadPath, 'pkg=' + Self.Package];
-      RunAsyncFile(Self.CurrentFile, params);
+      WaspAsync.Run('mover', params);
 
       Self.Caption.setCaption('Cleaning');
       Self.Caption.SetFontColor($00CCAA);
@@ -4072,7 +4513,7 @@ begin
       Self.Timer.SetEnabled(True);
     end;
 
-    EUpdaterState.NONE:
+    EMonitorState.NONE:
     begin
       Self.CurrentFile := '';
 
@@ -4127,202 +4568,6 @@ begin
   Self.NextState();
 end;
 
-function TWaspUpdater.GetUnzipperContent(): String;
-begin
-  Result += "var" + LineEnding;
-  Result += "  path, name: String;" + LineEnding + LineEnding;
-  Result += "procedure Free();" + LineEnding;
-  Result += "begin" + LineEnding;
-  Result += "  CloseFile(CreateFile({$MACRO CURRENT_DIRECTORY} + 'unzipper-' + LowerCase(name) + '.done'));" + LineEnding;
-  Result += "end;" + LineEnding + LineEnding;
-  Result += "begin" + LineEnding;
-  Result += "  path := GetProcessParameter('path');" + LineEnding;
-  Result += "  name := GetProcessParameter('name');" + LineEnding + LineEnding;
-  Result += "  if FileExists({$MACRO CURRENT_DIRECTORY} + 'downloader-' + LowerCase(name) + '.done') then" + LineEnding;
-  Result += "    DeleteFile({$MACRO CURRENT_DIRECTORY} + 'downloader-' + LowerCase(name) + '.done');" + LineEnding + LineEnding;
-  Result += "  AddOnTerminate(@Free);" + LineEnding + LineEnding;
-  Result += "  WriteLn('[AsyncUnzipper]: Unzipping ', name, ', this might take a while.');" + LineEnding + LineEnding;
-  Result += "  try" + LineEnding;
-  Result += "    UnZipFile(path + name + '.zip', path + name);" + LineEnding;
-  Result += "    DeleteFile(path + name + '.zip');" + LineEnding;
-  Result += "  except" + LineEnding;
-  Result += "    WriteLn('[AsyncUnzipper]: Error: ', GetExceptionMessage());" + LineEnding;
-  Result += "  end;" + LineEnding;
-  Result += "end;" + LineEnding;
-end;
-
-function TWaspUpdater.GetMoverContent(): String;
-begin
-  Result += "const" + LineEnding;
-  Result += "  SEP = DirectorySeparator;" + LineEnding + LineEnding;
-  Result += "procedure TerminateScript(reason: String); overload;" + LineEnding;
-  Result += "begin" + LineEnding;
-  Result += "  WriteLn('[AsyncMover]: Terminating: ' + reason);" + LineEnding;
-  Result += "  TerminateScript();" + LineEnding;
-  Result += "end;" + LineEnding + LineEnding;
-  Result += "function BackupFile(filePath: String): Boolean;" + LineEnding;
-  Result += "var" + LineEnding;
-  Result += "  f: Int32;" + LineEnding;
-  Result += "  str: String;" + LineEnding;
-  Result += "begin" + LineEnding;
-  Result += "  f := OpenFile(filePath, False);" + LineEnding + LineEnding;
-  Result += "  if not ReadFileString(f, str, FileSize(f)) then" + LineEnding;
-  Result += "    Exit;" + LineEnding + LineEnding;
-  Result += "  CloseFile(f);" + LineEnding;
-  Result += "  Result := WriteFileContents(filePath + '.bak', str, False);" + LineEnding;
-  Result += "end;" + LineEnding + LineEnding;
-  Result += "function RestoreFile(filePath: String): Boolean;" + LineEnding;
-  Result += "var" + LineEnding;
-  Result += "  f: Int32;" + LineEnding;
-  Result += "  str: String;" + LineEnding;
-  Result += "begin" + LineEnding;
-  Result += "  f := OpenFile(filePath + '.bak', False);" + LineEnding;
-  Result += "  if not ReadFileString(f, str, FileSize(f)) then" + LineEnding;
-  Result += "    Exit;" + LineEnding + LineEnding;
-  Result += "  CloseFile(f);" + LineEnding;
-  Result += "  Result := WriteFileContents(filePath, str, False);" + LineEnding;
-  Result += "  DeleteFile(filePath + '.bak');" + LineEnding;
-  Result += "end;" + LineEnding + LineEnding + LineEnding;
-  Result += "function IsFileLocked(path: String): Boolean;" + LineEnding;
-  Result += "begin" + LineEnding;
-  Result += "  if not FileExists(path) then" + LineEnding;
-  Result += "    Exit;" + LineEnding + LineEnding;
-  Result += "  if not BackupFile(path) then" + LineEnding;
-  Result += "    TerminateScript('Failed to backup file: ' + path);" + LineEnding + LineEnding;
-  Result += "  Result := not DeleteFile(path);" + LineEnding + LineEnding;
-  Result += "  if Result then" + LineEnding;
-  Result += "    DeleteFile(path + '.bak')" + LineEnding;
-  Result += "  else if not RestoreFile(path) then" + LineEnding;
-  Result += "    TerminateScript('Failed to restore file: ' + path);" + LineEnding;
-  Result += "end;" + LineEnding + LineEnding;
-  Result += "function FindLockedPlugins(): TStringArray;" + LineEnding;
-  Result += "const" + LineEnding;
-  Result += "  PATHS = [" + LineEnding;
-  Result += "    IncludePath + 'SRL'   + SEP + 'plugins' + SEP + 'libremoteinput' + SEP," + LineEnding;
-  Result += "    IncludePath + 'SRL-T' + SEP + 'plugins' + SEP + 'libremoteinput' + SEP" + LineEnding;
-  Result += "  ];" + LineEnding;
-  Result += "var" + LineEnding;
-  Result += "  path, plugin: String;" + LineEnding;
-  Result += "begin" + LineEnding;
-  Result += "  for path in PATHS do" + LineEnding;
-  Result += "    for plugin in FindFiles(path, False) do" + LineEnding;
-  Result += "      if IsFileLocked(plugin) then" + LineEnding;
-  Result += "        Result += plugin;" + LineEnding;
-  Result += "end;" + LineEnding + LineEnding + LineEnding;
-  Result += "procedure KillWindowByClass(name: String);" + LineEnding;
-  Result += "var" + LineEnding;
-  Result += "  window: TOSWindow;" + LineEnding;
-  Result += "begin" + LineEnding;
-  Result += "  for window in GetWindows().GetByClass(name) do" + LineEnding;
-  Result += "    window.Kill();" + LineEnding;
-  Result += "end;" + LineEnding + LineEnding;
-  Result += "procedure KillSimbas();" + LineEnding;
-  Result += "var" + LineEnding;
-  Result += "  windows, simbas: TOSWindowArray;" + LineEnding;
-  Result += "  win: TOSWindow;" + LineEnding;
-  Result += "begin" + LineEnding;
-  Result += "  windows := GetWindows();" + LineEnding;
-  Result += "  simbas := windows.GetByTitleAndClass('Output,File Browser,Editor,Function List', 'Window');" + LineEnding + LineEnding;
-  Result += "  if MessageDlg('Close Simba', 'Simba needs to be restarted.'," + LineEnding;
-  Result += "     TMsgDlgType.mtConfirmation, [mbOK, mbAbort]) = 3 then" + LineEnding;
-  Result += "    TerminateScript('You need to close all Simba windows to update SRL.');" + LineEnding + LineEnding;
-  Result += "  for win in simbas do" + LineEnding;
-  Result += "    win.Kill();" + LineEnding + LineEnding;
-  Result += "  TerminateScript();" + LineEnding;
-  Result += "end;" + LineEnding + LineEnding + LineEnding;
-  Result += "procedure UnlockPlugins();" + LineEnding;
-  Result += "var" + LineEnding;
-  Result += "  locked: TStringArray;" + LineEnding;
-  Result += "  plugin: String;" + LineEnding;
-  Result += "begin" + LineEnding;
-  Result += "  locked := FindLockedPlugins();" + LineEnding;
-  Result += "  if locked = [] then" + LineEnding;
-  Result += "    Exit;" + LineEnding + LineEnding;
-  Result += "  if MessageDlg('Close RuneScape', 'RS Clients need to be closed to update this package.'," + LineEnding;
-  Result += "     TMsgDlgType.mtConfirmation, [mbOK, mbAbort]) = 3 then" + LineEnding;
-  Result += "    TerminateScript('You need to close your RS Clients to update SRL.');" + LineEnding + LineEnding;
-  Result += "  KillWindowByClass('SunAwtCanvas');" + LineEnding + LineEnding;
-  Result += "  for plugin in locked do" + LineEnding;
-  Result += "    if IsFileLocked(plugin) then" + LineEnding;
-  Result += "    begin" + LineEnding;
-  Result += "      KillWindowByClass('Jagex Launcher');" + LineEnding;
-  Result += "      Break;" + LineEnding;
-  Result += "    end;" + LineEnding + LineEnding;
-  Result += "  for plugin in locked do" + LineEnding;
-  Result += "    if IsFileLocked(plugin) then" + LineEnding;
-  Result += "    begin" + LineEnding;
-  Result += "      KillSimbas();" + LineEnding;
-  Result += "      Break;" + LineEnding;
-  Result += "    end;" + LineEnding;
-  Result += "end;" + LineEnding + LineEnding;
-  Result += "function DelDirectory(path: String; deleteRoot: Boolean = True): Boolean;" + LineEnding;
-  Result += "var" + LineEnding;
-  Result += "  f, tmp: String;" + LineEnding;
-  Result += "begin" + LineEnding;
-  Result += "  for f in FindFiles(path, True) do" + LineEnding;
-  Result += "  begin" + LineEnding;
-  Result += "    if Pos(SEP + '.git' + SEP, f) > 0 then" + LineEnding;
-  Result += "    begin" + LineEnding;
-  Result += "      deleteRoot := False;" + LineEnding;
-  Result += "      Continue;" + LineEnding;
-  Result += "    end;" + LineEnding + LineEnding;
-  Result += "    if not DeleteFile(f) then" + LineEnding;
-  Result += "      Exit;" + LineEnding + LineEnding;
-  Result += "    tmp := ExtractFilePath(f);" + LineEnding;
-  Result += "    if (FindFiles(tmp, True) = []) and (FindDirectories(tmp, True) = []) then" + LineEnding;
-  Result += "      if not DeleteDirectory(tmp, False) then" + LineEnding;
-  Result += "        Exit;" + LineEnding;
-  Result += "  end;" + LineEnding + LineEnding;
-  Result += "  Result := not deleteRoot or DeleteDirectory(path, False);" + LineEnding;
-  Result += "end;" + LineEnding + LineEnding;
-  Result += "procedure MoveFiles(origin, pkg: String);" + LineEnding;
-  Result += "var" + LineEnding;
-  Result += "  paths, files: TStringArray;" + LineEnding;
-  Result += "  path, f, fPath, destination: String;" + LineEnding;
-  Result += "begin" + LineEnding;
-  Result += "  paths := GetDirectories(origin + pkg + SEP);" + LineEnding;
-  Result += "  if Length(paths) <> 1 then" + LineEnding;
-  Result += "    TerminateScript('The ' + pkg + ' download is empty or has unexpected things inside.');" + LineEnding + LineEnding;
-  Result += "  destination := IncludePath + pkg + SEP;" + LineEnding;
-  Result += "  if DirectoryExists(destination) and not DelDirectory(destination) then" + LineEnding;
-  Result += "    TerminateScript('Failed to delete old ' + pkg + ' library');" + LineEnding;
-  Result += "  if not ForceDirectories(destination) then" + LineEnding;
-  Result += "    TerminateScript('Failed to create path: ' + destination);" + LineEnding + LineEnding;
-  Result += "  path := origin + pkg + SEP + paths[0] + SEP;" + LineEnding;
-  Result += "  files := FindFiles(path, True);" + LineEnding + LineEnding;
-  Result += "  for f in files do" + LineEnding;
-  Result += "  begin" + LineEnding;
-  Result += "    fPath := Replace(f, path, '', [rfReplaceAll]);" + LineEnding;
-  Result += "    if Pos(SEP + '.git' + SEP, fPath) > 0 then" + LineEnding;
-  Result += "      Continue;" + LineEnding + LineEnding;
-  Result += "    if not ForceDirectories(destination + ExtractFilePath(fPath)) then" + LineEnding;
-  Result += "      TerminateScript('Failed to create path: ' + destination + ExtractFilePath(fPath));" + LineEnding + LineEnding;
-  Result += "    if not CopyFile(f, destination + fPath, False) then" + LineEnding;
-  Result += "      TerminateScript('Failed to copy file: ' + fPath);" + LineEnding + LineEnding;
-  Result += "    DeleteFile(f);" + LineEnding;
-  Result += "    if (FindFiles(ExtractFilePath(f), True) = []) and (FindDirectories(ExtractFilePath(f), True) = []) then" + LineEnding;
-  Result += "      DeleteDirectory(ExtractFilePath(f), False);" + LineEnding;
-  Result += "  end;" + LineEnding + LineEnding;
-  Result += "  DelDirectory(origin + pkg);" + LineEnding;
-  Result += "end;" + LineEnding + LineEnding;
-  Result += "var" + LineEnding;
-  Result += "  pkg: String;" + LineEnding + LineEnding;
-  Result += "procedure Free();" + LineEnding;
-  Result += "begin" + LineEnding;
-  Result += "  CloseFile(CreateFile({$MACRO CURRENT_DIRECTORY} + 'mover-' + LowerCase(pkg) + '.done'));" + LineEnding;
-  Result += "end;" + LineEnding + LineEnding;
-  Result += "begin" + LineEnding;
-  Result += "  pkg := GetProcessParameter('pkg');" + LineEnding + LineEnding;
-  Result += "  if FileExists({$MACRO CURRENT_DIRECTORY} + 'mover-' + LowerCase(pkg) + '.done') then" + LineEnding;
-  Result += "    DeleteFile({$MACRO CURRENT_DIRECTORY} + 'mover-' + LowerCase(pkg) + '.done');" + LineEnding + LineEnding;
-  Result += "  AddOnTerminate(@Free);" + LineEnding + LineEnding;
-  Result += "  case LowerCase(pkg) of" + LineEnding;
-  Result += "    'srl-t', 'srlt', 'srl': UnlockPlugins();" + LineEnding;
-  Result += "  end;" + LineEnding + LineEnding;
-  Result += "  WriteLn('[AsyncMover]: Moving ', pkg, ' files, this will take a while.');" + LineEnding;
-  Result += "  MoveFiles(GetProcessParameter('origin'), pkg);" + LineEnding;
-  Result += "end;" + LineEnding;
-end;
 
 procedure TWaspUpdater.Update(pkg: String; caption, button: TComponent);
 begin
@@ -4448,10 +4693,10 @@ begin
   Self.Launcher.Revision := StrToIntDef({$macro SCRIPT_REVISION}, 1);
 
   Self.Launcher.Path := ScriptPath + 'wasp-launcher.simba';
-
   Self.ScriptsPath := ScriptPath + 'waspscripts.com' + DirectorySeparator;
 
-  ForceDirectories(Self.ScriptsPath);
+  if not ForceDirectories(Self.ScriptsPath) then
+    TerminateScript('WaspUpdater can''t create scripts directory.');;
 
   Self.MonitorSRLT.Package := 'srl-t';
   Self.MonitorSRLT.Timer.Init(nil);
@@ -5711,12 +5956,15 @@ var
 {$ENDIF}
 {$ENDIF}
 {$ENDIF}
+{$ENDIF}
+{$ENDIF}
 
 
 
 begin
   ClearDebug();
 
+  WaspAsync.Setup();
   LauncherConfig.Setup(AppPath + 'Configs' + DirectorySeparator + 'launcher.json');
   WaspClient.Setup();
 
@@ -5725,5 +5973,6 @@ begin
 
   WaspForm.Run();
 end;
+
 
 

@@ -1,5 +1,5 @@
 {$DEFINE SCRIPT_ID := 'd563990c-4d31-4aba-b214-18e69171ed5e'}
-{$DEFINE SCRIPT_REVISION := '22'}
+{$DEFINE SCRIPT_REVISION := '24'}
 
 {.$DEFINE DEVELOPER_MODE}
 
@@ -8,6 +8,7 @@
 begin
   ClearDebug();
 
+  WaspAsync.Setup();
   LauncherConfig.Setup(AppPath + 'Configs' + DirectorySeparator + 'launcher.json');
   WaspClient.Setup();
 
@@ -16,5 +17,6 @@ begin
 
   WaspForm.Run();
 end;
+
 
 
