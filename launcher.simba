@@ -1,5 +1,5 @@
 {$DEFINE SCRIPT_ID := 'd563990c-4d31-4aba-b214-18e69171ed5e'}
-{$DEFINE SCRIPT_REVISION := '24'}
+{$DEFINE SCRIPT_REVISION := '25'}
 
 {.$DEFINE DEVELOPER_MODE}
 
@@ -1921,11 +1921,14 @@ procedure TWaspAsync.Setup();
 begin
   Self.Path := LAUNCHER_DATA + 'async' + DirectorySeparator;
 
-  if not RMDir(Self.Path, True) then
-    TerminateScript('WaspAsync failed to delete old files. Please manually delete :' + Self.Path);
+  if not ForceDirectories(LAUNCHER_DATA) then
+    TerminateScript('WaspAsync failed to create directory: ' + LAUNCHER_DATA);
 
-  if not RMDir(LAUNCHER_DATA + 'downloads') then
-    TerminateScript('WaspAsync failed to delete old files. Please manually delete :' + LAUNCHER_DATA + 'downloads' + DirectorySeparator);
+  if DirectoryExists(Self.Path) and not RMDir(Self.Path, True) then
+    TerminateScript('WaspAsync failed to delete old files. Please manually delete:' + Self.Path);
+
+  if DirectoryExists(LAUNCHER_DATA + 'downloads') and not RMDir(LAUNCHER_DATA + 'downloads') then
+    TerminateScript('WaspAsync failed to delete old files. Please manually delete: ' + LAUNCHER_DATA + 'downloads' + DirectorySeparator);
 
   if not ForceDirectories(Self.Path) then
     TerminateScript('WaspAsync can''t create async directory.');
