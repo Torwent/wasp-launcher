@@ -1,5 +1,5 @@
 {$DEFINE SCRIPT_ID := 'd563990c-4d31-4aba-b214-18e69171ed5e'}
-{$DEFINE SCRIPT_REVISION := '26'}
+{$DEFINE SCRIPT_REVISION := '27'}
 
 {.$DEFINE DEVELOPER_MODE}
 
@@ -2065,7 +2065,12 @@ begin
     str := ReadFileContents(Self.Path);
     if str <> '' then
     begin
-      Result.Init(str);
+      try
+        Result.Init(str);
+      except
+        Result := nil;
+        Result.Init();
+      end;
       Exit;
     end;
   end;
