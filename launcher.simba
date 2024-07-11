@@ -1,5 +1,5 @@
 {$DEFINE SCRIPT_ID := 'd563990c-4d31-4aba-b214-18e69171ed5e'}
-{$DEFINE SCRIPT_REVISION := '28'}
+{$DEFINE SCRIPT_REVISION := '29'}
 
 {.$DEFINE DEVELOPER_MODE}
 
@@ -3333,10 +3333,28 @@ end;
 
 
 procedure TWaspClient.Setup();
+var
+  response: TJSONObject;
 begin
   Self.Name := 'WaspClient';
-  Self.Server := 'https://db.waspscripts.com/';
-  Self.APIKey := 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJzdXBhYmFzZSIsImlhdCI6MTcxOTQ5MDgwMCwiZXhwIjo0ODc1MTY0NDAwLCJyb2xlIjoiYW5vbiJ9.pKuuhYK-xxOWBHg3mqaxNptyvCpE5n-cjhxN3GQKr2I';
+  Self.Server := 'https://api.waspscripts.com/';
+  Self.Client := InitializeHTTPClient(True);
+  try
+    response.Init(Self.GET(''));
+    Self.Server := response.getString('url');
+    Self.APIKey := response.getString('anon_key');
+  except
+    WriteLn 'Failed to connect to https://api.waspscripts.com/ to get the API Key.';
+  finally
+    FreeHTTPClient(Self.Client);
+    response.Free();
+  end;
+
+  if Self.APIKey = '' then
+    TerminateScript();
+
+  if not Self.Server.EndsWith('/') then Self.Server += '/';
+
   Self.DownloadPath := LAUNCHER_DATA + 'downloads' + DirectorySeparator;
   Self.AssetsPath := LAUNCHER_DATA + 'assets' + DirectorySeparator;
 
@@ -4818,18 +4836,24 @@ end;
 
 procedure TWaspForm._OpenScript(sender: TObject);
 var
-  panel: TPanel;
   list: TListBox;
   script: TScriptData;
   scriptFile: TScriptFile;
 begin
-  panel := TButton(sender).getOwner();
-  list := panel.GetChild('scripts_listbox');
+  list := sender;
   script := WaspClient.GetAllUserScripts()[list.getItemIndex()];
   LauncherConfig.Put('last_script', script.ID);
   scriptFile := WaspUpdater.GetScriptFile(script.ID);
   SimbaOpenInTab(scriptFile.Path);
   Self.Form.Close();
+end;
+
+procedure TWaspForm._OpenScriptEx(sender: TObject);
+var
+  panel: TPanel;
+begin
+  panel := TButton(sender).getOwner();
+  Self._OpenScript(panel.GetChild('scripts_listbox'));
 end;
 
 procedure TWaspForm._RunScript(sender: TObject);
@@ -5052,6 +5076,14 @@ begin
     WaspClient.DownloadImage(scriptData.ID, 'banner');
 
   panel.SwapImage(WaspClient.AssetsPath + scriptData.ID + DirectorySeparator + 'banner.jpg');
+end;
+
+procedure TWaspForm._OnScriptOnKeyDown(sender: TObject; var key: Char);
+begin
+  case key of
+    ' ': Self._UpdateScript();
+    #13: Self._OpenScript(sender);
+  end;
 end;
 
 
@@ -5531,7 +5563,7 @@ procedure TWaspForm.SetupVersionsPanel(parent: TPanel; top: Int32);
       case TButton(sender).getName() of
         'update_srl_button':    {$IFNDEF DEVELOPER_MODE}Sync(@Self._UpdateSRL){$ENDIF};
         'update_wl_button':     {$IFNDEF DEVELOPER_MODE}Sync(@Self._UpdateWL){$ENDIF};
-        'update_script_button': Self._UpdateScript;
+        'update_script_button': Self._UpdateScript();
       end;
     end;
 
@@ -5815,8 +5847,10 @@ begin
   scriptsList.SetWidth(TControl.AdjustToDPI(260));
   scriptsList.setHeight(Self.Size.Y - scriptsList.GetTop() - TControl.AdjustToDPI(80));
   scriptsList.ListBox.ListBox.setOnClick(@Self._OnScriptChange);
+  scriptsList.ListBox.ListBox.setOnKeyPress(@Self._OnScriptOnKeyDown);
   scriptsList.ListBox.ListBox.setStyle(TListBoxStyle.lbOwnerDrawFixed);
   scriptsList.ListBox.ListBox.setOnDrawItem(@Self.OnDrawItem);
+  scriptsList.ListBox.ListBox.setColor($242322);
 
   button.Create(panel);
   button.setName('logout_button');
@@ -5829,7 +5863,7 @@ begin
   button.Create(panel);
   button.setName('script_open_button');
   button.SetCaption('Open script');
-  button.SetOnClick(@Self._OpenScript);
+  button.SetOnClick(@Self._OpenScriptEx);
   button.setWidth(TControl.AdjustToDPI(150));
   button.SetLeft(panel.getWidth() - TControl.AdjustToDPI(10) - button.getWidth());
   button.SetTop(panel.getHeight() - TControl.AdjustToDPI(62));
