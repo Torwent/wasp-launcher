@@ -831,7 +831,10 @@ begin
     Self.Server := response.getString('url');
     Self.APIKey := response.getString('anon_key');
   except
-    WriteLn 'Failed to connect to https://api.waspscripts.com/ to get the API Key.';
+    WriteLn 'Failed to connect to https://api.waspscripts.com/ to get the database connection info.';
+    WriteLn 'Falling back to previously known good values';
+    Self.Server := 'https://db.waspscripts.com/';
+    Self.APIKey := 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJzdXBhYmFzZSIsImlhdCI6MTcxOTQ5MDgwMCwiZXhwIjo0ODc1MTY0NDAwLCJyb2xlIjoiYW5vbiJ9.pKuuhYK-xxOWBHg3mqaxNptyvCpE5n-cjhxN3GQKr2I';
   finally
     FreeHTTPClient(Self.Client);
     response.Free();
