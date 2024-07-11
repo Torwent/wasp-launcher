@@ -1,5 +1,5 @@
 {$DEFINE SCRIPT_ID := 'd563990c-4d31-4aba-b214-18e69171ed5e'}
-{$DEFINE SCRIPT_REVISION := '29'}
+{$DEFINE SCRIPT_REVISION := '30'}
 
 {.$DEFINE DEVELOPER_MODE}
 
@@ -3340,7 +3340,7 @@ begin
   Self.Server := 'https://api.waspscripts.com/';
   Self.Client := InitializeHTTPClient(True);
   try
-    response.Init(Self.GET(''));
+    response.Init(Self.GET('', False));
     Self.Server := response.getString('url');
     Self.APIKey := response.getString('anon_key');
   except
