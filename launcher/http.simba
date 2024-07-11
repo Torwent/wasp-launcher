@@ -827,7 +827,7 @@ begin
   Self.Server := 'https://api.waspscripts.com/';
   Self.Client := InitializeHTTPClient(True);
   try
-    response.Init(Self.GET(''));
+    response.Init(Self.GET('', False));
     Self.Server := response.getString('url');
     Self.APIKey := response.getString('anon_key');
   except
