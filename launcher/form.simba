@@ -135,7 +135,7 @@ begin
   if not FileExists(rl) then
     TerminateScript('RuneLite is not installed or it''s not in the expected directory!');
 
-  RunCommand(rl, ['--safe-mode', '--mode=OFF', '--profile=' + name]);
+  RunCommand(rl, ['--profile=' + name]);
 end;
 
 
@@ -253,7 +253,7 @@ var
   main, panel: TPanel;
   text: TLabel;
   memo: TMemo;
-  update, start, open: TButton;
+  update, open: TButton;
   checkbox: TCheckBox;
   scriptData: TScriptData;
   scriptFile: TScriptFile;
@@ -293,10 +293,7 @@ begin
     update.setCaption('Update')
   else
     update.setCaption('Re-install');
-
-  start  := main.GetChild('open_rl_button');
   open  := main.GetChild('script_open_button');
-  start.setEnabled(scriptFile.Revision <> 0);
   open.setEnabled(scriptFile.Revision <> 0);
 
   checkbox := panel.GetChild('update_script_checkbox');

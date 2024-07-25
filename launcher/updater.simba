@@ -1390,59 +1390,65 @@ begin
 end;
 
 procedure TWaspUpdater.InstallRLProfile(out name: String);
+  function _StrToInt(str: String): Int32;
+  var i: Int32;
+  begin
+    for i := 1 to Length(str) do Result += Int32(str[i]);
+  end;
 var
   path: String;
   json, tmp: TJSONObject;
-  arr: TJSONArray;
-  i, j: Int32;
+  arr, clean: TJSONArray;
+  i, j, id: Int32;
   updated: Boolean;
 begin
   path := GetEnvironmentVariable('userprofile') + DirectorySeparator + '.runelite' + DirectorySeparator + 'profiles2' + DirectorySeparator ;
 
-  name := WaspClient.Cache.User.ID.SubString(0,8);
-  if FileExists(path + name + '-0.properties') then
-    if not DeleteFile(path + name + '-0.properties') then
+  name := WaspClient.Cache.User.ID;
+  id :=  _StrToInt(name);
+  name := name.SubString(0,8);
+
+  if FileExists(path + name + '-' + ToStr(id) + '.properties') then
+    if not DeleteFile(path + name + '-' + ToStr(id) + '.properties') then
       TerminateScript('Failed to delete RuneLite WaspScripts profile.');
 
-  WriteFileContents(path + name + '-0.properties', Self.GetProfileFileString(), False);
+  WriteFileContents(path + name + '-' + ToStr(id) + '.properties', Self.GetProfileFileString(), False);
 
   try
     json.Init(ReadFileContents(path + 'profiles.json'));
     arr := json.getJSONArray('profiles');
 
     j := -1;
+    clean.Init();
     for i := 0 to arr.High() do
     begin
       tmp := arr.getJSONObject(i);
-      if (tmp.getInt('id') = 0) and (tmp.getString('name') = name) then
-        j := i;
-
-      if (tmp.getInt('id') = 0) then
+      if (tmp.getInt('id') = id) and (tmp.getString('name') = name) then
       begin
-        tmp.Put('name', name);
-        j := i;
+        tmp.Put('active', True);
+        tmp.Put('sync', False);
+        tmp.Put('rev', -1);
+        tmp.remove('defaultForRsProfiles');
+        clean.Put(tmp);
+        j := clean.High();
+        Continue;
       end;
 
-      if (tmp.getString('name') = name) then
-      begin
-        tmp.Put('name', name);
-        j := i;
-      end;
+      if (tmp.getInt('id') = id) then Continue;
+      if (tmp.getString('name') = name) then Continue;
+      if tmp.getBoolean('active') then tmp.Put('active', False);
 
-      if tmp.getBoolean('active') then
-        tmp.Put('active', False);
+      clean.Put(tmp);
     end;
 
     if j = -1 then
     begin
-      tmp.Init('{"id":0,"name":"' + name + '","sync":false,"active":true,"rev":-1}');
-      arr.put(tmp);
-    end
-    else
-    begin
-      tmp := arr.getJSONObject(j);
-      tmp.Put('active', True);
+      tmp.Init('{"id":' + ToStr(id) + ',"name":"' + name + '","sync":false,"active":true,"rev":-1}');
+      clean.put(tmp);
     end;
+
+    json.remove('profiles');
+    json.put('profiles', clean);
 
     if not WriteFileContents(path + 'profiles.json', json.toString(), False) then
       TerminateScript('Failed to write to profiles.json');
@@ -1450,7 +1456,6 @@ begin
     json.Free();
   end;
 end;
-
 
 procedure TWaspUpdater.SelfUpdate();
 begin
