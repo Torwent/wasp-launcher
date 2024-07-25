@@ -1,5 +1,5 @@
 {$DEFINE SCRIPT_ID := 'd563990c-4d31-4aba-b214-18e69171ed5e'}
-{$DEFINE SCRIPT_REVISION := '35'}
+{$DEFINE SCRIPT_REVISION := '36'}
 
 {.$DEFINE DEVELOPER_MODE}
 
@@ -5409,7 +5409,7 @@ begin
             'idlenotifier.prayer=1' + LineEnding +
             'woodcutting.statTimeout=5' + LineEnding +
             'grounditems.highlightedColor=-5635841' + LineEnding +
-            'runelite.usernameInTitle=true' + LineEnding +
+            'runelite.usernameInTitle=false' + LineEnding +
             'clanchat.clanChatShowJoinLeave=false' + LineEnding +
             'chatnotification.notifyOnTrade={"enabled"\:false,"initialized"\:false,"override"\:false,"tray"\:false,"volume"\:0,"timeout"\:0,"gameMessage"\:false,"sendWhenFocused"\:false}' + LineEnding +
             'xpTracker.pauseSkillAfter=0' + LineEnding +
