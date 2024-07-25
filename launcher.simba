@@ -1,5 +1,5 @@
 {$DEFINE SCRIPT_ID := 'd563990c-4d31-4aba-b214-18e69171ed5e'}
-{$DEFINE SCRIPT_REVISION := '34'}
+{$DEFINE SCRIPT_REVISION := '35'}
 
 {.$DEFINE DEVELOPER_MODE}
 
@@ -1512,22 +1512,18 @@ begin
 end;
 
 {$IFDEF WINDOWS}
-const DARK_MODE_ATTRIBUTE = 20;
-
 function ShowWindow(hwnd: TOSWindow; nCmdShow: UInt32): LongBool;
 external 'ShowWindow@user32.dll ' + WINAPI_CC;
 
 function SetWindowAttribute(hwnd: TOSWindow; dwAttribute: DWORD; pvAttribute: Pointer; cbAttribute: DWORD): UInt32;
 external 'DwmSetWindowAttribute@dwmapi.dll ' + WINAPI_CC;
 
-function SetWindowAttribute(hwnd: TOSWindow; dwAttribute: DWORD; pvAttribute: LongBool): UInt32; overload;
-begin
-  Result := SetWindowAttribute(hwnd, dwAttribute, @pvAttribute, SizeOf(pvAttribute));
-end;
-
 function SetWindowDarkTitleBar(hwnd: TOSWindow): UInt32;
+const
+  DWMWA_USE_IMMERSIVE_DARK_MODE: Integer = 20;
+  DARK: LongBool = True;
 begin
-  Result := SetWindowAttribute(hwnd, DARK_MODE_ATTRIBUTE, True);
+  Result := SetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, @DARK, SizeOf(DARK));
 end;
 
 type PWideChar = ^WideChar;
@@ -7118,8 +7114,8 @@ procedure TWaspForm.OnShow(sender: TObject);
 begin
   {$IFDEF WINDOWS}
   SetWindowDarkTitleBar(TForm(sender).getHandle());
-  {$ENDIF}
   Self.SetAllChildsDarkTheme();
+  {$ENDIF}
 
   case WaspClient.IsLoggedIn() of
     True:  Self.HandleLogin(Self.Form.GetChild('login_panel'));
