@@ -9,6 +9,7 @@ const
   SIMBA_DATA_DIR = AppPath + 'Data' + DirectorySeparator;
   WL_DATAPATH = SIMBA_DATA_DIR + 'WaspLib' + DirectorySeparator;
   LAUNCHER_DATA = SIMBA_DATA_DIR + 'wasp-launcher' + DirectorySeparator;
+  WINAPI_CC = {$IFDEF CPU386}'stdcall'{$ELSE}'win64'{$ENDIF};
 
 type
   TSRL = record IsSetup: Boolean; end;
@@ -19,6 +20,7 @@ var
 
 {$IFNDEF SCRIPT_ID}{$DEFINE SCRIPT_ID := 'd563990c-4d31-4aba-b214-18e69171ed5e'}{$ENDIF}
 {$IFNDEF SCRIPT_REVISION}{$DEFINE SCRIPT_REVISION := '1'}{$ENDIF}
+
 
 {$IFNDEF SRL_TIME_INCLUDED}        {$I SRL-T/utils/system/time.simba}
 {$IFNDEF SRL_FILE_INCLUDED}        {$I SRL-T/utils/system/file.simba}

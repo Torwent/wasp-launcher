@@ -116,28 +116,21 @@ begin
   Self._OpenScript(panel.GetChild('scripts_listbox'));
 end;
 
-procedure TWaspForm._RunScript(sender: TObject);
-var
-  panel: TPanel;
-  list: TListBox;
-  script: TScriptData;
-  scriptFile: TScriptFile;
-  proc: TSysProc;
-begin
-  panel := TButton(sender).getOwner();
-  list := panel.GetChild('scripts_listbox');
-  script := WaspClient.GetAllUserScripts()[list.getItemIndex()];
-  LauncherConfig.Put('last_script', script.ID);
-  scriptFile := WaspUpdater.GetScriptFile(script.ID);
-  SimbaRunInTab(scriptFile.Path);
-  Self.Form.Close();
 
-  for proc in GetProcesses() do
-    if proc.PID = GetSimbaPID() then
-    begin
-      ShowWindow(proc.Handle, 6); //6 = SW_MINIMIZE https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-showwindow
-      Break;
-    end;
+
+
+
+procedure TWaspForm._OpenRL(sender: TObject);
+var
+  rl: String;
+begin
+  WaspUpdater.InstallRLProfile();
+  rl := GetEnvironmentVariable('localappdata') + DirectorySeparator + 'RuneLite' + DirectorySeparator + 'RuneLite.exe';
+
+  if not FileExists(rl) then
+    TerminateScript('RuneLite is not installed or it''s not in the expected directory!');
+
+  RunCommand(rl, ['--safe-mode', '--profile=WaspScripts']);
 end;
 
 
@@ -650,7 +643,7 @@ procedure TWaspForm.SetupLoginPanel(form: TForm);
     dPanel.Show();
     lPanel.Hide();
 
-    OpenWebPage('https://waspscripts.com/refresh_token/');
+    OpenWebPage('https://waspscripts.com/auth/refresh-token/');
     Sync(@Self.RunTimer);
   end;
 var
@@ -1130,8 +1123,8 @@ begin
 
   button.Create(panel);
   button.setName('script_start_button');
-  button.SetCaption('Run script');
-  button.setOnClick(@Self._RunScript);
+  button.SetCaption('Open RuneLite');
+  button.setOnClick(@Self._OpenRL);
   button.setWidth(TControl.AdjustToDPI(150));
   button.SetLeft(panel.getWidth() - TControl.AdjustToDPI(10) - button.getWidth());
   button.SetTop(panel.getHeight() - TControl.AdjustToDPI(40));

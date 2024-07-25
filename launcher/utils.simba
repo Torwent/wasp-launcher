@@ -26,9 +26,7 @@ begin
 end;
 
 {$IFDEF WINDOWS}
-const
-  WINAPI_CC = {$IFDEF CPU386}'stdcall'{$ELSE}'win64'{$ENDIF};
-  DARK_MODE_ATTRIBUTE = 20;
+const DARK_MODE_ATTRIBUTE = 20;
 
 function ShowWindow(hwnd: TOSWindow; nCmdShow: UInt32): LongBool;
 external 'ShowWindow@user32.dll ' + WINAPI_CC;
