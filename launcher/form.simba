@@ -1160,8 +1160,8 @@ procedure TWaspForm.OnShow(sender: TObject);
 begin
   {$IFDEF WINDOWS}
   SetWindowDarkTitleBar(TForm(sender).getHandle());
-  {$ENDIF}
   Self.SetAllChildsDarkTheme();
+  {$ENDIF}
 
   case WaspClient.IsLoggedIn() of
     True:  Self.HandleLogin(Self.Form.GetChild('login_panel'));

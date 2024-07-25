@@ -26,22 +26,18 @@ begin
 end;
 
 {$IFDEF WINDOWS}
-const DARK_MODE_ATTRIBUTE = 20;
-
 function ShowWindow(hwnd: TOSWindow; nCmdShow: UInt32): LongBool;
 external 'ShowWindow@user32.dll ' + WINAPI_CC;
 
 function SetWindowAttribute(hwnd: TOSWindow; dwAttribute: DWORD; pvAttribute: Pointer; cbAttribute: DWORD): UInt32;
 external 'DwmSetWindowAttribute@dwmapi.dll ' + WINAPI_CC;
 
-function SetWindowAttribute(hwnd: TOSWindow; dwAttribute: DWORD; pvAttribute: LongBool): UInt32; overload;
-begin
-  Result := SetWindowAttribute(hwnd, dwAttribute, @pvAttribute, SizeOf(pvAttribute));
-end;
-
 function SetWindowDarkTitleBar(hwnd: TOSWindow): UInt32;
+const
+  DWMWA_USE_IMMERSIVE_DARK_MODE: Integer = 20;
+  DARK: LongBool = True;
 begin
-  Result := SetWindowAttribute(hwnd, DARK_MODE_ATTRIBUTE, True);
+  Result := SetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, @DARK, SizeOf(DARK));
 end;
 
 type PWideChar = ^WideChar;
