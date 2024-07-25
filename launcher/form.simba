@@ -117,22 +117,19 @@ begin
 end;
 
 
-
-
-
 procedure TWaspForm._OpenRL(sender: TObject);
 var
-  rl: String;
+  rl, name: String;
 begin
-  WaspUpdater.InstallRLProfile();
+  WaspUpdater.InstallRLProfile(name);
+
   rl := GetEnvironmentVariable('localappdata') + DirectorySeparator + 'RuneLite' + DirectorySeparator + 'RuneLite.exe';
 
   if not FileExists(rl) then
     TerminateScript('RuneLite is not installed or it''s not in the expected directory!');
 
-  RunCommand(rl, ['--safe-mode', '--profile=WaspScripts']);
+  RunCommand(rl, ['--safe-mode', '--mode=OFF', '--profile=' + name]);
 end;
-
 
 
 procedure TWaspForm._MailField(sender: TObject; var key: char);

@@ -1389,44 +1389,59 @@ begin
             'pyramidplunder.timerLowWarning=30';
 end;
 
-procedure TWaspUpdater.InstallRLProfile();
+procedure TWaspUpdater.InstallRLProfile(out name: String);
 var
   path: String;
   json, tmp: TJSONObject;
   arr: TJSONArray;
   i: Int32;
-  missing: Boolean;
+  has, updated: Boolean;
 begin
   path := GetEnvironmentVariable('userprofile') + DirectorySeparator + '.runelite' + DirectorySeparator + 'profiles2' + DirectorySeparator ;
 
-  if FileExists(path + 'WaspScripts-0.properties') then
-    if not DeleteFile(path + 'WaspScripts-0.properties') then
+  name := WaspClient.Cache.User.ID.SubString(0,8);
+  if FileExists(path + name + '-0.properties') then
+    if not DeleteFile(path + name + '-0.properties') then
       TerminateScript('Failed to delete RuneLite WaspScripts profile.');
 
-  WriteFileContents(path + 'WaspScripts-0.properties', Self.GetProfileFileString(), False);
+  WriteFileContents(path + name + '-0.properties', Self.GetProfileFileString(), False);
 
   try
     json.Init(ReadFileContents(path + 'profiles.json'));
     arr := json.getJSONArray('profiles');
 
-    missing := True;
-    for i := 0 to arr.High() do
+    for i := arr.High() downto 0 do
     begin
       tmp := arr.getJSONObject(i);
-      if (tmp.getInt('id') = 0) and (tmp.getString('name') = 'WaspScripts') then
+      if (tmp.getInt('id') = 0) and (tmp.getString('name') = name) then
       begin
-        missing := False;
+        has := True;
         Break;
+      end;
+
+      if (tmp.getInt('id') = 0) then
+      begin
+        tmp.Put('name', name);
+        updated := True;
+      end;
+
+      if (tmp.getString('name') = name) then
+      begin
+        tmp.Put('name', name);
+        updated := True;
       end;
     end;
 
-    if missing then
+    if not has then
     begin
-      tmp.Init('{"id":0,"name":"WaspScripts","sync":false,"active":false,"rev":-1}');
+      updated := True;
+      tmp.Init('{"id":0,"name":"' + name + '","sync":false,"active":false,"rev":-1}');
       arr.put(tmp);
+    end;
+
+    if updated then
       if not WriteFileContents(path + 'profiles.json', json.toString(), False) then
         TerminateScript('Failed to write to profiles.json');
-    end;
   finally
     json.Free();
   end;
