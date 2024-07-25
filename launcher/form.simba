@@ -117,6 +117,13 @@ begin
 end;
 
 
+procedure TWaspForm._InstallProfile(sender: TObject);
+var
+  rl, name: String;
+begin
+  WaspUpdater.InstallRLProfile(name);
+end;
+
 procedure TWaspForm._OpenRL(sender: TObject);
 var
   rl, name: String;
@@ -287,7 +294,7 @@ begin
   else
     update.setCaption('Re-install');
 
-  start  := main.GetChild('script_start_button');
+  start  := main.GetChild('open_rl_button');
   open  := main.GetChild('script_open_button');
   start.setEnabled(scriptFile.Revision <> 0);
   open.setEnabled(scriptFile.Revision <> 0);
@@ -1116,15 +1123,23 @@ begin
   button.SetOnClick(@Self._OpenScriptEx);
   button.setWidth(TControl.AdjustToDPI(150));
   button.SetLeft(panel.getWidth() - TControl.AdjustToDPI(10) - button.getWidth());
-  button.SetTop(panel.getHeight() - TControl.AdjustToDPI(62));
+  button.SetTop(panel.getHeight() - TControl.AdjustToDPI(72));
 
   button.Create(panel);
-  button.setName('script_start_button');
+  button.setName('open_rl_button');
   button.SetCaption('Open RuneLite');
   button.setOnClick(@Self._OpenRL);
   button.setWidth(TControl.AdjustToDPI(150));
   button.SetLeft(panel.getWidth() - TControl.AdjustToDPI(10) - button.getWidth());
-  button.SetTop(panel.getHeight() - TControl.AdjustToDPI(40));
+  button.SetTop(panel.getHeight() - TControl.AdjustToDPI(50));
+
+  button.Create(panel);
+  button.setName('install_profile_button');
+  button.SetCaption('Install RuneLite Profile');
+  button.setOnClick(@Self._InstallProfile);
+  button.setWidth(TControl.AdjustToDPI(150));
+  button.SetLeft(panel.getWidth() - TControl.AdjustToDPI(10) - button.getWidth());
+  button.SetTop(panel.getHeight() - TControl.AdjustToDPI(28));
 
   launcherRev.Create(panel);
   launcherRev.setName('launcher_revision_label');

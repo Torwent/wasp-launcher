@@ -1394,8 +1394,8 @@ var
   path: String;
   json, tmp: TJSONObject;
   arr: TJSONArray;
-  i: Int32;
-  has, updated: Boolean;
+  i, j: Int32;
+  updated: Boolean;
 begin
   path := GetEnvironmentVariable('userprofile') + DirectorySeparator + '.runelite' + DirectorySeparator + 'profiles2' + DirectorySeparator ;
 
@@ -1410,38 +1410,42 @@ begin
     json.Init(ReadFileContents(path + 'profiles.json'));
     arr := json.getJSONArray('profiles');
 
-    for i := arr.High() downto 0 do
+    j := -1;
+    for i := 0 to arr.High() do
     begin
       tmp := arr.getJSONObject(i);
       if (tmp.getInt('id') = 0) and (tmp.getString('name') = name) then
-      begin
-        has := True;
-        Break;
-      end;
+        j := i;
 
       if (tmp.getInt('id') = 0) then
       begin
         tmp.Put('name', name);
-        updated := True;
+        j := i;
       end;
 
       if (tmp.getString('name') = name) then
       begin
         tmp.Put('name', name);
-        updated := True;
+        j := i;
       end;
+
+      if tmp.getBoolean('active') then
+        tmp.Put('active', False);
     end;
 
-    if not has then
+    if j = -1 then
     begin
-      updated := True;
-      tmp.Init('{"id":0,"name":"' + name + '","sync":false,"active":false,"rev":-1}');
+      tmp.Init('{"id":0,"name":"' + name + '","sync":false,"active":true,"rev":-1}');
       arr.put(tmp);
+    end
+    else
+    begin
+      tmp := arr.getJSONObject(j);
+      tmp.Put('active', True);
     end;
 
-    if updated then
-      if not WriteFileContents(path + 'profiles.json', json.toString(), False) then
-        TerminateScript('Failed to write to profiles.json');
+    if not WriteFileContents(path + 'profiles.json', json.toString(), False) then
+      TerminateScript('Failed to write to profiles.json');
   finally
     json.Free();
   end;
