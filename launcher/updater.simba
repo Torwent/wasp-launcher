@@ -1317,7 +1317,7 @@ begin
             'agility.stickHighlightColor=-65536' + LineEnding +
             'xpglobes.Progress\ orb\ background\ color=2139127936' + LineEnding +
             'woodcutting.clueNestNotifyTier=BEGINNER' + LineEnding +
-            'runelite.dragHotkey=0\:512' + LineEnding +
+            'runelite.dragHotkey=0\:0' + LineEnding +
             'bank.searchKeybind=70\:128' + LineEnding +
             'runelite.loginscreenplugin=false' + LineEnding +
             'npcUnaggroArea.npcAggroAreaColor=1694498560' + LineEnding +

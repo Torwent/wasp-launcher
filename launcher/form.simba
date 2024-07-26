@@ -1049,7 +1049,24 @@ begin
 end;
 
 
-procedure TWaspForm.SetupMainPanel(form: TForm);
+procedure TWaspForm._PanelSwapClick(sender: TObject);
+var
+  parent, extra, scripts: TPanel;
+begin
+  parent := TButton(sender).getParent();
+  parent := parent.getParent();
+
+  scripts := parent.GetChild('scripts_panel');
+  extra := parent.GetChild('extra_panel');
+
+
+  scripts.setVisible(not scripts.getVisible());
+  scripts.setEnabled(not scripts.getEnabled());
+  extra.setEnabled(not extra.getEnabled());
+  extra.setVisible(not extra.getVisible());
+end;
+
+procedure TWaspForm.SetupScriptsPanel(parent: TPanel);
   type TWaspForm = TWaspForm;
 
   procedure TWaspForm._OnUserClick(sender: TObject);
@@ -1066,8 +1083,8 @@ var
   button: TButton;
   scriptsList: TLabeledDarkListBox;
 begin
-  panel.Create(form);
-  panel.setName('main_panel');
+  panel.Create(parent);
+  panel.setName('scripts_panel');
   panel.setCaption('');
   panel.setWidth(Self.Size.X);
   panel.setHeight(Self.Size.Y);
@@ -1107,36 +1124,40 @@ begin
   scriptsList.ListBox.ListBox.setColor($242322);
 
   button.Create(panel);
+  button.setName('extra_button');
+  button.setCaption('Extra settings');
+  button.SetTop(panel.getHeight() - TControl.AdjustToDPI(70));
+  button.setLeft(TControl.AdjustToDPI(10));
+  button.setWidth(TControl.AdjustToDPI(150));
+  button.setHeight(TControl.AdjustToDPI(30));
+  button.setOnClick(@Self._PanelSwapClick);
+
+  button.Create(panel);
   button.setName('logout_button');
   button.SetCaption('Logout');
   button.setOnClick(@Self._LogoutButton);
-  button.setWidth(TControl.AdjustToDPI(150));
   button.SetLeft(TControl.AdjustToDPI(10));
-  button.SetTop(panel.getHeight() - TControl.AdjustToDPI(51));
+  button.SetTop(panel.getHeight() - TControl.AdjustToDPI(35));
+  button.setWidth(TControl.AdjustToDPI(150));
+  button.setHeight(TControl.AdjustToDPI(30));
 
   button.Create(panel);
   button.setName('script_open_button');
   button.SetCaption('Open script');
   button.SetOnClick(@Self._OpenScriptEx);
   button.setWidth(TControl.AdjustToDPI(150));
+  button.setHeight(TControl.AdjustToDPI(30));
+  button.SetTop(panel.getHeight() - TControl.AdjustToDPI(70));
   button.SetLeft(panel.getWidth() - TControl.AdjustToDPI(10) - button.getWidth());
-  button.SetTop(panel.getHeight() - TControl.AdjustToDPI(72));
 
   button.Create(panel);
   button.setName('open_rl_button');
   button.SetCaption('Open RuneLite');
   button.setOnClick(@Self._OpenRL);
   button.setWidth(TControl.AdjustToDPI(150));
+  button.setHeight(TControl.AdjustToDPI(30));
+  button.SetTop(panel.getHeight() - TControl.AdjustToDPI(35));
   button.SetLeft(panel.getWidth() - TControl.AdjustToDPI(10) - button.getWidth());
-  button.SetTop(panel.getHeight() - TControl.AdjustToDPI(50));
-
-  button.Create(panel);
-  button.setName('install_profile_button');
-  button.SetCaption('Install RuneLite Profile');
-  button.setOnClick(@Self._InstallProfile);
-  button.setWidth(TControl.AdjustToDPI(150));
-  button.SetLeft(panel.getWidth() - TControl.AdjustToDPI(10) - button.getWidth());
-  button.SetTop(panel.getHeight() - TControl.AdjustToDPI(28));
 
   launcherRev.Create(panel);
   launcherRev.setName('launcher_revision_label');
@@ -1150,6 +1171,75 @@ begin
     [scriptsList.GetRight() + TControl.AdjustToDPI(30),
      scriptsList.GetTop()   + TControl.AdjustToDPI(30)]
   );
+end;
+
+procedure TWaspForm.SetupExtraPanel(parent: TPanel);
+var
+  panel: TPanel;
+  button: TButton;
+  info: TLabel;
+begin
+  panel.Create(parent);
+  panel.setName('extra_panel');
+  panel.setCaption('');
+  panel.setWidth(Self.Size.X);
+  panel.setHeight(Self.Size.Y);
+  panel.setBevelWidth(0);
+
+  info.Create(panel);
+  info.SetCaption(
+    '     Work in progress!' + LineEnding + LineEnding +
+    'More stuff will be added here in the future!' + LineEnding +
+    'Thank you for using WaspScripts :)' + LineEnding + LineEnding +
+    'Sorry if things have been bumpy for a few days!'
+  );
+  info.SetFontSize(60);
+  info.setTop(Self.Size.Y div 3);
+  info.setLeft(Self.Size.X div 3);
+
+  button.Create(panel);
+  button.setName('extra_button');
+  button.setCaption('Scripts');
+  button.SetTop(panel.getHeight() - TControl.AdjustToDPI(70));
+  button.setLeft(TControl.AdjustToDPI(10));
+  button.setWidth(TControl.AdjustToDPI(150));
+  button.setHeight(TControl.AdjustToDPI(30));
+  button.setOnClick(@Self._PanelSwapClick);
+
+  button.Create(panel);
+  button.setName('logout_button');
+  button.SetCaption('Logout');
+  button.setOnClick(@Self._LogoutButton);
+  button.SetLeft(TControl.AdjustToDPI(10));
+  button.SetTop(panel.getHeight() - TControl.AdjustToDPI(35));
+  button.setWidth(TControl.AdjustToDPI(150));
+  button.setHeight(TControl.AdjustToDPI(30));
+
+  button.Create(panel);
+  button.setName('install_profile_button');
+  button.SetCaption('Install RuneLite Profile');
+  button.setOnClick(@Self._InstallProfile);
+  button.setWidth(TControl.AdjustToDPI(150));
+  button.setHeight(TControl.AdjustToDPI(30));
+  button.SetTop(panel.getHeight() - TControl.AdjustToDPI(35));
+  button.SetLeft(panel.getWidth() - TControl.AdjustToDPI(10) - button.getWidth());
+
+  panel.setVisible(False);
+  panel.setEnabled(False);
+end;
+
+procedure TWaspForm.SetupMainPanel(form: TForm);
+var
+  panel: TPanel;
+begin
+  panel.Create(form);
+  panel.setName('main_panel');
+  panel.setCaption('');
+  panel.setWidth(Self.Size.X);
+  panel.setHeight(Self.Size.Y);
+  panel.setBevelWidth(0);
+  Self.SetupScriptsPanel(panel);
+  Self.SetupExtraPanel(panel);
 end;
 
 
