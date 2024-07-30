@@ -1,5 +1,5 @@
 {$DEFINE SCRIPT_ID := 'd563990c-4d31-4aba-b214-18e69171ed5e'}
-{$DEFINE SCRIPT_REVISION := '38'}
+{$DEFINE SCRIPT_REVISION := '39'}
 
 {.$DEFINE DEVELOPER_MODE}
 
@@ -1872,7 +1872,7 @@ begin
   Result += "  if Length(paths) <> 1 then" + LineEnding;
   Result += "    TerminateScript('The ' + pkg + ' download is empty or has unexpected things inside.');" + LineEnding + LineEnding;
   Result += "  destination := IncludePath + pkg + SEP;" + LineEnding;
-  Result += "  if DirectoryExists(destination) and not RMDir(destination, True, ['.git']) then" + LineEnding;
+  Result += "  if DirectoryExists(destination) and not RMDir(destination, True, ['.git', 'overrides.simba']) then" + LineEnding;
   Result += "    TerminateScript('Failed to delete old ' + pkg + ' library');" + LineEnding;
   Result += "  if not ForceDirectories(destination) then" + LineEnding;
   Result += "    TerminateScript('Failed to create path: ' + destination);" + LineEnding + LineEnding;
@@ -6180,6 +6180,29 @@ begin
   end;
 end;
 
+procedure TWaspForm._UpdateScripts(sender: TObject);
+var
+  list: TListBox;
+  data: TScriptDataArray;
+  script: TScriptData;
+  idx, i: Int32;
+begin
+  list := Self.Form.GetChild('scripts_listbox');
+  data := WaspClient.GetAllUserScripts();
+
+  for i := 0 to list.getItems().getCount()-1 do
+  begin
+    try
+      Self.Updating.Script := True;
+      WaspUpdater.UpdateScript(data[i]);
+    finally
+      Self.Updating.Script := False;
+    end;
+  end;
+
+  Self._OnScriptChange(list);
+end;
+
 
 procedure TWaspForm._OnTogglePass(sender: TObject);
 var
@@ -6471,6 +6494,14 @@ begin
   Self.TokenTimer.setEnabled(True);
 end;
 
+
+procedure TWaspForm._LogoutButton(sender: TObject);
+begin
+  if WaspClient.Logout() then
+    Self.HandleLogout(TButton(sender).getParent().getParent());
+end;
+
+
 procedure TWaspForm.SetupLoginPanel(form: TForm);
   type TWaspForm = TWaspForm;
 
@@ -6512,12 +6543,6 @@ procedure TWaspForm.SetupLoginPanel(form: TForm);
       setColor($0000FF);
       setStyle([]);
     end;
-  end;
-
-  procedure TWaspForm._LogoutButton(sender: TObject);
-  begin
-    if WaspClient.Logout() then
-      Self.HandleLogout(TButton(sender).getOwner());
   end;
 
   procedure TWaspForm._Validate(edit: TEdit);
@@ -7025,6 +7050,14 @@ begin
   extra.setVisible(not extra.getVisible());
 end;
 
+procedure TWaspForm._ClearCache(sender: TObject);
+begin
+  RMDir(SIMBA_DATA_DIR + 'cache');
+  RMDir(SIMBA_DATA_DIR + 'WaspLib');
+  RMDir(SIMBA_DATA_DIR + 'wasp-launcher' + DirectorySeparator + 'assets');
+  RMDir(SIMBA_DATA_DIR + 'wasp-launcher' + DirectorySeparator + 'downloads');
+end;
+
 procedure TWaspForm.SetupScriptsPanel(parent: TPanel);
   type TWaspForm = TWaspForm;
 
@@ -7147,7 +7180,7 @@ begin
 
   info.Create(panel);
   info.SetCaption(
-    '     Work in progress!' + LineEnding + LineEnding +
+    '       Work in progress!' + LineEnding + LineEnding +
     'More stuff will be added here in the future!' + LineEnding +
     'Thank you for using WaspScripts :)' + LineEnding + LineEnding +
     'Sorry if things have been bumpy for a few days!'
@@ -7155,6 +7188,24 @@ begin
   info.SetFontSize(60);
   info.setTop(Self.Size.Y div 3);
   info.setLeft(Self.Size.X div 3);
+
+  button.Create(panel);
+  button.setName('all_autoupdate_button');
+  button.setCaption('Update All Scripts');
+  button.SetTop(TControl.AdjustToDPI(70));
+  button.setLeft(TControl.AdjustToDPI(10));
+  button.setWidth(TControl.AdjustToDPI(150));
+  button.setHeight(TControl.AdjustToDPI(30));
+  button.setOnClick(@Self._UpdateScripts);
+
+  button.Create(panel);
+  button.setName('clear_cache_button');
+  button.setCaption('Clear cache');
+  button.SetTop(TControl.AdjustToDPI(70));
+  button.setLeft(TControl.AdjustToDPI(200));
+  button.setWidth(TControl.AdjustToDPI(150));
+  button.setHeight(TControl.AdjustToDPI(30));
+  button.setOnClick(@Self._ClearCache);
 
   button.Create(panel);
   button.setName('extra_button');
@@ -7325,6 +7376,3 @@ begin
   GitHubClient.Setup();
   WaspForm.Run();
 end;
-
-
-
