@@ -1,5 +1,5 @@
 {$DEFINE SCRIPT_ID := 'd563990c-4d31-4aba-b214-18e69171ed5e'}
-{$DEFINE SCRIPT_REVISION := '40'}
+{$DEFINE SCRIPT_REVISION := '41'}
 
 {.$DEFINE DEVELOPER_MODE}
 
@@ -1882,6 +1882,8 @@ begin
   Result += "  begin" + LineEnding;
   Result += "    fPath := Replace(f, path, '', [rfReplaceAll]);" + LineEnding;
   Result += "    if Pos('.git', fPath) > 0 then" + LineEnding;
+  Result += "      Continue;" + LineEnding + LineEnding;
+  Result += "    if Pos('overrides.simba', fPath) > 0 then" + LineEnding;
   Result += "      Continue;" + LineEnding + LineEnding;
   Result += "    if not ForceDirectories(destination + ExtractFilePath(fPath)) then" + LineEnding;
   Result += "      TerminateScript('Failed to create path: ' + destination + ExtractFilePath(fPath));" + LineEnding + LineEnding;
