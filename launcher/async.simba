@@ -317,7 +317,7 @@ begin
   Result += "  if Length(paths) <> 1 then" + LineEnding;
   Result += "    TerminateScript('The ' + pkg + ' download is empty or has unexpected things inside.');" + LineEnding + LineEnding;
   Result += "  destination := IncludePath + pkg + SEP;" + LineEnding;
-  Result += "  if DirectoryExists(destination) and not RMDir(destination, True, ['.git']) then" + LineEnding;
+  Result += "  if DirectoryExists(destination) and not RMDir(destination, True, ['.git', 'overrides.simba']) then" + LineEnding;
   Result += "    TerminateScript('Failed to delete old ' + pkg + ' library');" + LineEnding;
   Result += "  if not ForceDirectories(destination) then" + LineEnding;
   Result += "    TerminateScript('Failed to create path: ' + destination);" + LineEnding + LineEnding;
