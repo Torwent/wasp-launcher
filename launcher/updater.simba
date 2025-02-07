@@ -5,6 +5,7 @@
 
 type
   TScriptFile = record
+    URL: String;
     ID: String;
     Revision: Int32;
     Path: String;
@@ -158,14 +159,13 @@ end;
 
 function TWaspUpdater.GetScriptFileEx(filepath: String): TScriptFile;
 var
-  id, fileContent: String;
+  url, id, fileContent: String;
+  tmp: String;
 begin
-  id := ExtractFileName(filepath).Before('.simba');
-  if not id.IsUUID() then
-    Exit;
-  Result.ID := id;
+  Result.URL := ExtractFileName(filepath).Before('.simba');
   Result.Path := filepath;
   fileContent := ReadFileContents(filepath);
+  Result.ID := fileContent.After('SCRIPT_ID := ''').Before('''}');
   Result.Revision := StrToIntDef(fileContent.After('SCRIPT_REVISION := ''').Before('''}'), 0);
 end;
 
@@ -175,15 +175,13 @@ var
   i: Int32;
   script: TScriptFile;
 begin
-  if Self.Scripts <> [] then
-    Exit(Self.Scripts);
+  if Self.Scripts <> [] then Exit(Self.Scripts);
 
   files := GetFiles(Self.ScriptsPath, 'simba');
   for i := 0 to High(files) do
   begin
     script := GetScriptFileEx(Self.ScriptsPath + files[i]);
-    if script <> [] then
-      Result += script;
+    if script <> [] then Result += script;
   end;
 
   Self.Scripts := Result;
@@ -220,14 +218,14 @@ var
   fileName, path: String;
 begin
   files := GetFiles(WaspClient.DownloadPath, 'simba');
+
   for fileName in files do
     DeleteFile(WaspClient.DownloadPath + fileName);
 
-  WaspClient.DownloadScript(script.ID, script.Revision);
+  WaspClient.DownloadScript(script.URL, script.ID, script.Revision);
 
   files := GetFiles(WaspClient.DownloadPath, 'simba');
-  if Length(files) <> 1 then
-    Exit;
+  if Length(files) <> 1 then Exit;
 
   fileName := files[0];
   path := Self.ScriptsPath + fileName;

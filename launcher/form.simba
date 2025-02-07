@@ -11,10 +11,7 @@ type
   TWaspForm = record
     Form: TForm;
     Size: TPoint;
-    TokenTimer: TTimer;
-
-    ReadClipboard: Boolean;
-
+    ServerListener: TTimer;
     Updating: record
       SRL: Boolean;
       WaspLib: Boolean;
@@ -43,7 +40,6 @@ begin
   pass := loginPanel.GetChild('password_edit');
   pass.Clear();
 
-  Self.TokenTimer.setEnabled(False);
   msPanel := Self.Form.GetChild('main_panel');
   dPanel := Self.Form.GetChild('discord_panel');
 
@@ -310,12 +306,12 @@ begin
 
   update := panel.GetChild('update_script_button');
 
-  if scriptFile.Revision = 0 then
-    update.setCaption('Install')
-  else if scriptFile.Revision <> scriptData.Revision then
-    update.setCaption('Update')
-  else
-    update.setCaption('Re-install');
+  case scriptFile.Revision of
+    0: update.setCaption('Install');
+    scriptData.Revision: update.setCaption('Re-install');
+    else update.setCaption('Update');
+  end;
+
   open  := main.GetChild('script_open_button');
   open.setEnabled(scriptFile.Revision <> 0);
 
@@ -356,11 +352,58 @@ begin
 end;
 
 procedure TWaspForm._OnScriptOnKeyDown(sender: TObject; var key: Char);
+var
+  panel: TPanel;
+  edit: TEdit;
+  str: String;
+  tmp: Char;
 begin
-  case key of
+  tmp := key;
+  key := #0;
+
+  case tmp of
     ' ': Self._UpdateScript();
     #13: Self._OpenScript(sender);
   end;
+
+  panel := TControl(sender).getParent().getParent().getParent().getParent();
+  edit := panel.GetChild('search_edit');
+  str := edit.getText();
+  if tmp = #08 then
+  begin
+    SetLength(str, Length(str)-1);
+    edit.setText(str);
+    Exit;
+  end;
+
+  edit.setText(str + tmp);
+end;
+
+procedure TWaspForm._OnScriptSearchChange(sender: TObject);
+var
+  parent: TControl;
+  list: TListBox;
+  edit: TEdit;
+  query: String;
+  i: Int32;
+begin
+  parent := TControl(sender).getParent();
+  while parent.getName() <> 'scripts_panel' do parent := parent.getParent();
+
+  list := parent.GetChild('scripts_listbox');
+  edit := parent.GetChild('search_edit');
+
+  query := LowerCase(Trim(edit.GetText()));
+  if (query = '') then Exit;
+
+
+  for i := 0 to list.getItems().getCount() - 1 do
+    if list.getItems().getStrings(i).Lower().Contains(query) then
+    begin
+      list.setItemIndex(i);
+      Self._OnScriptChange(list);
+      Break;
+    end;
 end;
 
 
@@ -417,123 +460,52 @@ procedure TWaspForm.SetupDiscordPanel(form: TForm);
     lPanel := Self.Form.GetChild('login_panel');
     lPanel.Show();
     dPanel.Hide();
-    Self.TokenTimer.setEnabled(False);
-  end;
-
-  procedure TWaspForm._ClipboardToggle(sender: TObject);
-  begin
-    Self.ReadClipboard := TCheckBox(sender).IsChecked();
+    CloseFile(CreateFile(WaspAsync.Path + 'server-stop'));
+    Self.ServerListener.setEnabled(False);
   end;
 
 var
   panel: TPanel;
-  tokenEdit: TLabeledEdit;
   cancel: TButton;
-  caption: TLabel;
-  check: TLabeledCheckBox;
+  caption, info: TLabel;
+  h, w: Int32;
 begin
   panel.Create(form);
   panel.setName('discord_panel');
   panel.setCaption('');
-  panel.setWidth(TControl.AdjustToDPI(400));
-  panel.setHeight(TControl.AdjustToDPI(150));
-  panel.SetLeft(Self.Size.X div 2 - panel.getWidth() div 2);
+  panel.setWidth(TControl.AdjustToDPI(600));
+  panel.setHeight(TControl.AdjustToDPI(300));
+
+  h := panel.getHeight() div 2;
+  w := panel.getWidth() div 2;
+
+  panel.SetLeft(Self.Size.X div 2 - w);
   panel.SetTop(Self.Size.Y div 2 - (panel.getHeight() - (panel.getHeight() div 10)));
   panel.setBevelWidth(0);
   panel.Hide();
 
-  tokenEdit.Create(panel);
-  tokenEdit.SetName('discord_token');
-  tokenEdit.SetCaption('Token:');
-  tokenEdit.SetWidth(panel.getWidth());
-  tokenEdit.SetControlColor($303030);
-  tokenEdit.setControlFontColor($F0F0F0);
-
-  check.Create(panel);
-  check.SetName('clipboard_');
-  check.SetCaption('Read clipboard');
-  check.SetTop(tokenEdit.GetTop());
-  if LauncherConfig.JSON.has('clipboard_checkbox') then
-  begin
-    if LauncherConfig.GetBoolean('clipboard_checkbox') then
-      check.SetChecked(True);
-  end
-  else
-    check.SetChecked(True);
-  check.SetLeft(panel.getWidth() - check.GetWidth());
-
-  check.CheckBox.setOnChange(@Self._ClipboardToggle);
-  Self._ClipboardToggle(check.CheckBox);
-
   caption.Create(panel);
   caption.SetName('discord_label');
-  caption.SetTop(tokenEdit.GetBottom() + TControl.AdjustToDPI(20));
-  caption.SetCaption('Waiting for token');
-  caption.SetLeft(panel.getWidth() div 2 - caption.GetTrueWidth() div 2);
+  caption.SetTop(h);
+  caption.SetFontSize(32);
+  caption.SetCaption('Sign In On Your Browser');
+  caption.SetLeft(w - caption.GetTrueWidth() div 2);
+
+  info.Create(panel);
+  info.SetName('discord_info_label');
+  info.SetTop(h + h div 3);
+  info.SetCaption('This page will refresh once you''re signed in.');
+  info.SetLeft(w - info.GetTrueWidth() div 2);
 
   cancel.Create(panel);
   cancel.SetName('cancel_button');
   cancel.SetCaption('Cancel');
   cancel.setWidth(panel.getWidth() div 3);
-  cancel.SetLeft(panel.getWidth() div 2 - cancel.getWidth() div 2);
-  cancel.SetTop(panel.getHeight() - TControl.AdjustToDPI(40));
+  cancel.SetLeft(w - cancel.getWidth() div 2);
+  cancel.SetTop(info.getTop() + info.getHeight() + TControl.AdjustToDPI(20));
   cancel.setOnClick(@Self._CancelButton);
 end;
 
-procedure TWaspForm._OnTimer(sender: TObject);
-var
-  panel: TPanel;
-  caption: TLabel;
-  edit: TEdit;
-  token: String;
-  i: Int32;
-  {$IFDEF DEVELOPER_MODE}t: Double;{$ENDIF}
-begin
-  {$IFDEF DEVELOPER_MODE}t := PerformanceTimer();{$ENDIF}
-  if Self.ReadClipboard then
-  begin
-    token := GetClipBoard();
-
-    if token.IsRefreshToken() and WaspClient.Login(token) then
-    begin
-      Self.HandleLogin(Self.Form.GetChild('login_panel'));
-      {$IFDEF DEVELOPER_MODE}
-      WriteLn('Full login took: ', Round(PerformanceTimer()-t, 4), 'ms.');
-      {$ENDIF}
-      Exit;
-    end;
-  end;
-
-  panel := Self.Form.GetChild('discord_panel');
-
-  if not Self.ReadClipboard then
-  begin
-    edit := Self.Form.GetChild('discord_token_edit');
-    token := edit.GetText();
-    if token.IsRefreshToken() and WaspClient.Login(token) then
-    begin
-      Self.HandleLogin(Self.Form.GetChild('login_panel'));
-      {$IFDEF DEVELOPER_MODE}
-      WriteLn('Full login took: ', Round(PerformanceTimer()-t, 4), 'ms.');
-      {$ENDIF}
-      Exit;
-    end;
-  end;
-
-  caption := panel.GetChild('discord_label');
-
-  i := caption.GetTextLen() - 17 + 1;
-  if i > 3 then i := 0;
-
-  caption.SetCaption('Waiting for login' + '.' * i);
-  caption.SetLeft(panel.getWidth() div 2 - caption.GetTrueWidth() div 2);
-end;
-
-procedure TWaspForm.RunTimer();
-begin
-  Self.TokenTimer.setOnTimer(@Self._OnTimer);
-  Self.TokenTimer.setEnabled(True);
-end;
 
 
 procedure TWaspForm._LogoutButton(sender: TObject);
@@ -542,6 +514,45 @@ begin
     Self.HandleLogout(TButton(sender).getParent().getParent());
 end;
 
+
+
+procedure TWaspForm._OnListen(sender: TObject);
+var
+  token: String;
+  i: Int32;
+  {$IFDEF DEVELOPER_MODE}t: Double;{$ENDIF}
+begin
+  {$IFDEF DEVELOPER_MODE}t := PerformanceTimer();{$ENDIF}
+  if FileExists(WaspAsync.Path + 'server-failed.done') then
+  begin
+    DeleteFile(WaspAsync.Path + 'server-failed.done');
+    TTimer(sender).setEnabled(False);
+    Self._CancelButton(Self.Form.GetChild('cancel_button'));
+    Exit;
+  end;
+
+  if not FileExists(WaspAsync.Path + 'server-success.done') then Exit;
+
+  token := ReadFileContents(WaspAsync.Path + 'server-success.done');
+  DeleteFile(WaspAsync.Path + 'server-success.done');
+  TTimer(sender).setEnabled(False);
+  CloseFile(CreateFile(WaspAsync.Path + 'server-stop'));
+
+  if (token <> '') and WaspClient.FinishOAuth2Login(token) then
+  begin
+    Self.HandleLogin(Self.Form.GetChild('login_panel'));
+    {$IFDEF DEVELOPER_MODE}
+    WriteLn('Full login took: ', Round(PerformanceTimer()-t, 4), 'ms.');
+    {$ENDIF}
+    Exit;
+  end;
+end;
+
+procedure TWaspForm.Listen();
+begin
+  Self.ServerListener.setOnTimer(@Self._OnListen);
+  Self.ServerListener.setEnabled(True);
+end;
 
 procedure TWaspForm.SetupLoginPanel(form: TForm);
   type TWaspForm = TWaspForm;
@@ -669,8 +680,11 @@ procedure TWaspForm.SetupLoginPanel(form: TForm);
     dPanel.Show();
     lPanel.Hide();
 
-    OpenWebPage('https://waspscripts.com/auth/refresh-token/');
-    Sync(@Self.RunTimer);
+    WaspClient.StartOAuth2Login();
+    DeleteFile(WaspAsync.Path + 'server-failed.done');
+    DeleteFile(WaspAsync.Path + 'server-success.done');
+    RunScript(WaspAsync.Path + 'server.simba', ['LauncherPID=' + ToString(GetProcessID())]);
+    Sync(@Self.Listen);
   end;
 var
   panel: TPanel;
@@ -1115,6 +1129,7 @@ var
   user, id, launcherRev: TLabel;
   button: TButton;
   scriptsList: TLabeledDarkListBox;
+  search: TLabeledEdit;
 begin
   panel.Create(parent);
   panel.setName('scripts_panel');
@@ -1149,12 +1164,24 @@ begin
   scriptsList.SetLeft(id.getLeft());
   scriptsList.SetTop(id.GetTop() + id.getHeight() + TControl.AdjustToDPI(15));
   scriptsList.SetWidth(TControl.AdjustToDPI(260));
-  scriptsList.setHeight(Self.Size.Y - scriptsList.GetTop() - TControl.AdjustToDPI(80));
+  scriptsList.setHeight(Self.Size.Y - scriptsList.GetTop() - TControl.AdjustToDPI(130));
   scriptsList.ListBox.ListBox.setOnClick(@Self._OnScriptChange);
   scriptsList.ListBox.ListBox.setOnKeyPress(@Self._OnScriptOnKeyDown);
   scriptsList.ListBox.ListBox.setStyle(TListBoxStyle.lbOwnerDrawFixed);
   scriptsList.ListBox.ListBox.setOnDrawItem(@Self.OnDrawItem);
   scriptsList.ListBox.ListBox.setColor($242322);
+
+  search.Create(panel);
+  search.SetCaption('Search');
+  search.SetTop(scriptsList.GetBottom() + TControl.AdjustToDPI(5));
+  search.SetLeft(id.getLeft());
+  search.SetHeight(TControl.AdjustToDPI(40));
+  search.SetWidth(TControl.AdjustToDPI(260));
+  search.SetName('search');
+  search.SetControlColor($303030);
+  search.setControlFontColor($F0F0F0);
+  search.Edit.setOnChange(@Self._OnScriptSearchChange);
+
 
   button.Create(panel);
   button.setName('extra_button');
@@ -1331,9 +1358,9 @@ begin
     SetColor($F0F0F0);
   end;
 
-  Self.TokenTimer.Init(nil);
-  Self.TokenTimer.setName('token_timer');
-  Self.TokenTimer.setInterval(1500);
+  Self.ServerListener.Init(nil);
+  Self.ServerListener.setName('server_listener');
+  Self.ServerListener.setInterval(1500);
 
   Self.SetupLoginPanel(Self.Form);
   Self.SetupDiscordPanel(Self.Form);
@@ -1355,8 +1382,8 @@ begin
     Writeln(GetExceptionMessage());
   finally
     Self.Form.Free();
-    Self.TokenTimer.setEnabled(False);
-    Self.TokenTimer.Free();
+    Self.ServerListener.setEnabled(False);
+    Self.ServerListener.Free();
   end;
 end;
 

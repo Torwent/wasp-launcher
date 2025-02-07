@@ -28,6 +28,7 @@ begin
   FreeHTTPClient(Self.Client);
 end;
 
+
 function THTTPClient.GET(route: String; verbose: Boolean = True): String;
 var
   time: UInt64;
@@ -61,6 +62,7 @@ begin
     DebugLn(Self.Name, 'HTTPCode: ' + ToStr(Self.GetHTTPCode()) + ' - Download took: ' + ToStr(time) + 'ms.');
     {$ENDIF}
 end;
+
 
 function THTTPClient.POST(route: String; verbose: Boolean = True): String;
 var
@@ -99,6 +101,7 @@ function THTTPClient.POST(route: String; payload: TJSONObject; verbose: Boolean 
 begin
   Result := Self.POST(route, payload.toString(), verbose);
 end;
+
 
 (*
 # GithubClient
@@ -308,6 +311,7 @@ type
     APIKey: String;
     DownloadPath: String;
     AssetsPath: String;
+    PKCEVerifier: String;
 
     Cache: record
       User: record
@@ -441,6 +445,151 @@ begin
   payload.Put('refresh_token', refreshToken);
   Result := Self.Login('refresh_token', payload);
 end;
+
+
+function TWaspClient.GeneratePKCEVerifier(challengeLength: Int32 = 56): String;
+const
+  CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~';
+var
+  i, n: Int32;
+begin
+  n := Length(CHARS);
+  for i := 1 to challengeLength do
+    Result += CHARS[Random(n) + 1];
+end;
+
+
+
+function TWaspClient.GeneratePKCEChallenge(verifier: String): String;
+  {$R-}
+  //Hex2Bytes by slacky
+  function Hex2Bytes(const hexStr: string): TByteArray;
+  var i: Int32;
+  const
+    lookup: array[48..70] of Byte = [
+      0, 1, 2, 3, 4, 5, 6, 7, 8, 9,   // '0' to '9'
+      0, 0, 0, 0, 0, 0, 0,
+      10, 11, 12, 13, 14, 15          // 'A' to 'F'
+    ];
+  begin
+    if (Length(hexStr) mod 2 <> 0) then Exit;
+    SetLength(Result, Length(hexStr) div 2);
+
+    for i := 1 to Length(hexStr) with 2 do
+    begin
+      Result[i shr 1] := (lookup[Byte(hexStr[i])] shl 4) or lookup[Byte(hexStr[i+1])];
+    end;
+  end;
+
+  function Base64UrlEncode(const data: TByteArray): string;
+  const
+    BASE64URLTable: string = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+  var
+    i, j: Integer;
+    triplet: Cardinal;
+    pad: Integer;
+  begin
+    while i < Length(data) do
+    begin
+      triplet := 0;
+      pad := 0;
+
+      // Read up to 3 bytes into a 24-bit integer
+      for j := 0 to 2 do
+      begin
+        triplet := triplet shl 8;
+        if (i + j < Length(data)) then
+          triplet := triplet or data[i + j]
+        else
+          Inc(pad);  // Count missing bytes for padding
+      end;
+
+      // Convert 24-bit integer into four 6-bit values and map to Base64URL
+      for j := 0 to 3 - pad do
+        Result += BASE64URLTable[(triplet shr ((3 - j) * 6)) and $3F + 1];
+
+      i := i + 3;
+    end;
+  end;
+  {$R+}
+var
+  bytes: TByteArray;
+begin
+  verifier := Hash(THashType.htSHA256, verifier);
+  bytes := Hex2Bytes(verifier);
+  Result := Base64UrlEncode(bytes);
+end;
+
+
+procedure TWaspClient.StartOAuth2Login(provider: String = 'discord'; method: String = 's256');
+const
+  ROUTE: String = 'auth/v1/authorize';
+  SERVER_PORT: String = '5173';
+var
+  code, query: String;
+  response: TJSONObject;
+begin
+  Self.PKCEVerifier := Self.GeneratePKCEVerifier();
+
+  case method of
+    'plain': code := Self.PKCEVerifier;
+    's256':  code := GeneratePKCEChallenge(Self.PKCEVerifier);
+    else     RaiseException('Unknown PKCE method: ' + method);
+  end;
+
+  query := '?provider=' + provider;
+  query += '&redirect_to=http%3A%2F%2Flocalhost%3A' + SERVER_PORT + '%2F';
+  query += '&scopes=identify%20email%20guilds%20guilds.members.read';
+  query += '&code_challenge=' + code;
+  query += '&code_challenge_method=' + method;
+  OpenWebPage(Self.Server + ROUTE + query);
+end;
+
+function TWaspClient.FinishOAuth2Login(auth_code: String): Boolean;
+const
+  ROUTE: String = 'auth/v1/token';
+  QUERY: String = '?grant_type=pkce';
+var
+  payload, response: TJSONObject;
+begin
+  payload.Init();
+  payload.Put('auth_code', auth_code);
+  payload.Put('code_verifier', Self.PKCEVerifier);
+  Self.PKCEVerifier := '';
+
+  try
+    response.Init(Self.POST(ROUTE + QUERY, payload, False));
+
+    if Self.GetHTTPCode() = 200 then
+    begin
+      Self.Cache.User.AccessToken := response.getString('access_token');
+      Self.Cache.User.RefreshToken := response.getString('refresh_token');
+      Self.Cache.User.ID := response.getJSONObject('user').getString('id');
+      Self.Cache.User.Username := response.getJSONObject('user').getJSONObject('user_metadata').getJSONObject('custom_claims').getString('global_name');
+      Self.RefreshClient();
+      Self.SaveRefreshToken();
+      Self.Cache.Free := False;
+
+      Self.GetAllUserScripts();
+      Exit(True);
+    end;
+
+    Self.Cache.User := [];
+    LauncherConfig.Remove('refresh_token');
+    Self.FreeUserData();
+  except
+    WriteLn('Error logging in: ', GetExceptionMessage());
+    if response <> nil then
+      TerminateScript('Response: ' + response.ToString());
+  finally
+    payload.Free();
+    if response <> nil then
+      response.Free();
+  end;
+end;
+
+
+
 
 
 function TWaspClient.GetUserData(): TJSONObject;
@@ -663,7 +812,7 @@ begin
       script.Name := getString('title');
       script.Description := getString('description');
       script.Content := getString('content');
-      script.URL := 'https://waspscripts.com/scripts/' + getString('url');
+      script.URL := getString('url');
       script.Revision := getJSONObject('protected').getInt('revision');
 
       script.Content := script.Content.
@@ -1033,7 +1182,7 @@ begin
 end;
 
 
-procedure TWaspClient.DownloadScript(id: String; revision: Int32);
+procedure TWaspClient.DownloadScript(name, id: String; revision: Int32);
 const
   ROUTE: String = 'storage/v1/object/authenticated/scripts/';
 var
@@ -1041,8 +1190,9 @@ var
 begin
   revStr := PadL(ToStr(revision), 9, '0');
   url := ROUTE + id + '/' + revStr + '/script.simba';
-  DebugLn(Self.Name, 'Downloading ' + id + ' rev. ' + ToStr(revision) + ' this might take a while.');
-  if not Self.GETEx(url, Self.DownloadPath + id + '.simba') then
+
+  DebugLn(Self.Name, 'Downloading ' + name + ' rev. ' + ToStr(revision) + ' this might take a while.');
+  if not Self.GETEx(url, Self.DownloadPath + name + '.simba') then
     TerminateScript('Something went wrong while trying to download: ' + url);
 end;
 
