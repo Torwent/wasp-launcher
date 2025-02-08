@@ -1,5 +1,5 @@
 {$DEFINE SCRIPT_ID := 'd563990c-4d31-4aba-b214-18e69171ed5e'}
-{$DEFINE SCRIPT_REVISION := '42'}
+{$DEFINE SCRIPT_REVISION := '43'}
 
 {.$DEFINE DEVELOPER_MODE}
 
@@ -6394,12 +6394,12 @@ procedure TWaspUpdater.SelfUpdate();
 begin
   Self.UpdateScript(WaspClient.Cache.Launcher);
 
-  if FileExists(Self.ScriptsPath + Self.Launcher.ID + '.simba') then
+  if FileExists(Self.ScriptsPath + 'wasp_launcher.simba') then
   begin
     if FileExists(Self.Launcher.Path) and not DeleteFile(Self.Launcher.Path) then
       TerminateScript('Failed to delete old launcher.');
 
-    if not CopyFile(Self.ScriptsPath + Self.Launcher.ID + '.simba', Self.Launcher.Path) then
+    if not CopyFile(Self.ScriptsPath + 'wasp_launcher.simba', Self.Launcher.Path) then
       TerminateScript('Failed to copy updated launcher to it''s directory.');
   end;
 end;
