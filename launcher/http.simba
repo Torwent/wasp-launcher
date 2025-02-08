@@ -524,7 +524,7 @@ end;
 procedure TWaspClient.StartOAuth2Login(provider: String = 'discord'; method: String = 's256');
 const
   ROUTE: String = 'auth/v1/authorize';
-  SERVER_PORT: String = '5173';
+  SERVER_PORT: String = '5217';
 var
   code, query: String;
   response: TJSONObject;

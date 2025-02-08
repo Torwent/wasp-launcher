@@ -449,7 +449,7 @@ begin
   Result += "begin" + LineEnding;
   Result += "  Self.ID   := CreateSocket();" + LineEnding;
   Result += "  Self.IP   := '127.0.0.1';" + LineEnding;
-  Result += "  Self.Port := '5173';" + LineEnding + LineEnding;
+  Result += "  Self.Port := '5217';" + LineEnding + LineEnding;
   Result += "  for attempt := 0 to 200 do" + LineEnding;
   Result += "  begin" + LineEnding;
   Result += "    if Self.AttemptSocketBind() then Break;" + LineEnding;

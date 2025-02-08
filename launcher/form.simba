@@ -278,6 +278,8 @@ var
   scriptFile: TScriptFile;
 begin
   list := sender;
+  list.Repaint();
+
   scriptData := WaspClient.GetAllUserScripts()[list.getItemIndex()];
   scriptFile := WaspUpdater.GetScriptFile(scriptData.ID);
 
@@ -401,6 +403,7 @@ begin
     if list.getItems().getStrings(i).Lower().Contains(query) then
     begin
       list.setItemIndex(i);
+      list.SetFocus();
       Self._OnScriptChange(list);
       Break;
     end;
@@ -1071,8 +1074,9 @@ var
   color, fColor: TColor;
 begin
   listbox := control;
-  if idx mod 2 = 0 then color:=$303030
-  else color:=$282828;
+  if idx = listbox.getItemIndex() then color := $505050
+  else if idx mod 2 = 0 then color := $303030
+  else color := $282828;
 
   if WaspClient.GetAllUserScripts()[idx].Categories.Contains('Premium') then
     fColor := $4DB5FF
@@ -1181,7 +1185,6 @@ begin
   search.SetControlColor($303030);
   search.setControlFontColor($F0F0F0);
   search.Edit.setOnChange(@Self._OnScriptSearchChange);
-
 
   button.Create(panel);
   button.setName('extra_button');
