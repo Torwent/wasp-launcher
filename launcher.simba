@@ -1,5 +1,5 @@
 {$DEFINE SCRIPT_ID := 'd563990c-4d31-4aba-b214-18e69171ed5e'}
-{$DEFINE SCRIPT_REVISION := '41'}
+{$DEFINE SCRIPT_REVISION := '42'}
 
 {.$DEFINE DEVELOPER_MODE}
 
@@ -100,7 +100,7 @@ begin
   Result := MsToTime(GetTimeRunning(), TheType);
 end;
 
-function TSRL.TimeStamp: String;
+function TSRL.TimeStamp(): String;
 var
   Time: Int64;
   Hours, Mins, Secs, Millis: Int32;
@@ -167,7 +167,7 @@ begin
   Self.Timeout := Self.Timeout + Time;
 end;
 
-function TCountDown.TimeRemaining: UInt32;
+function TCountDown.TimeRemaining(): UInt32;
 begin
   if Self.IsPaused() then
     Result := Max(Self.Timeout - Self.Paused, 0)
@@ -175,23 +175,23 @@ begin
     Result := Max(Self.Timeout - GetTickCount(), 0);
 end;
 
-function TCountDown.IsFinished: Boolean;
+function TCountDown.IsFinished(): Boolean;
 begin
   Result := (Self.Timeout > 0) and (Self.Paused = 0) and (TimeRemaining() = 0);
 end;
 
-function TCountDown.IsPaused: Boolean;
+function TCountDown.IsPaused(): Boolean;
 begin
   Result := Self.Paused > 0;
 end;
 
-procedure TCountDown.Pause;
+procedure TCountDown.Pause();
 begin
   if not Self.IsPaused() then
     Self.Paused := GetTickCount();
 end;
 
-procedure TCountDown.Resume;
+procedure TCountDown.Resume();
 begin
   if Self.IsPaused() then
   begin
@@ -220,7 +220,7 @@ type
     TotalPausedTime: UInt64;
   end;
 
-procedure TStopWatch.Start;
+procedure TStopWatch.Start();
 begin
   if Self.PausedTime > 0 then
   begin
@@ -230,24 +230,24 @@ begin
     Self.StartTime := GetTickCount();
 end;
 
-procedure TStopWatch.Resume;
+procedure TStopWatch.Resume();
 begin
   Self.Start();
 end;
 
-procedure TStopWatch.Pause;
+procedure TStopWatch.Pause();
 begin
   Self.PausedTime := GetTickCount();
 end;
 
-procedure TStopWatch.Reset;
+procedure TStopWatch.Reset();
 begin
   Self.StartTime := GetTickCount();
   Self.PausedTime := 0;
   Self.TotalPausedTime := 0;
 end;
 
-function TStopWatch.ElapsedTime: UInt64;
+function TStopWatch.ElapsedTime(): UInt64;
 begin
   if Self.PausedTime > 0 then
     Result := (GetTickCount() - Self.StartTime) - (GetTickCount() - Self.PausedTime)
@@ -255,7 +255,7 @@ begin
     Result := (GetTickCount() - Self.StartTime) - Self.TotalPausedTime;
 end;
 
-function TStopWatch.IsPaused: Boolean;
+function TStopWatch.IsPaused(): Boolean;
 begin
   Result := Self.PausedTime > 0;
 end;
@@ -987,13 +987,21 @@ Returns the hexadecimal value that represents the string.
 *)
 function String.Hex(): string; constref;
 var
-  n: Integer;
+  n: Int32;
 begin
   Result := '';
   for n := 1 to Length(Self) do
     Result := LowerCase(Result + IntToHex(Ord(Self[n]), 2));
 end;
 
+function String.Hash(): UInt32; constref;
+var
+  i: Int32;
+begin
+  Result := $811C9DC5;
+  for i := 1 to Length(Self) do
+    Result := (Result * $1000193) xor Ord(Self[i]);
+end;
 
 //---| operator overloads bellow this |---------------------------------------\\
 (*
@@ -1052,77 +1060,79 @@ end;
 {$DEFINE SRL_STRINGARRAY_INCLUDED}
 
 
-procedure TStringArray.Append(const Value: String);
+procedure TStringArray.Append(const value: String);
 var top:Int32;
 begin
   top := Length(Self);
   SetLength(self, top+1);
-  Self[top] := Value;
+  Self[top] := value;
 end;
 
-procedure TStringArray.Insert(const Value: String; Index: Integer);
+procedure TStringArray.Insert(const value: String; index: Int32);
 var
   l: UInt32;
 begin
   l := Length(Self);
-  if (l <= Index) then
+  if (l <= index) then
   begin
-    Self.Append(Value);
+    Self.Append(value);
     Exit();
   end;
 
   SetLength(Self, l + 1);
-  MemMove(Self[Index], self[Index + 1], (L - Index) * SizeOf(Pointer));
-  Self[Index] := Value;
+  MemMove(Self[index], self[index + 1], (L - index) * SizeOf(Self[0]));
+  Self[index] := value;
 end;
 
-procedure TStringArray.Del(const Index: Integer; const Count: Integer = 1);
+procedure TStringArray.Del(const index: Int32; const Count: Int32 = 1);
 begin
-  Delete(Self, Index, Count);
+  Delete(Self, index, Count);
 end;
 
-function TStringArray.Len(): Integer;
+
+function TStringArray.Len(): Int32;
 begin
   Result := Length(Self);
 end;
 
-procedure TStringArray.Remove(const Value: String; const All: Boolean = False);
+procedure TStringArray.Remove(const value: String; const All: Boolean = False);
 var
   i: Int32;
   lst: TIntegerArray;
 begin
   if (not All) then
   begin
-    i := Self.Find(Value);
+    i := Self.Find(value);
     if i >= 0 then Self.Del(i);
     Exit;
   end;
 
-  lst := Self.FindAll(Value);
+  lst := Self.FindAll(value);
   for i:=High(lst) downto 0 do
     Self.Del(lst[i]);
 end;
 
 function TStringArray.Pop(): String;
 var
-  h: Integer;
+  h: Int32;
 begin
   h := High(Self);
   Result := Self[h];
   SetLength(Self, h);
 end;
 
-procedure TStringArray.Extend(const Arr: TStringArray);
-var i,len:Int32;
+procedure TStringArray.Extend(const arr: TStringArray);
+var
+  i, len: Int32;
 begin
   len := Length(Self);
-  SetLength(Self, len+Length(Arr));
-  for i:=0 to High(Arr) do
-    Self[len+i] := Arr[i];
+  SetLength(Self, len+Length(arr));
+  for i:=0 to High(arr) do
+    Self[len+i] := arr[i];
 end;
 
 
-function TStringArray.Find(const value: String): Integer; constref;
+function TStringArray.Find(const value: String): Int32; constref;
 begin
   for Result := 0 to High(Self) do
     if value = Self[Result] then
@@ -1130,12 +1140,12 @@ begin
   Result := -1;
 end;
 
-function TStringArray.FindAll(const Value: String): TIntegerArray; constref;
+function TStringArray.FindAll(const value: String): TIntegerArray; constref;
 var
   i: UInt32;
 begin
   for i:=0 to High(Self) do
-    if (Self[i] = Value) then
+    if (Self[i] = value) then
       Result += i;
 end;
 
@@ -1162,6 +1172,58 @@ begin
     if not Self.Contains(value) then
       Exit;
   Result := True;
+end;
+
+
+procedure TStringArray.Sort();
+begin
+  System.Sort(Self);
+end;
+
+function TStringArray.Sorted(): TStringArray;
+begin
+  Result := Copy(Self);
+  System.Sort(Result);
+end;
+
+
+procedure TStringArray.WeightedSort(weights: TIntegerArray; iLo, iHi: Int32; sortUp: Boolean);
+var
+  lo, hi, mid: Int32;
+begin
+  if (Length(weights) <> Length(Self)) then Exit;
+  lo := iLo;
+  hi := iHi;
+  mid := weights[(lo + hi) shr 1];
+  repeat
+    if sortUp then
+    begin
+      while (weights[lo] < mid) do Inc(lo);
+      while (weights[hi] > mid) do Dec(hi);
+    end
+    else
+    begin
+      while (weights[lo] > mid) do Inc(lo);
+      while (weights[hi] < mid) do Dec(hi);
+    end;
+
+    if (lo <= hi) then
+    begin
+      Swap(weights[lo], weights[hi]);
+      Swap(Self[lo], Self[hi]);
+      Inc(lo);
+      Dec(hi);
+    end;
+  until lo > hi;
+
+  if (hi > iLo) then Self.WeightedSort(weights, iLo, hi, sortUp);
+  if (lo < iHi) then Self.WeightedSort(weights, lo, iHi, sortUp);
+end;
+
+function TStringArray.WeightSorted(weights: TIntegerArray; iLo, iHi: Int32; sortUp: Boolean): TStringArray; constref;
+begin
+  Result := Copy(Self);
+  Result.WeightedSort(weights, iLo, iHi, sortUp);
 end;
 
 
@@ -1206,6 +1268,7 @@ begin
   end;
 end;
 
+
 function TStringArray.Combine(const Arr2: TStringArray): TStringArray; constref;
 var
   i,j: Int32;
@@ -1236,7 +1299,7 @@ begin
   Result := True;
 end;
 
-function TStringArray.Merge(glue:String=''): String; constref;
+function TStringArray.Merge(glue: String = ''): String; constref;
 var
   i:Int32;
 begin
@@ -1246,6 +1309,113 @@ begin
   Result := Self[0];
   for i:=1 to High(Self) do
     Result += glue + Self[i];
+end;
+
+
+procedure TStringArray.ClearDuplicates();
+var
+  i: Int32;
+  unique: TStringArray;
+begin
+  for i := 0 to High(Self) do
+    if unique.Find(Self[i]) = -1 then
+      unique += Self[i];
+
+  Self := unique;
+end;
+
+function TStringArray.Unique(): TStringArray;
+begin
+  Result := Copy(Self);
+  Result.ClearDuplicates();
+end;
+
+
+function TStringArray.ToLower(): TStringArray;
+var
+  i: Int32;
+begin
+  for i := 0 to High(Self) do
+    Result += LowerCase(Self[i]);
+end;
+
+function TStringArray.ToUpper(): TStringArray;
+var
+  i: Int32;
+begin
+  for i := 0 to High(Self) do
+    Result += UpperCase(Self[i]);
+end;
+
+
+function TStringArray.Replace(const oldvalue, newvalue: String): TStringArray;
+var
+  i: Int32;
+begin
+  for i := 0 to High(Self) do
+    Result += StringReplace(Self[i], oldvalue, newvalue, [rfReplaceAll]);
+end;
+
+
+function TStringArray.CountSubstring(const subStr: String): Int32;
+var
+  i: Int32;
+begin
+  for i := 0 to High(Self) do
+    if Self[i].Contains(subStr) then
+      Inc(Result);
+end;
+
+function TStringArray.Count(const value: String): Int32;
+var
+  i: Int32;
+begin
+  for i := 0 to High(Self) do
+    if Self[i] = value then
+      Inc(Result);
+end;
+
+
+function TStringArray.Intersection(other: TStringArray): TStringArray; constref;
+var
+  i: Int32;
+begin
+  for i := 0 to High(other) do
+    if Self.Find(other[i]) > -1 then
+      Result += other[i];
+end;
+
+function TStringArray.Difference(other: TStringArray): TStringArray; constref;
+var
+  item: String;
+begin
+  for item in Self do
+    if other.Find(item) = -1 then
+      Result += item;
+  Result.ClearDuplicates();
+end;
+
+function TStringArray.SymmetricDifference(other: TStringArray): TStringArray; constref;
+var
+  item: String;
+begin
+  for item in Self do
+    if other.Find(item) = -1 then
+      Result += item;
+
+  for item in other do
+    if Self.Find(item) = -1 then
+      Result += item;
+
+  Result.ClearDuplicates();
+end;
+
+
+
+function TStringArray.RandomValue(): String; constref;
+begin
+  if Self <> [] then
+    Result := Self[System.Random(Low(Self), High(Self))];
 end;
 
 
@@ -1374,8 +1544,7 @@ end;
 
 function String.SentenceCase(): String; constref;
 begin
-  if Length(Self) = 0 then
-    Exit;
+  if Length(Self) = 0 then Exit;
   Result := LowerCase(Self);
   Result[1] := UpCase(Result[1]);
 end;
@@ -1466,23 +1635,6 @@ const
 begin
   Result := ExecRegExpr(REGEX, System.Trim(Self));
 end;
-
-
-function TStringArray.ToLower(): TStringArray;
-var
-  i: Int32;
-begin
-  for i := 0 to High(Self) do
-    Result += Self[i].Lower();
-end;
-
-function TStringArray.RandomValue(): String; constref;
-begin
-  if Self <> [] then
-    Result := Self[System.Random(Low(Self), High(Self))];
-end;
-
-
 
 
 {$IFNDEF WS_UTILS_INCLUDED}        
@@ -1914,6 +2066,183 @@ begin
   Result += "end;" + LineEnding;
 end;
 
+function TWaspAsync.GetServerContent(): String;
+begin
+  Result += "//Credits: Slacky" + LineEnding;
+  Result += "function String.After(SubStr: String; p: Int32): String; constref;" + LineEnding;
+  Result += "begin" + LineEnding;
+  Result += "  Inc(p, Length(SubStr));" + LineEnding;
+  Result += "  Result := Copy(Self, p, Length(Self) - p + 1);" + LineEnding;
+  Result += "end;" + LineEnding + LineEnding;
+  Result += "type" + LineEnding;
+  Result += "  TSimbaServerClient = record" + LineEnding;
+  Result += "    ID: Int32;" + LineEnding;
+  Result += "    IP, Port: String;" + LineEnding;
+  Result += "    IsSetup: Boolean;" + LineEnding;
+  Result += "  end;" + LineEnding + LineEnding;
+  Result += "  TSimbaServer = record" + LineEnding;
+  Result += "    ID: Int32;" + LineEnding;
+  Result += "    IP, Port: String;" + LineEnding;
+  Result += "    Client: TSimbaServerClient;" + LineEnding;
+  Result += "  end;" + LineEnding + LineEnding;
+  Result += "procedure TSimbaServerClient.CloseAndFree();" + LineEnding;
+  Result += "begin" + LineEnding;
+  Result += "  if not Self.IsSetup then Exit;" + LineEnding;
+  Result += "  CloseSocket(Self.ID);" + LineEnding;
+  Result += "  FreeSocket(Self.ID);" + LineEnding;
+  Result += "  Self.IsSetup := False;" + LineEnding;
+  Result += "end;" + LineEnding + LineEnding;
+  Result += "procedure TSimbaServerClient.WriteString(s: string);" + LineEnding;
+  Result += "begin" + LineEnding;
+  Result += "  SendSocket(Self.ID, s);" + LineEnding;
+  Result += "end;" + LineEnding + LineEnding;
+  Result += "function TSimbaServerClient.SendHTML(content: String): Boolean;" + LineEnding;
+  Result += "var" + LineEnding;
+  Result += "  headers, html: String;" + LineEnding;
+  Result += "begin" + LineEnding;
+  Result += "  html :=" + LineEnding;
+  Result += "  '<!DOCTYPE html>' + LineEnding +" + LineEnding;
+  Result += "    '<html>' + LineEnding +" + LineEnding;
+  Result += "    '  <head>' + LineEnding +" + LineEnding;
+  Result += "    '    <meta charset=''UTF-8''>' + LineEnding +" + LineEnding;
+  Result += "    '    <link rel=''icon'' href=''https://waspscripts.com/favicon.png''>' + LineEnding +" + LineEnding;
+  Result += "    '    <meta name=''viewport'' content=''width=device-width''>' + LineEnding +" + LineEnding;
+  Result += "    '    <title>WaspScripts</title>'  + LineEnding +" + LineEnding;
+  Result += "    '    <meta name=''description'' content=''WaspScripts Simba Login page''>' + LineEnding +" + LineEnding;
+  Result += "    '    <style>' + LineEnding +" + LineEnding;
+  Result += "    '      body {' + LineEnding +" + LineEnding;
+  Result += "    '         background-color: #222324;' + LineEnding +" + LineEnding;
+  Result += "    '         color: white;' + LineEnding +" + LineEnding;
+  Result += "    '         display: flex;' + LineEnding +" + LineEnding;
+  Result += "    '         justify-content: center;' + LineEnding +" + LineEnding;
+  Result += "    '         height: 100vh;' + LineEnding +" + LineEnding;
+  Result += "    '         text-align: center;' + LineEnding +" + LineEnding;
+  Result += "    '         flex-direction: column;' + LineEnding +" + LineEnding;
+  Result += "    '      }' + LineEnding +" + LineEnding;
+  Result += "    '    </style>' + LineEnding +" + LineEnding + LineEnding;
+  Result += "    '  </head>' + LineEnding +" + LineEnding;
+  Result += "    ' <body>' + LineEnding +" + LineEnding;
+  Result += "        content + LineEnding +" + LineEnding;
+  Result += "    ' </body>' + LineEnding +" + LineEnding;
+  Result += "  '</html>';" + LineEnding + LineEnding;
+  Result += "  headers += 'HTTP/1.1 200 OK' + #13#10;" + LineEnding;
+  Result += "  headers += 'Content-Type: text/html'+#13#10;" + LineEnding;
+  Result += "  headers += 'Connection: close'+#13#10;" + LineEnding;
+  Result += "  headers += 'Content-Length: ' + IntToStr(Length(html))+#13#10#13#10;" + LineEnding + LineEnding;
+  Result += "  Result := True;" + LineEnding;
+  Result += "  try" + LineEnding;
+  Result += "    Self.WriteString(headers + html);" + LineEnding;
+  Result += "  except" + LineEnding;
+  Result += "    Exit(False);" + LineEnding;
+  Result += "  end;" + LineEnding;
+  Result += "end;" + LineEnding + LineEnding + LineEnding;
+  Result += "function TSimbaServerClient.Read(): String; overload;" + LineEnding;
+  Result += "begin" + LineEnding;
+  Result += "  Result := RecvSocketStr(Self.ID);" + LineEnding;
+  Result += "end;" + LineEnding + LineEnding + LineEnding;
+  Result += "procedure TSimbaServer.CloseAndFree();" + LineEnding;
+  Result += "begin" + LineEnding;
+  Result += "  CloseSocket(Self.ID);" + LineEnding;
+  Result += "  FreeSocket(Self.ID);" + LineEnding;
+  Result += "end;" + LineEnding + LineEnding;
+  Result += "function TSimbaServer.AttemptSocketBind(): Boolean;" + LineEnding;
+  Result += "begin" + LineEnding;
+  Result += "  try BindSocket(Self.ID, Self.IP, Self.Port); except Exit end;" + LineEnding;
+  Result += "  Result := True;" + LineEnding;
+  Result += "end;" + LineEnding + LineEnding;
+  Result += "procedure TSimbaServer.Setup();" + LineEnding;
+  Result += "var" + LineEnding;
+  Result += "  attempt: Int32;" + LineEnding;
+  Result += "begin" + LineEnding;
+  Result += "  Self.ID   := CreateSocket();" + LineEnding;
+  Result += "  Self.IP   := '127.0.0.1';" + LineEnding;
+  Result += "  Self.Port := '5217';" + LineEnding + LineEnding;
+  Result += "  for attempt := 0 to 200 do" + LineEnding;
+  Result += "  begin" + LineEnding;
+  Result += "    if Self.AttemptSocketBind() then Break;" + LineEnding;
+  Result += "    Sleep(100);" + LineEnding;
+  Result += "  end;" + LineEnding + LineEnding;
+  Result += "  ListenSocket(Self.ID);" + LineEnding;
+  Result += "  Self.Client.ID := -1;" + LineEnding;
+  Result += "end;" + LineEnding + LineEnding;
+  Result += "procedure TSimbaServer.AcceptClient();" + LineEnding;
+  Result += "begin" + LineEnding;
+  Result += "  Self.Client.IsSetup := True;" + LineEnding;
+  Result += "  Self.Client.ID := AcceptSocket(Self.ID);" + LineEnding;
+  Result += "  SocketInfo(Self.Client.ID, Self.Client.IP, Self.Client.Port);" + LineEnding;
+  Result += "end;" + LineEnding + LineEnding;
+  Result += "function TSimbaServer.Listen(): String;" + LineEnding;
+  Result += "var" + LineEnding;
+  Result += "  tmp, header, path: String;" + LineEnding;
+  Result += "  i: Int32" + LineEnding;
+  Result += "begin" + LineEnding;
+  Result += "  try SetSocketTimeout(Self.Client.ID, 2000); except Exit; end;" + LineEnding + LineEnding;
+  Result += "  //Writeln('Connection from: ', client.IP, ':', client.Port);" + LineEnding + LineEnding;
+  Result += "  repeat" + LineEnding;
+  Result += "    try" + LineEnding;
+  Result += "      tmp := Self.Client.Read();" + LineEnding;
+  Result += "      header += tmp;" + LineEnding;
+  Result += "    except" + LineEnding;
+  Result += "      Exit; //client is DC'ed." + LineEnding;
+  Result += "    end;" + LineEnding;
+  Result += "  until tmp = '';" + LineEnding + LineEnding;
+  Result += "  path := Between('GET ', ' HTTP/1.1', header);" + LineEnding + LineEnding;
+  Result += "  i := Pos('?error=', path);" + LineEnding;
+  Result += "  if i > 0 then" + LineEnding;
+  Result += "    if not client.SendHTML('<h1>Login failed with error message:</h1><p>' + path.After('?error=', i) + '</p><h2>Close this page and try again.</h2>') then Exit;" + LineEnding + LineEnding;
+  Result += "  i := Pos('?code=', path);" + LineEnding;
+  Result += "  if i > 0 then" + LineEnding;
+  Result += "  begin" + LineEnding;
+  Result += "    Result := path.After('?code=', i);" + LineEnding;
+  Result += "    if not Self.Client.SendHTML('<h1>You''ve successfully logged in!</h1><h2>You can now close this page.</h2>') then Exit;" + LineEnding;
+  Result += "  end;" + LineEnding + LineEnding;
+  Result += "  Self.Client.CloseAndFree();" + LineEnding;
+  Result += "end;" + LineEnding + LineEnding;
+  Result += "var" + LineEnding;
+  Result += "  HealthChecker: TTimer;" + LineEnding;
+  Result += "  Timeout: UInt64;" + LineEnding;
+  Result += "  Server: TSimbaServer;" + LineEnding;
+  Result += "  {$IFDEF SIMBAHEADLESS}" + LineEnding;
+  Result += "  LauncherPID: PtrUInt;" + LineEnding;
+  Result += "  {$ENDIF}" + LineEnding;
+  Result += "  Code: String;" + LineEnding + LineEnding;
+  Result += "procedure HealthCheck(sender: TObject);" + LineEnding;
+  Result += "begin" + LineEnding;
+  Result += "  if (GetTickCount() <= Timeout) and" + LineEnding;
+  Result += "      {$IFDEF SIMBAHEADLESS} IsProcessRunning(LauncherPID) and {$ENDIF}" + LineEnding;
+  Result += "      not FileExists({$MACRO CURRENT_DIRECTORY} + 'server-stop') then Exit;" + LineEnding + LineEnding;
+  Result += "  DeleteFile({$MACRO CURRENT_DIRECTORY} + 'server-stop');" + LineEnding;
+  Result += "  CloseFile(CreateFile({$MACRO CURRENT_DIRECTORY} + 'server-failed.done'));" + LineEnding + LineEnding;
+  Result += "  TTimer(sender).setEnabled(False);" + LineEnding;
+  Result += "  RaiseException('Server timed out!');" + LineEnding;
+  Result += "end;" + LineEnding + LineEnding;
+  Result += "procedure RunHealthCheck();" + LineEnding;
+  Result += "begin" + LineEnding;
+  Result += "  HealthChecker.SetOnTimer(@HealthCheck);" + LineEnding;
+  Result += "  HealthChecker.SetEnabled(True);" + LineEnding;
+  Result += "end;" + LineEnding + LineEnding;
+  Result += "begin" + LineEnding;
+  Result += "  DeleteFile({$MACRO CURRENT_DIRECTORY} + 'server-stop');" + LineEnding;
+  Result += "  {$IFDEF SIMBAHEADLESS}" + LineEnding;
+  Result += "  LauncherPID := Variant(GetProcessParameter('LauncherPID'));" + LineEnding;
+  Result += "  {$ENDIF}" + LineEnding + LineEnding;
+  Result += "  Server.Setup();" + LineEnding;
+  Result += "  AddOnTerminate(@Server.CloseAndFree);" + LineEnding;
+  Result += "  AddOnTerminate(@Server.Client.CloseAndFree);" + LineEnding;
+  Result += "  AddOnTerminate(@HealthChecker.Free);" + LineEnding + LineEnding;
+  Result += "  Timeout := GetTickCount() + 5 * 60 * 1000;" + LineEnding;
+  Result += "  HealthChecker.Init(nil);" + LineEnding + LineEnding;
+  Result += "  HealthChecker.SetInterval(150);" + LineEnding;
+  Result += "  Sync(@RunHealthCheck);" + LineEnding + LineEnding;
+  Result += "  repeat" + LineEnding;
+  Result += "    Server.AcceptClient();" + LineEnding;
+  Result += "    code := Server.Listen();" + LineEnding;
+  Result += "  until code <> '';" + LineEnding + LineEnding;
+  Result += "  WriteFileContents({$MACRO CURRENT_DIRECTORY} + 'server-success.done', code, False);" + LineEnding + LineEnding;
+  Result += "  HealthChecker.setEnabled(False);" + LineEnding;
+  Result += "end;" + LineEnding;
+end;
+
 procedure TWaspAsync.Setup();
 begin
   Self.Path := LAUNCHER_DATA + 'async' + DirectorySeparator;
@@ -1933,6 +2262,7 @@ begin
   Self.Write('downloader.simba', Self.GetDownloaderContent());
   Self.Write('unzipper.simba', Self.GetUnzipperContent());
   Self.Write('mover.simba', Self.GetMoverContent());
+  Self.Write('server.simba', Self.GetServerContent());
 end;
 
 var
@@ -2094,8 +2424,7 @@ you wish to unlock the ram used by this (which should be minimal).
 *)
 procedure TConfigJSON.Free();
 begin
-  if not Self.IsSetup then
-    Exit;
+  if not Self.IsSetup then Exit;
 
   Self.JSON.Free();
   Self.JSON := nil;
@@ -2546,6 +2875,7 @@ begin
   FreeHTTPClient(Self.Client);
 end;
 
+
 function THTTPClient.GET(route: String; verbose: Boolean = True): String;
 var
   time: UInt64;
@@ -2579,6 +2909,7 @@ begin
     DebugLn(Self.Name, 'HTTPCode: ' + ToStr(Self.GetHTTPCode()) + ' - Download took: ' + ToStr(time) + 'ms.');
     {$ENDIF}
 end;
+
 
 function THTTPClient.POST(route: String; verbose: Boolean = True): String;
 var
@@ -2617,6 +2948,7 @@ function THTTPClient.POST(route: String; payload: TJSONObject; verbose: Boolean 
 begin
   Result := Self.POST(route, payload.toString(), verbose);
 end;
+
 
 (*
 # GithubClient
@@ -2826,6 +3158,7 @@ type
     APIKey: String;
     DownloadPath: String;
     AssetsPath: String;
+    PKCEVerifier: String;
 
     Cache: record
       User: record
@@ -2959,6 +3292,151 @@ begin
   payload.Put('refresh_token', refreshToken);
   Result := Self.Login('refresh_token', payload);
 end;
+
+
+function TWaspClient.GeneratePKCEVerifier(challengeLength: Int32 = 56): String;
+const
+  CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~';
+var
+  i, n: Int32;
+begin
+  n := Length(CHARS);
+  for i := 1 to challengeLength do
+    Result += CHARS[Random(n) + 1];
+end;
+
+
+
+function TWaspClient.GeneratePKCEChallenge(verifier: String): String;
+  {$R-}
+  //Hex2Bytes by slacky
+  function Hex2Bytes(const hexStr: string): TByteArray;
+  var i: Int32;
+  const
+    lookup: array[48..70] of Byte = [
+      0, 1, 2, 3, 4, 5, 6, 7, 8, 9,   // '0' to '9'
+      0, 0, 0, 0, 0, 0, 0,
+      10, 11, 12, 13, 14, 15          // 'A' to 'F'
+    ];
+  begin
+    if (Length(hexStr) mod 2 <> 0) then Exit;
+    SetLength(Result, Length(hexStr) div 2);
+
+    for i := 1 to Length(hexStr) with 2 do
+    begin
+      Result[i shr 1] := (lookup[Byte(hexStr[i])] shl 4) or lookup[Byte(hexStr[i+1])];
+    end;
+  end;
+
+  function Base64UrlEncode(const data: TByteArray): string;
+  const
+    BASE64URLTable: string = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+  var
+    i, j: Integer;
+    triplet: Cardinal;
+    pad: Integer;
+  begin
+    while i < Length(data) do
+    begin
+      triplet := 0;
+      pad := 0;
+
+      // Read up to 3 bytes into a 24-bit integer
+      for j := 0 to 2 do
+      begin
+        triplet := triplet shl 8;
+        if (i + j < Length(data)) then
+          triplet := triplet or data[i + j]
+        else
+          Inc(pad);  // Count missing bytes for padding
+      end;
+
+      // Convert 24-bit integer into four 6-bit values and map to Base64URL
+      for j := 0 to 3 - pad do
+        Result += BASE64URLTable[(triplet shr ((3 - j) * 6)) and $3F + 1];
+
+      i := i + 3;
+    end;
+  end;
+  {$R+}
+var
+  bytes: TByteArray;
+begin
+  verifier := Hash(THashType.htSHA256, verifier);
+  bytes := Hex2Bytes(verifier);
+  Result := Base64UrlEncode(bytes);
+end;
+
+
+procedure TWaspClient.StartOAuth2Login(provider: String = 'discord'; method: String = 's256');
+const
+  ROUTE: String = 'auth/v1/authorize';
+  SERVER_PORT: String = '5217';
+var
+  code, query: String;
+  response: TJSONObject;
+begin
+  Self.PKCEVerifier := Self.GeneratePKCEVerifier();
+
+  case method of
+    'plain': code := Self.PKCEVerifier;
+    's256':  code := GeneratePKCEChallenge(Self.PKCEVerifier);
+    else     RaiseException('Unknown PKCE method: ' + method);
+  end;
+
+  query := '?provider=' + provider;
+  query += '&redirect_to=http%3A%2F%2Flocalhost%3A' + SERVER_PORT + '%2F';
+  query += '&scopes=identify%20email%20guilds%20guilds.members.read';
+  query += '&code_challenge=' + code;
+  query += '&code_challenge_method=' + method;
+  OpenWebPage(Self.Server + ROUTE + query);
+end;
+
+function TWaspClient.FinishOAuth2Login(auth_code: String): Boolean;
+const
+  ROUTE: String = 'auth/v1/token';
+  QUERY: String = '?grant_type=pkce';
+var
+  payload, response: TJSONObject;
+begin
+  payload.Init();
+  payload.Put('auth_code', auth_code);
+  payload.Put('code_verifier', Self.PKCEVerifier);
+  Self.PKCEVerifier := '';
+
+  try
+    response.Init(Self.POST(ROUTE + QUERY, payload, False));
+
+    if Self.GetHTTPCode() = 200 then
+    begin
+      Self.Cache.User.AccessToken := response.getString('access_token');
+      Self.Cache.User.RefreshToken := response.getString('refresh_token');
+      Self.Cache.User.ID := response.getJSONObject('user').getString('id');
+      Self.Cache.User.Username := response.getJSONObject('user').getJSONObject('user_metadata').getJSONObject('custom_claims').getString('global_name');
+      Self.RefreshClient();
+      Self.SaveRefreshToken();
+      Self.Cache.Free := False;
+
+      Self.GetAllUserScripts();
+      Exit(True);
+    end;
+
+    Self.Cache.User := [];
+    LauncherConfig.Remove('refresh_token');
+    Self.FreeUserData();
+  except
+    WriteLn('Error logging in: ', GetExceptionMessage());
+    if response <> nil then
+      TerminateScript('Response: ' + response.ToString());
+  finally
+    payload.Free();
+    if response <> nil then
+      response.Free();
+  end;
+end;
+
+
+
 
 
 function TWaspClient.GetUserData(): TJSONObject;
@@ -3181,7 +3659,7 @@ begin
       script.Name := getString('title');
       script.Description := getString('description');
       script.Content := getString('content');
-      script.URL := 'https://waspscripts.com/scripts/' + getString('url');
+      script.URL := getString('url');
       script.Revision := getJSONObject('protected').getInt('revision');
 
       script.Content := script.Content.
@@ -3551,7 +4029,7 @@ begin
 end;
 
 
-procedure TWaspClient.DownloadScript(id: String; revision: Int32);
+procedure TWaspClient.DownloadScript(name, id: String; revision: Int32);
 const
   ROUTE: String = 'storage/v1/object/authenticated/scripts/';
 var
@@ -3559,8 +4037,9 @@ var
 begin
   revStr := PadL(ToStr(revision), 9, '0');
   url := ROUTE + id + '/' + revStr + '/script.simba';
-  DebugLn(Self.Name, 'Downloading ' + id + ' rev. ' + ToStr(revision) + ' this might take a while.');
-  if not Self.GETEx(url, Self.DownloadPath + id + '.simba') then
+
+  DebugLn(Self.Name, 'Downloading ' + name + ' rev. ' + ToStr(revision) + ' this might take a while.');
+  if not Self.GETEx(url, Self.DownloadPath + name + '.simba') then
     TerminateScript('Something went wrong while trying to download: ' + url);
 end;
 
@@ -4461,6 +4940,7 @@ end;
 
 type
   TScriptFile = record
+    URL: String;
     ID: String;
     Revision: Int32;
     Path: String;
@@ -4614,14 +5094,13 @@ end;
 
 function TWaspUpdater.GetScriptFileEx(filepath: String): TScriptFile;
 var
-  id, fileContent: String;
+  url, id, fileContent: String;
+  tmp: String;
 begin
-  id := ExtractFileName(filepath).Before('.simba');
-  if not id.IsUUID() then
-    Exit;
-  Result.ID := id;
+  Result.URL := ExtractFileName(filepath).Before('.simba');
   Result.Path := filepath;
   fileContent := ReadFileContents(filepath);
+  Result.ID := fileContent.After('SCRIPT_ID := ''').Before('''}');
   Result.Revision := StrToIntDef(fileContent.After('SCRIPT_REVISION := ''').Before('''}'), 0);
 end;
 
@@ -4631,15 +5110,13 @@ var
   i: Int32;
   script: TScriptFile;
 begin
-  if Self.Scripts <> [] then
-    Exit(Self.Scripts);
+  if Self.Scripts <> [] then Exit(Self.Scripts);
 
   files := GetFiles(Self.ScriptsPath, 'simba');
   for i := 0 to High(files) do
   begin
     script := GetScriptFileEx(Self.ScriptsPath + files[i]);
-    if script <> [] then
-      Result += script;
+    if script <> [] then Result += script;
   end;
 
   Self.Scripts := Result;
@@ -4676,14 +5153,14 @@ var
   fileName, path: String;
 begin
   files := GetFiles(WaspClient.DownloadPath, 'simba');
+
   for fileName in files do
     DeleteFile(WaspClient.DownloadPath + fileName);
 
-  WaspClient.DownloadScript(script.ID, script.Revision);
+  WaspClient.DownloadScript(script.URL, script.ID, script.Revision);
 
   files := GetFiles(WaspClient.DownloadPath, 'simba');
-  if Length(files) <> 1 then
-    Exit;
+  if Length(files) <> 1 then Exit;
 
   fileName := files[0];
   path := Self.ScriptsPath + fileName;
@@ -5972,10 +6449,7 @@ type
   TWaspForm = record
     Form: TForm;
     Size: TPoint;
-    TokenTimer: TTimer;
-
-    ReadClipboard: Boolean;
-
+    ServerListener: TTimer;
     Updating: record
       SRL: Boolean;
       WaspLib: Boolean;
@@ -6004,7 +6478,6 @@ begin
   pass := loginPanel.GetChild('password_edit');
   pass.Clear();
 
-  Self.TokenTimer.setEnabled(False);
   msPanel := Self.Form.GetChild('main_panel');
   dPanel := Self.Form.GetChild('discord_panel');
 
@@ -6243,6 +6716,8 @@ var
   scriptFile: TScriptFile;
 begin
   list := sender;
+  list.Repaint();
+
   scriptData := WaspClient.GetAllUserScripts()[list.getItemIndex()];
   scriptFile := WaspUpdater.GetScriptFile(scriptData.ID);
 
@@ -6271,12 +6746,12 @@ begin
 
   update := panel.GetChild('update_script_button');
 
-  if scriptFile.Revision = 0 then
-    update.setCaption('Install')
-  else if scriptFile.Revision <> scriptData.Revision then
-    update.setCaption('Update')
-  else
-    update.setCaption('Re-install');
+  case scriptFile.Revision of
+    0: update.setCaption('Install');
+    scriptData.Revision: update.setCaption('Re-install');
+    else update.setCaption('Update');
+  end;
+
   open  := main.GetChild('script_open_button');
   open.setEnabled(scriptFile.Revision <> 0);
 
@@ -6317,11 +6792,59 @@ begin
 end;
 
 procedure TWaspForm._OnScriptOnKeyDown(sender: TObject; var key: Char);
+var
+  panel: TPanel;
+  edit: TEdit;
+  str: String;
+  tmp: Char;
 begin
-  case key of
+  tmp := key;
+  key := #0;
+
+  case tmp of
     ' ': Self._UpdateScript();
     #13: Self._OpenScript(sender);
   end;
+
+  panel := TControl(sender).getParent().getParent().getParent().getParent();
+  edit := panel.GetChild('search_edit');
+  str := edit.getText();
+  if tmp = #08 then
+  begin
+    SetLength(str, Length(str)-1);
+    edit.setText(str);
+    Exit;
+  end;
+
+  edit.setText(str + tmp);
+end;
+
+procedure TWaspForm._OnScriptSearchChange(sender: TObject);
+var
+  parent: TControl;
+  list: TListBox;
+  edit: TEdit;
+  query: String;
+  i: Int32;
+begin
+  parent := TControl(sender).getParent();
+  while parent.getName() <> 'scripts_panel' do parent := parent.getParent();
+
+  list := parent.GetChild('scripts_listbox');
+  edit := parent.GetChild('search_edit');
+
+  query := LowerCase(Trim(edit.GetText()));
+  if (query = '') then Exit;
+
+
+  for i := 0 to list.getItems().getCount() - 1 do
+    if list.getItems().getStrings(i).Lower().Contains(query) then
+    begin
+      list.setItemIndex(i);
+      list.SetFocus();
+      Self._OnScriptChange(list);
+      Break;
+    end;
 end;
 
 
@@ -6378,123 +6901,52 @@ procedure TWaspForm.SetupDiscordPanel(form: TForm);
     lPanel := Self.Form.GetChild('login_panel');
     lPanel.Show();
     dPanel.Hide();
-    Self.TokenTimer.setEnabled(False);
-  end;
-
-  procedure TWaspForm._ClipboardToggle(sender: TObject);
-  begin
-    Self.ReadClipboard := TCheckBox(sender).IsChecked();
+    CloseFile(CreateFile(WaspAsync.Path + 'server-stop'));
+    Self.ServerListener.setEnabled(False);
   end;
 
 var
   panel: TPanel;
-  tokenEdit: TLabeledEdit;
   cancel: TButton;
-  caption: TLabel;
-  check: TLabeledCheckBox;
+  caption, info: TLabel;
+  h, w: Int32;
 begin
   panel.Create(form);
   panel.setName('discord_panel');
   panel.setCaption('');
-  panel.setWidth(TControl.AdjustToDPI(400));
-  panel.setHeight(TControl.AdjustToDPI(150));
-  panel.SetLeft(Self.Size.X div 2 - panel.getWidth() div 2);
+  panel.setWidth(TControl.AdjustToDPI(600));
+  panel.setHeight(TControl.AdjustToDPI(300));
+
+  h := panel.getHeight() div 2;
+  w := panel.getWidth() div 2;
+
+  panel.SetLeft(Self.Size.X div 2 - w);
   panel.SetTop(Self.Size.Y div 2 - (panel.getHeight() - (panel.getHeight() div 10)));
   panel.setBevelWidth(0);
   panel.Hide();
 
-  tokenEdit.Create(panel);
-  tokenEdit.SetName('discord_token');
-  tokenEdit.SetCaption('Token:');
-  tokenEdit.SetWidth(panel.getWidth());
-  tokenEdit.SetControlColor($303030);
-  tokenEdit.setControlFontColor($F0F0F0);
-
-  check.Create(panel);
-  check.SetName('clipboard_');
-  check.SetCaption('Read clipboard');
-  check.SetTop(tokenEdit.GetTop());
-  if LauncherConfig.JSON.has('clipboard_checkbox') then
-  begin
-    if LauncherConfig.GetBoolean('clipboard_checkbox') then
-      check.SetChecked(True);
-  end
-  else
-    check.SetChecked(True);
-  check.SetLeft(panel.getWidth() - check.GetWidth());
-
-  check.CheckBox.setOnChange(@Self._ClipboardToggle);
-  Self._ClipboardToggle(check.CheckBox);
-
   caption.Create(panel);
   caption.SetName('discord_label');
-  caption.SetTop(tokenEdit.GetBottom() + TControl.AdjustToDPI(20));
-  caption.SetCaption('Waiting for token');
-  caption.SetLeft(panel.getWidth() div 2 - caption.GetTrueWidth() div 2);
+  caption.SetTop(h);
+  caption.SetFontSize(32);
+  caption.SetCaption('Sign In On Your Browser');
+  caption.SetLeft(w - caption.GetTrueWidth() div 2);
+
+  info.Create(panel);
+  info.SetName('discord_info_label');
+  info.SetTop(h + h div 3);
+  info.SetCaption('This page will refresh once you''re signed in.');
+  info.SetLeft(w - info.GetTrueWidth() div 2);
 
   cancel.Create(panel);
   cancel.SetName('cancel_button');
   cancel.SetCaption('Cancel');
   cancel.setWidth(panel.getWidth() div 3);
-  cancel.SetLeft(panel.getWidth() div 2 - cancel.getWidth() div 2);
-  cancel.SetTop(panel.getHeight() - TControl.AdjustToDPI(40));
+  cancel.SetLeft(w - cancel.getWidth() div 2);
+  cancel.SetTop(info.getTop() + info.getHeight() + TControl.AdjustToDPI(20));
   cancel.setOnClick(@Self._CancelButton);
 end;
 
-procedure TWaspForm._OnTimer(sender: TObject);
-var
-  panel: TPanel;
-  caption: TLabel;
-  edit: TEdit;
-  token: String;
-  i: Int32;
-  {$IFDEF DEVELOPER_MODE}t: Double;{$ENDIF}
-begin
-  {$IFDEF DEVELOPER_MODE}t := PerformanceTimer();{$ENDIF}
-  if Self.ReadClipboard then
-  begin
-    token := GetClipBoard();
-
-    if token.IsRefreshToken() and WaspClient.Login(token) then
-    begin
-      Self.HandleLogin(Self.Form.GetChild('login_panel'));
-      {$IFDEF DEVELOPER_MODE}
-      WriteLn('Full login took: ', Round(PerformanceTimer()-t, 4), 'ms.');
-      {$ENDIF}
-      Exit;
-    end;
-  end;
-
-  panel := Self.Form.GetChild('discord_panel');
-
-  if not Self.ReadClipboard then
-  begin
-    edit := Self.Form.GetChild('discord_token_edit');
-    token := edit.GetText();
-    if token.IsRefreshToken() and WaspClient.Login(token) then
-    begin
-      Self.HandleLogin(Self.Form.GetChild('login_panel'));
-      {$IFDEF DEVELOPER_MODE}
-      WriteLn('Full login took: ', Round(PerformanceTimer()-t, 4), 'ms.');
-      {$ENDIF}
-      Exit;
-    end;
-  end;
-
-  caption := panel.GetChild('discord_label');
-
-  i := caption.GetTextLen() - 17 + 1;
-  if i > 3 then i := 0;
-
-  caption.SetCaption('Waiting for login' + '.' * i);
-  caption.SetLeft(panel.getWidth() div 2 - caption.GetTrueWidth() div 2);
-end;
-
-procedure TWaspForm.RunTimer();
-begin
-  Self.TokenTimer.setOnTimer(@Self._OnTimer);
-  Self.TokenTimer.setEnabled(True);
-end;
 
 
 procedure TWaspForm._LogoutButton(sender: TObject);
@@ -6503,6 +6955,45 @@ begin
     Self.HandleLogout(TButton(sender).getParent().getParent());
 end;
 
+
+
+procedure TWaspForm._OnListen(sender: TObject);
+var
+  token: String;
+  i: Int32;
+  {$IFDEF DEVELOPER_MODE}t: Double;{$ENDIF}
+begin
+  {$IFDEF DEVELOPER_MODE}t := PerformanceTimer();{$ENDIF}
+  if FileExists(WaspAsync.Path + 'server-failed.done') then
+  begin
+    DeleteFile(WaspAsync.Path + 'server-failed.done');
+    TTimer(sender).setEnabled(False);
+    Self._CancelButton(Self.Form.GetChild('cancel_button'));
+    Exit;
+  end;
+
+  if not FileExists(WaspAsync.Path + 'server-success.done') then Exit;
+
+  token := ReadFileContents(WaspAsync.Path + 'server-success.done');
+  DeleteFile(WaspAsync.Path + 'server-success.done');
+  TTimer(sender).setEnabled(False);
+  CloseFile(CreateFile(WaspAsync.Path + 'server-stop'));
+
+  if (token <> '') and WaspClient.FinishOAuth2Login(token) then
+  begin
+    Self.HandleLogin(Self.Form.GetChild('login_panel'));
+    {$IFDEF DEVELOPER_MODE}
+    WriteLn('Full login took: ', Round(PerformanceTimer()-t, 4), 'ms.');
+    {$ENDIF}
+    Exit;
+  end;
+end;
+
+procedure TWaspForm.Listen();
+begin
+  Self.ServerListener.setOnTimer(@Self._OnListen);
+  Self.ServerListener.setEnabled(True);
+end;
 
 procedure TWaspForm.SetupLoginPanel(form: TForm);
   type TWaspForm = TWaspForm;
@@ -6630,8 +7121,11 @@ procedure TWaspForm.SetupLoginPanel(form: TForm);
     dPanel.Show();
     lPanel.Hide();
 
-    OpenWebPage('https://waspscripts.com/auth/refresh-token/');
-    Sync(@Self.RunTimer);
+    WaspClient.StartOAuth2Login();
+    DeleteFile(WaspAsync.Path + 'server-failed.done');
+    DeleteFile(WaspAsync.Path + 'server-success.done');
+    RunScript(WaspAsync.Path + 'server.simba', ['LauncherPID=' + ToString(GetProcessID())]);
+    Sync(@Self.Listen);
   end;
 var
   panel: TPanel;
@@ -7018,8 +7512,9 @@ var
   color, fColor: TColor;
 begin
   listbox := control;
-  if idx mod 2 = 0 then color:=$303030
-  else color:=$282828;
+  if idx = listbox.getItemIndex() then color := $505050
+  else if idx mod 2 = 0 then color := $303030
+  else color := $282828;
 
   if WaspClient.GetAllUserScripts()[idx].Categories.Contains('Premium') then
     fColor := $4DB5FF
@@ -7076,6 +7571,7 @@ var
   user, id, launcherRev: TLabel;
   button: TButton;
   scriptsList: TLabeledDarkListBox;
+  search: TLabeledEdit;
 begin
   panel.Create(parent);
   panel.setName('scripts_panel');
@@ -7110,12 +7606,23 @@ begin
   scriptsList.SetLeft(id.getLeft());
   scriptsList.SetTop(id.GetTop() + id.getHeight() + TControl.AdjustToDPI(15));
   scriptsList.SetWidth(TControl.AdjustToDPI(260));
-  scriptsList.setHeight(Self.Size.Y - scriptsList.GetTop() - TControl.AdjustToDPI(80));
+  scriptsList.setHeight(Self.Size.Y - scriptsList.GetTop() - TControl.AdjustToDPI(130));
   scriptsList.ListBox.ListBox.setOnClick(@Self._OnScriptChange);
   scriptsList.ListBox.ListBox.setOnKeyPress(@Self._OnScriptOnKeyDown);
   scriptsList.ListBox.ListBox.setStyle(TListBoxStyle.lbOwnerDrawFixed);
   scriptsList.ListBox.ListBox.setOnDrawItem(@Self.OnDrawItem);
   scriptsList.ListBox.ListBox.setColor($242322);
+
+  search.Create(panel);
+  search.SetCaption('Search');
+  search.SetTop(scriptsList.GetBottom() + TControl.AdjustToDPI(5));
+  search.SetLeft(id.getLeft());
+  search.SetHeight(TControl.AdjustToDPI(40));
+  search.SetWidth(TControl.AdjustToDPI(260));
+  search.SetName('search');
+  search.SetControlColor($303030);
+  search.setControlFontColor($F0F0F0);
+  search.Edit.setOnChange(@Self._OnScriptSearchChange);
 
   button.Create(panel);
   button.setName('extra_button');
@@ -7292,9 +7799,9 @@ begin
     SetColor($F0F0F0);
   end;
 
-  Self.TokenTimer.Init(nil);
-  Self.TokenTimer.setName('token_timer');
-  Self.TokenTimer.setInterval(1500);
+  Self.ServerListener.Init(nil);
+  Self.ServerListener.setName('server_listener');
+  Self.ServerListener.setInterval(1500);
 
   Self.SetupLoginPanel(Self.Form);
   Self.SetupDiscordPanel(Self.Form);
@@ -7316,8 +7823,8 @@ begin
     Writeln(GetExceptionMessage());
   finally
     Self.Form.Free();
-    Self.TokenTimer.setEnabled(False);
-    Self.TokenTimer.Free();
+    Self.ServerListener.setEnabled(False);
+    Self.ServerListener.Free();
   end;
 end;
 
@@ -7373,7 +7880,6 @@ begin
   WaspAsync.Setup();
   LauncherConfig.Setup(AppPath + 'Configs' + DirectorySeparator + 'launcher.json');
   WaspClient.Setup();
-
   WaspUpdater.Setup();
   GitHubClient.Setup();
   WaspForm.Run();
