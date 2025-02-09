@@ -1,5 +1,5 @@
 {$DEFINE SCRIPT_ID := 'd563990c-4d31-4aba-b214-18e69171ed5e'}
-{$DEFINE SCRIPT_REVISION := '44'}
+{$DEFINE SCRIPT_REVISION := '45'}
 
 {.$DEFINE DEVELOPER_MODE}
 
@@ -6553,25 +6553,11 @@ end;
 
 procedure TWaspForm._InstallProfile(sender: TObject);
 var
-  rl, name: String;
+  name: String;
 begin
   WaspUpdater.InstallRLProfile(name);
+  MessageDlg('WaspScripts', 'RuneLite profile installed! Please pick "' + name + '" profile before you start botting.', TMsgDlgType.mtInformation, []);
 end;
-
-procedure TWaspForm._OpenRL(sender: TObject);
-var
-  rl, name: String;
-begin
-  WaspUpdater.InstallRLProfile(name);
-
-  rl := GetEnvironmentVariable('localappdata') + DirectorySeparator + 'RuneLite' + DirectorySeparator + 'RuneLite.exe';
-
-  if not FileExists(rl) then
-    TerminateScript('RuneLite is not installed or it''s not in the expected directory!');
-
-  RunCommand(rl, ['--profile=' + name]);
-end;
-
 
 procedure TWaspForm._MailField(sender: TObject; var key: char);
 var
@@ -7653,8 +7639,8 @@ begin
 
   button.Create(panel);
   button.setName('open_rl_button');
-  button.SetCaption('Open RuneLite');
-  button.setOnClick(@Self._OpenRL);
+  button.SetCaption('Install RuneLite Profile');
+  button.setOnClick(@Self._InstallProfile);
   button.setWidth(TControl.AdjustToDPI(150));
   button.setHeight(TControl.AdjustToDPI(30));
   button.SetTop(panel.getHeight() - TControl.AdjustToDPI(35));
@@ -7733,15 +7719,6 @@ begin
   button.SetTop(panel.getHeight() - TControl.AdjustToDPI(35));
   button.setWidth(TControl.AdjustToDPI(150));
   button.setHeight(TControl.AdjustToDPI(30));
-
-  button.Create(panel);
-  button.setName('install_profile_button');
-  button.SetCaption('Install RuneLite Profile');
-  button.setOnClick(@Self._InstallProfile);
-  button.setWidth(TControl.AdjustToDPI(150));
-  button.setHeight(TControl.AdjustToDPI(30));
-  button.SetTop(panel.getHeight() - TControl.AdjustToDPI(35));
-  button.SetLeft(panel.getWidth() - TControl.AdjustToDPI(10) - button.getWidth());
 
   panel.setVisible(False);
   panel.setEnabled(False);
@@ -7876,7 +7853,6 @@ var
 
 begin
   ClearDebug();
-
   WaspAsync.Setup();
   LauncherConfig.Setup(AppPath + 'Configs' + DirectorySeparator + 'launcher.json');
   WaspClient.Setup();
