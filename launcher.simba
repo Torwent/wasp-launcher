@@ -1,5 +1,5 @@
 {$DEFINE SCRIPT_ID := 'd563990c-4d31-4aba-b214-18e69171ed5e'}
-{$DEFINE SCRIPT_REVISION := '45'}
+{$DEFINE SCRIPT_REVISION := '46'}
 
 {.$DEFINE DEVELOPER_MODE}
 
@@ -1061,7 +1061,8 @@ end;
 
 
 procedure TStringArray.Append(const value: String);
-var top:Int32;
+var
+  top:Int32;
 begin
   top := Length(Self);
   SetLength(self, top+1);
@@ -1076,7 +1077,7 @@ begin
   if (l <= index) then
   begin
     Self.Append(value);
-    Exit();
+    Exit;
   end;
 
   SetLength(Self, l + 1);
@@ -1084,9 +1085,9 @@ begin
   Self[index] := value;
 end;
 
-procedure TStringArray.Del(const index: Int32; const Count: Int32 = 1);
+procedure TStringArray.Del(const index: Int32; const count: Int32 = 1);
 begin
-  Delete(Self, index, Count);
+  Delete(Self, index, count);
 end;
 
 
@@ -1232,11 +1233,9 @@ var
   lo:PtrUInt;
   p,r:^String;
 begin
-  if (Length(Self) = 0) then
-    Exit();
 
-  SetLength(Result,length(self));
-  p := @Self[high(self)];
+  SetLength(Result, Length(Self));
+  p := @Self[High(Self)];
   r := @Result[0];
 
   lo := PtrUInt(@Self[0]);
@@ -1253,8 +1252,7 @@ var
   tmp:String;
   lo,hi:^String;
 begin
-  if (Length(Self) = 0) then
-    Exit();
+  if (Length(Self) = 0) then Exit;
 
   lo := @Self[0];
   hi := @Self[High(self)];
@@ -1287,8 +1285,9 @@ begin
   end;
 end;
 
-function TStringArray.Equals(Other:TStringArray): Boolean; constref;
-var i:Int32;
+function TStringArray.Equals(other:TStringArray): Boolean; constref;
+var
+  i:Int32;
 begin
   if (Length(Self) <> Length(Other)) then Exit(False);
   if (Length(Self) = 0) then Exit(True);
@@ -1301,13 +1300,12 @@ end;
 
 function TStringArray.Merge(glue: String = ''): String; constref;
 var
-  i:Int32;
+  i: Int32;
 begin
-  if Length(Self) = 0 then
-    Exit();
+  if Length(Self) = 0 then Exit;
 
   Result := Self[0];
-  for i:=1 to High(Self) do
+  for i := 1 to High(Self) do
     Result += glue + Self[i];
 end;
 
@@ -3323,9 +3321,7 @@ function TWaspClient.GeneratePKCEChallenge(verifier: String): String;
     SetLength(Result, Length(hexStr) div 2);
 
     for i := 1 to Length(hexStr) with 2 do
-    begin
       Result[i shr 1] := (lookup[Byte(hexStr[i])] shl 4) or lookup[Byte(hexStr[i+1])];
-    end;
   end;
 
   function Base64UrlEncode(const data: TByteArray): string;
@@ -6117,7 +6113,7 @@ begin
             'stretchedmode.scalingFactor=50' + LineEnding +
             'statusbars.enableRestorationBars=true' + LineEnding +
             'runelite.infoBoxTextOutline=false' + LineEnding +
-            'runelite.rememberScreenBounds=true' + LineEnding +
+            'runelite.rememberScreenBounds=false' + LineEnding +
             'implings.gourmetColor=-5667998' + LineEnding +
             'chatnotification.notifyOnDuel={"enabled"\:false,"initialized"\:false,"override"\:false,"tray"\:false,"volume"\:0,"timeout"\:0,"gameMessage"\:false,"sendWhenFocused"\:false}' + LineEnding +
             'xpTracker.progressBarLabel=PERCENTAGE' + LineEnding +
