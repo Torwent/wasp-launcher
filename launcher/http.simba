@@ -476,9 +476,7 @@ function TWaspClient.GeneratePKCEChallenge(verifier: String): String;
     SetLength(Result, Length(hexStr) div 2);
 
     for i := 1 to Length(hexStr) with 2 do
-    begin
       Result[i shr 1] := (lookup[Byte(hexStr[i])] shl 4) or lookup[Byte(hexStr[i+1])];
-    end;
   end;
 
   function Base64UrlEncode(const data: TByteArray): string;

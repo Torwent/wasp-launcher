@@ -1182,7 +1182,7 @@ begin
             'stretchedmode.scalingFactor=50' + LineEnding +
             'statusbars.enableRestorationBars=true' + LineEnding +
             'runelite.infoBoxTextOutline=false' + LineEnding +
-            'runelite.rememberScreenBounds=true' + LineEnding +
+            'runelite.rememberScreenBounds=false' + LineEnding +
             'implings.gourmetColor=-5667998' + LineEnding +
             'chatnotification.notifyOnDuel={"enabled"\:false,"initialized"\:false,"override"\:false,"tray"\:false,"volume"\:0,"timeout"\:0,"gameMessage"\:false,"sendWhenFocused"\:false}' + LineEnding +
             'xpTracker.progressBarLabel=PERCENTAGE' + LineEnding +
