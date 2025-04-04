@@ -318,15 +318,17 @@ begin
   text.setCaption(scriptData.Name);
 
   text := panel.GetChild('script_category_label');
-  if scriptData.Categories.Contains('Premium') then
-  begin
-    text.setCaption('Premium');
-    text.SetFontColor($4DB5FF);
-  end
-  else
-  begin
-    text.setCaption('Free');
-    text.SetFontColor($F0F0F0);
+  case scriptData.Typ of
+    EScriptType.PREMIUM:
+    begin
+      text.setCaption('Premium');
+      text.SetFontColor($4DB5FF);
+    end;
+    EScriptType.FREE:
+    begin
+      text.setCaption('Free');
+      text.SetFontColor($F0F0F0);
+    end;
   end;
   text.setLeft(panel.getWidth() - text.GetTrueWidth() - TControl.AdjustToDPI(5));
 
@@ -383,7 +385,6 @@ begin
 
   query := LowerCase(Trim(edit.GetText()));
   if (query = '') then Exit;
-
 
   for i := 0 to list.getItems().getCount() - 1 do
     if list.getItems().getStrings(i).Lower().Contains(query) then
@@ -1064,7 +1065,7 @@ begin
   else if idx mod 2 = 0 then color := $303030
   else color := $282828;
 
-  if WaspClient.GetAllUserScripts()[idx].Categories.Contains('Premium') then
+  if WaspClient.GetAllUserScripts()[idx].Typ = EScriptType.PREMIUM then
     fColor := $4DB5FF
   else
     fColor := $F0F0F0;

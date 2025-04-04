@@ -242,13 +242,17 @@ type
     Administrator: Boolean;
   end;
 
+  EScriptStatus = (OFFICIAL, COMMUNITY);
+  EScriptType = (FREE, PREMIUM);
+
   TScriptData = record
     ID: String;
     Name: String;
     Description: String;
     Content: String;
     URL: String;
-    Categories: TStringArray;
+    Status: EScriptStatus;
+    Typ: EScriptType;
     Revision: Int32;
   end;
 
@@ -796,14 +800,13 @@ begin
   jsonArray := Self.Select(
                   'scripts',
                   'scripts',
-                  'id,product,title,description,content,url,categories,protected!inner(revision,username,revision_date)',
+                  'id,product,title,description,content,url,protected!inner(revision,username,revision_date),metadata!inner(status,type)',
                   ['published=eq.true'],
                   ['title.asc']
                );
 
   for i := 0 to jsonArray.High() do
   begin
-    categories := jsonArray.getJSONObject(i).getJSONArray('categories');
     with jsonArray.getJSONObject(i) do
     begin
       script.ID := getString('id');
@@ -824,8 +827,17 @@ begin
                         Replace('{$last_revision_time}', _parseDate(getJSONObject('protected').getString('revision_date')).After(', ')).
                         Replace('{$last_revision_full_date}', _parseDate(getJSONObject('protected').getString('revision_date')));
 
-      for j := 0 to categories.High() do
-        script.Categories += categories.getString(j);
+      case getJSONObject('metadata').getString('status') of
+        'official':  script.Status := EScriptStatus.OFFICIAL;
+        'community': script.Status := EScriptStatus.COMMUNITY;
+        else raise 'Script ' + script.ID + ' is missing a status.';
+      end;
+
+      case getJSONObject('metadata').getString('type') of
+        'free':    script.Typ := EScriptType.FREE;
+        'premium': script.typ := EScriptType.PREMIUM;
+        else raise 'Script ' + script.ID + ' is missing a type.';
+      end;
     end;
 
     if script.ID = {$MACRO SCRIPT_ID} then
@@ -844,22 +856,15 @@ end;
 function TWaspClient.GetFreeScripts(): TScriptDataArray;
 var
   scripts: TScriptDataArray;
-  i, j: Int32;
+  i: Int32;
 begin
   if Self.Cache.FreeScripts <> [] then
     Exit(Self.Cache.FreeScripts);
 
   scripts := Self.GetScripts();
   for i := 0 to High(scripts) do
-    for j := 0 to High(scripts[i].Categories) do
-      case scripts[i].Categories[j] of
-        'Free':
-        begin
-          Result += scripts[i];
-          Break;
-        end;
-        'Premium': Break;
-      end;
+    if scripts[i].Typ = EScriptType.FREE then
+      Result += scripts[i];
 
   Self.Cache.FreeScripts := Result;
 end;
@@ -874,15 +879,9 @@ begin
 
   scripts := Self.GetScripts();
   for i := 0 to High(scripts) do
-    for j := 0 to High(scripts[i].Categories) do
-      case scripts[i].Categories[j] of
-        'Premium':
-        begin
-          Result += scripts[i];
-          Break;
-        end;
-        'Free': Break;
-      end;
+    if scripts[i].Typ = EScriptType.PREMIUM then
+      Result += scripts[i];
+
   Self.Cache.PremiumScripts := Result;
 end;
 
