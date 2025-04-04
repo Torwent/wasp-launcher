@@ -1,5 +1,5 @@
 {$DEFINE SCRIPT_ID := 'd563990c-4d31-4aba-b214-18e69171ed5e'}
-{$DEFINE SCRIPT_REVISION := '46'}
+{$DEFINE SCRIPT_REVISION := '47'}
 
 {.$DEFINE DEVELOPER_MODE}
 
@@ -3087,13 +3087,17 @@ type
     Administrator: Boolean;
   end;
 
+  EScriptStatus = (OFFICIAL, COMMUNITY);
+  EScriptType = (FREE, PREMIUM);
+
   TScriptData = record
     ID: String;
     Name: String;
     Description: String;
     Content: String;
     URL: String;
-    Categories: TStringArray;
+    Status: EScriptStatus;
+    Typ: EScriptType;
     Revision: Int32;
   end;
 
@@ -3641,14 +3645,13 @@ begin
   jsonArray := Self.Select(
                   'scripts',
                   'scripts',
-                  'id,product,title,description,content,url,categories,protected!inner(revision,username,revision_date)',
+                  'id,product,title,description,content,url,protected!inner(revision,username,revision_date),metadata!inner(status,type)',
                   ['published=eq.true'],
                   ['title.asc']
                );
 
   for i := 0 to jsonArray.High() do
   begin
-    categories := jsonArray.getJSONObject(i).getJSONArray('categories');
     with jsonArray.getJSONObject(i) do
     begin
       script.ID := getString('id');
@@ -3669,8 +3672,17 @@ begin
                         Replace('{$last_revision_time}', _parseDate(getJSONObject('protected').getString('revision_date')).After(', ')).
                         Replace('{$last_revision_full_date}', _parseDate(getJSONObject('protected').getString('revision_date')));
 
-      for j := 0 to categories.High() do
-        script.Categories += categories.getString(j);
+      case getJSONObject('metadata').getString('status') of
+        'official':  script.Status := EScriptStatus.OFFICIAL;
+        'community': script.Status := EScriptStatus.COMMUNITY;
+        else raise 'Script ' + script.ID + ' is missing a status.';
+      end;
+
+      case getJSONObject('metadata').getString('type') of
+        'free':    script.Typ := EScriptType.FREE;
+        'premium': script.typ := EScriptType.PREMIUM;
+        else raise 'Script ' + script.ID + ' is missing a type.';
+      end;
     end;
 
     if script.ID = {$MACRO SCRIPT_ID} then
@@ -3689,22 +3701,15 @@ end;
 function TWaspClient.GetFreeScripts(): TScriptDataArray;
 var
   scripts: TScriptDataArray;
-  i, j: Int32;
+  i: Int32;
 begin
   if Self.Cache.FreeScripts <> [] then
     Exit(Self.Cache.FreeScripts);
 
   scripts := Self.GetScripts();
   for i := 0 to High(scripts) do
-    for j := 0 to High(scripts[i].Categories) do
-      case scripts[i].Categories[j] of
-        'Free':
-        begin
-          Result += scripts[i];
-          Break;
-        end;
-        'Premium': Break;
-      end;
+    if scripts[i].Typ = EScriptType.FREE then
+      Result += scripts[i];
 
   Self.Cache.FreeScripts := Result;
 end;
@@ -3719,15 +3724,9 @@ begin
 
   scripts := Self.GetScripts();
   for i := 0 to High(scripts) do
-    for j := 0 to High(scripts[i].Categories) do
-      case scripts[i].Categories[j] of
-        'Premium':
-        begin
-          Result += scripts[i];
-          Break;
-        end;
-        'Free': Break;
-      end;
+    if scripts[i].Typ = EScriptType.PREMIUM then
+      Result += scripts[i];
+
   Self.Cache.PremiumScripts := Result;
 end;
 
@@ -6752,15 +6751,17 @@ begin
   text.setCaption(scriptData.Name);
 
   text := panel.GetChild('script_category_label');
-  if scriptData.Categories.Contains('Premium') then
-  begin
-    text.setCaption('Premium');
-    text.SetFontColor($4DB5FF);
-  end
-  else
-  begin
-    text.setCaption('Free');
-    text.SetFontColor($F0F0F0);
+  case scriptData.Typ of
+    EScriptType.PREMIUM:
+    begin
+      text.setCaption('Premium');
+      text.SetFontColor($4DB5FF);
+    end;
+    EScriptType.FREE:
+    begin
+      text.setCaption('Free');
+      text.SetFontColor($F0F0F0);
+    end;
   end;
   text.setLeft(panel.getWidth() - text.GetTrueWidth() - TControl.AdjustToDPI(5));
 
@@ -6817,7 +6818,6 @@ begin
 
   query := LowerCase(Trim(edit.GetText()));
   if (query = '') then Exit;
-
 
   for i := 0 to list.getItems().getCount() - 1 do
     if list.getItems().getStrings(i).Lower().Contains(query) then
@@ -7498,7 +7498,7 @@ begin
   else if idx mod 2 = 0 then color := $303030
   else color := $282828;
 
-  if WaspClient.GetAllUserScripts()[idx].Categories.Contains('Premium') then
+  if WaspClient.GetAllUserScripts()[idx].Typ = EScriptType.PREMIUM then
     fColor := $4DB5FF
   else
     fColor := $F0F0F0;
