@@ -1,5 +1,5 @@
 {$DEFINE SCRIPT_ID := 'd563990c-4d31-4aba-b214-18e69171ed5e'}
-{$DEFINE SCRIPT_REVISION := '48'}
+{$DEFINE SCRIPT_REVISION := '49'}
 
 {.$DEFINE DEVELOPER_MODE}
 
@@ -6783,24 +6783,25 @@ begin
 
   update := panel.GetChild('update_script_button');
 
- case scriptFile.Revision of
-    0:
-    begin
-      if scriptData.Typ = EScriptType.PREMIUM_NO_SUB then
-        update.setCaption('Purchase')
-      else
-        update.setCaption('Install');
-    end
-    scriptData.Revision: update.setCaption('Re-install');
-    else update.setCaption('Update');
-  end;
+  if scriptData.Typ = EScriptType.PREMIUM_NO_SUB then
+    update.setCaption('Purchase')
+  else
+    case scriptFile.Revision of
+      0: update.setCaption('Install');
+      scriptData.Revision: update.setCaption('Re-install');
+      else update.setCaption('Update');
+    end;
 
   open  := main.GetChild('script_open_button');
   open.setEnabled(scriptFile.Revision <> 0);
 
   checkbox := panel.GetChild('update_script_checkbox');
 
-  checkbox.SetChecked(LauncherConfig.GetBoolean('update_' + scriptData.ID));
+  if scriptData.Typ = EScriptType.PREMIUM_NO_SUB then
+    checkbox.SetChecked(False)
+  else
+    checkbox.SetChecked(LauncherConfig.GetBoolean('update_' + scriptData.ID));
+
   if checkbox.IsChecked() and (scriptFile.Revision <> scriptData.Revision) then
   begin
     WaspUpdater.UpdateScript(scriptData);
@@ -7357,12 +7358,16 @@ procedure TWaspForm.SetupVersionsPanel(parent: TPanel; top: Int32);
       list: TListBox;
       script: TScriptData;
     begin
+
       with TCheckBox(sender) do
         case GetName() of
           'update_script_checkbox':
           begin
             list := Self.Form.GetChild('scripts_listbox');
             script := WaspClient.GetAllUserScripts()[list.getItemIndex()];
+            if script.Typ = EScriptType.PREMIUM_NO_SUB then
+              SetChecked(False);
+
             LauncherConfig.Put('update_' + script.ID, IsChecked());
           end;
 
