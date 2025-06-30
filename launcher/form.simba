@@ -49,6 +49,8 @@ begin
   user.setCaption('Logged as: ' + WaspClient.Cache.User.Username);
   id.setCaption('ID: ' + WaspClient.Cache.User.Id);
 
+  WaspClient.ApplyNoSubPremiumType();
+
   scripts := WaspClient.GetAllUserScripts();
 
   listBox := msPanel.GetChild('scripts_listbox');
@@ -196,7 +198,12 @@ begin
     Self.Updating.Script := True;
     list := Self.Form.GetChild('scripts_listbox');
     script := WaspClient.GetAllUserScripts()[list.getItemIndex()];
-    WaspUpdater.UpdateScript(script);
+
+    if WaspClient.GetUnsubscribedScripts().Find(script.ID) > -1 then
+      OpenWebPage("https://waspscripts.com/scripts/" + script.URL)
+    else
+      WaspUpdater.UpdateScript(script);
+
     Self._OnScriptChange(list);
   finally
     Self.Updating.Script := False;
@@ -294,8 +301,14 @@ begin
 
   update := panel.GetChild('update_script_button');
 
-  case scriptFile.Revision of
-    0: update.setCaption('Install');
+ case scriptFile.Revision of
+    0:
+    begin
+      if scriptData.Typ = EScriptType.PREMIUM_NO_SUB then
+        update.setCaption('Purchase')
+      else
+        update.setCaption('Install');
+    end
     scriptData.Revision: update.setCaption('Re-install');
     else update.setCaption('Update');
   end;
@@ -328,6 +341,11 @@ begin
     begin
       text.setCaption('Free');
       text.SetFontColor($F0F0F0);
+    end;
+    EScriptType.PREMIUM_NO_SUB:
+    begin
+      text.setCaption('Premium - Not owned');
+      text.SetFontColor($FFFF00);
     end;
   end;
   text.setLeft(panel.getWidth() - text.GetTrueWidth() - TControl.AdjustToDPI(5));
@@ -1067,6 +1085,8 @@ begin
 
   if WaspClient.GetAllUserScripts()[idx].Typ = EScriptType.PREMIUM then
     fColor := $4DB5FF
+  else if WaspClient.GetAllUserScripts()[idx].Typ = EScriptType.PREMIUM_NO_SUB then
+    fColor := $FFFF00
   else
     fColor := $F0F0F0;
 
