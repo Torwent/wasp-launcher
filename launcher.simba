@@ -1,5 +1,5 @@
 {$DEFINE SCRIPT_ID := 'd563990c-4d31-4aba-b214-18e69171ed5e'}
-{$DEFINE SCRIPT_REVISION := '47'}
+{$DEFINE SCRIPT_REVISION := '48'}
 
 {.$DEFINE DEVELOPER_MODE}
 
@@ -2755,6 +2755,7 @@ end;
 ## TConfigINI.Get
 ```pascal
 function TConfigINI.Get(Section, KeyName: String): String;
+function TConfigINI.Get(Section, KeyName, DefaultValue: String): String; overload;
 ```
 Retrieves a single value by key from a specified section.
 
@@ -2766,6 +2767,12 @@ WriteLn(ConfigINI.Get('GUISettings', 'UsePoolPOH'));
 function TConfigINI.Get(Section, KeyName: String): String;
 begin
   Result := ReadINI(Section, KeyName, Self.Path);
+end;
+
+function TConfigINI.Get(Section, KeyName, DefaultValue: String): String; overload;
+begin
+  Result := ReadINI(Section, KeyName, Self.Path);
+  if Result = '' then Result := DefaultValue;
 end;
 
 (*
@@ -3088,7 +3095,7 @@ type
   end;
 
   EScriptStatus = (OFFICIAL, COMMUNITY);
-  EScriptType = (FREE, PREMIUM);
+  EScriptType = (FREE, PREMIUM, PREMIUM_NO_SUB);
 
   TScriptData = record
     ID: String;
@@ -3173,6 +3180,7 @@ type
         Roles: TRolesData;
         Subscriptions: TSubscriptionDataArray;
         FreeAccess: TSubscriptionDataArray;
+        UnsubscribedScripts : TScriptDataArray;
         SubscribbedProducts: TProductDataArray;
         FreeAccessProducts: TProductDataArray;
         SubscribbedScripts: TScriptDataArray;
@@ -3966,17 +3974,58 @@ begin
   Self.Cache.User.SubscribbedScripts := Result;
 end;
 
+function TWaspClient.GetUnsubscribedScripts() : TScriptDataArray;
+var
+   i, j : Int32;
+   all, subbed : TScriptDataArray;
+begin
+  if Self.Cache.User.UnsubscribedScripts <> [] then
+    Exit(Self.Cache.User.UnsubscribedScripts);
+
+  all := Self.GetPremiumScripts();
+  subbed := Self.GetAccessScripts();
+
+  for i := 0 to High(all) do
+  begin
+    if subbed.Find(all[i].ID) > -1 then
+      continue;
+
+    Result += all[i];
+  end;
+
+  Self.Cache.User.UnsubscribedScripts := Result;
+end;
+
 function TWaspClient.GetAllUserScripts(): TScriptDataArray;
 begin
   if Self.Cache.User.AllUserScripts <> [] then
     Exit(Self.Cache.User.AllUserScripts);
 
-  Result := Self.GetAccessScripts() + Self.GetFreeScripts();
+  Result := Self.GetPremiumScripts() + Self.GetFreeScripts();
   Result := Result.Sorted();
 
   Self.Cache.User.AllUserScripts := Result;
 end;
 
+procedure TWaspClient.ApplyNoSubPremiumType()
+var
+  i : int32;
+  unSubbed, access : TScriptDataArray;
+begin
+  //Get the unsubscribed stuff.
+  unSubbed := Self.GetUnsubscribedScripts();
+
+  //Get what they actually have
+  access := Self.GetAccessScripts();
+
+  for i := 0 to High(Self.Cache.User.AllUserScripts) do
+  begin
+    if unSubbed.Find(Self.Cache.User.AllUserScripts[i].ID) > -1 then
+    begin
+      Self.Cache.User.AllUserScripts[i].Typ := EScriptType.PREMIUM_NO_SUB;
+    end;
+  end;
+end;
 
 function TWaspClient.Storage(route: String): String;
 var
@@ -6482,6 +6531,8 @@ begin
   user.setCaption('Logged as: ' + WaspClient.Cache.User.Username);
   id.setCaption('ID: ' + WaspClient.Cache.User.Id);
 
+  WaspClient.ApplyNoSubPremiumType();
+
   scripts := WaspClient.GetAllUserScripts();
 
   listBox := msPanel.GetChild('scripts_listbox');
@@ -6629,7 +6680,12 @@ begin
     Self.Updating.Script := True;
     list := Self.Form.GetChild('scripts_listbox');
     script := WaspClient.GetAllUserScripts()[list.getItemIndex()];
-    WaspUpdater.UpdateScript(script);
+
+    if WaspClient.GetUnsubscribedScripts().Find(script.ID) > -1 then
+      OpenWebPage("https://waspscripts.com/scripts/" + script.URL)
+    else
+      WaspUpdater.UpdateScript(script);
+
     Self._OnScriptChange(list);
   finally
     Self.Updating.Script := False;
@@ -6727,8 +6783,14 @@ begin
 
   update := panel.GetChild('update_script_button');
 
-  case scriptFile.Revision of
-    0: update.setCaption('Install');
+ case scriptFile.Revision of
+    0:
+    begin
+      if scriptData.Typ = EScriptType.PREMIUM_NO_SUB then
+        update.setCaption('Purchase')
+      else
+        update.setCaption('Install');
+    end
     scriptData.Revision: update.setCaption('Re-install');
     else update.setCaption('Update');
   end;
@@ -6761,6 +6823,11 @@ begin
     begin
       text.setCaption('Free');
       text.SetFontColor($F0F0F0);
+    end;
+    EScriptType.PREMIUM_NO_SUB:
+    begin
+      text.setCaption('Premium - Not owned');
+      text.SetFontColor($FFFF00);
     end;
   end;
   text.setLeft(panel.getWidth() - text.GetTrueWidth() - TControl.AdjustToDPI(5));
@@ -7500,6 +7567,8 @@ begin
 
   if WaspClient.GetAllUserScripts()[idx].Typ = EScriptType.PREMIUM then
     fColor := $4DB5FF
+  else if WaspClient.GetAllUserScripts()[idx].Typ = EScriptType.PREMIUM_NO_SUB then
+    fColor := $FFFF00
   else
     fColor := $F0F0F0;
 
@@ -7807,7 +7876,6 @@ var
 begin
   uxtheme := LoadLibrary('uxtheme.dll');
   RefreshImmersiveColorPolicyState := GetProcAddr(uxtheme, PChar(104));
-  ShouldAppUseDarkMode := GetProcAddr(uxtheme, PChar(132));
   AllowDarkModeForWindow := GetProcAddr(uxtheme, PChar(133));
   AllowDarkModeForApp := GetProcAddr(uxtheme, PChar(135));
   SetPreferredAppMode := GetProcAddr(uxtheme, PChar(135));
