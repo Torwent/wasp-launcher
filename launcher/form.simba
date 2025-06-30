@@ -1394,7 +1394,6 @@ var
 begin
   uxtheme := LoadLibrary('uxtheme.dll');
   RefreshImmersiveColorPolicyState := GetProcAddr(uxtheme, PChar(104));
-  ShouldAppUseDarkMode := GetProcAddr(uxtheme, PChar(132));
   AllowDarkModeForWindow := GetProcAddr(uxtheme, PChar(133));
   AllowDarkModeForApp := GetProcAddr(uxtheme, PChar(135));
   SetPreferredAppMode := GetProcAddr(uxtheme, PChar(135));
