@@ -6372,24 +6372,64 @@ procedure TWaspUpdater.InstallRLProfile(out name: String);
   begin
     for i := 1 to Length(str) do Result += Int32(str[i]);
   end;
+
+  function EnsureGpuOff(const s: String): String;
+  var
+    cfg: String;
+    p, lineStart, lineEnd: Integer;
+  begin
+    cfg := s;
+
+    cfg := StringReplace(cfg, #13#10, #10, [rfReplaceAll]);
+    cfg := StringReplace(cfg, #13,    #10, [rfReplaceAll]);
+
+    // remove any existing 'runelite.gpuplugin=' lines
+    repeat
+      p := Pos('runelite.gpuplugin=', cfg);
+      if p > 0 then
+      begin
+        lineStart := p;
+        while (lineStart > 1) and (cfg[lineStart-1] <> #10) do
+          Dec(lineStart);
+        lineEnd := p;
+        while (lineEnd <= Length(cfg)) and (cfg[lineEnd] <> #10) do
+          Inc(lineEnd);
+        if (lineEnd <= Length(cfg)) and (cfg[lineEnd] = #10) then
+          Delete(cfg, lineStart, lineEnd - lineStart + 1)
+        else
+          Delete(cfg, lineStart, lineEnd - lineStart);
+      end;
+    until p = 0;
+
+    if (Length(cfg) > 0) and (cfg[Length(cfg)] <> #10) then
+      cfg := cfg + #10;
+    cfg := cfg + 'runelite.gpuplugin=false' + #10;
+
+    Result := StringReplace(cfg, #10, #13#10, [rfReplaceAll]);
+  end;
+
 var
   path: String;
   json, tmp: TJSONObject;
   arr, clean: TJSONArray;
   i, j, id: Int32;
   updated: Boolean;
+  profileText: String;
 begin
   path := GetEnvironmentVariable('userprofile') + DirectorySeparator + '.runelite' + DirectorySeparator + 'profiles2' + DirectorySeparator ;
 
   name := WaspClient.Cache.User.ID;
-  id :=  _StrToInt(name);
+  id := _StrToInt(name);
   name := name.SubString(0,8);
+
+  // Build the profile text, then enforce GPU OFF
+  profileText := Self.GetProfileFileString();
+  profileText := EnsureGpuOff(profileText);
 
   if FileExists(path + name + '-' + ToStr(id) + '.properties') then
     if not DeleteFile(path + name + '-' + ToStr(id) + '.properties') then
       TerminateScript('Failed to delete RuneLite WaspScripts profile.');
-
-  WriteFileContents(path + name + '-' + ToStr(id) + '.properties', Self.GetProfileFileString(), False);
+  WriteFileContents(path + name + '-' + ToStr(id) + '.properties', profileText, False);
 
   try
     json.Init(ReadFileContents(path + 'profiles.json'));
@@ -6432,7 +6472,7 @@ begin
   finally
     json.Free();
   end;
-end;
+end; 
 
 procedure TWaspUpdater.SelfUpdate();
 begin
