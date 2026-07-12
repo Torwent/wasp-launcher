@@ -9,6 +9,22 @@ type
     Simba2, AssetsScript: String;
   end;
 
+procedure TWaspAssets.UpdateAssetsScript(constref client: Int32; const path: String);
+const
+  URL: String = 'https://raw.githubusercontent.com/Torwent/wasp-launcher/refs/heads/main/assets-downloader.simba';
+begin
+  if FileExists(path) then
+    if not DeleteFile(path) then
+      RaiseException('Failed to delete old assets script: ' + path);
+
+  try
+    GetHTTPPageEx(client, URL, path);
+  except
+    FreeHTTPClient(client);
+    RaiseException('Failed to download assets script!');
+  end;
+end;
+
 procedure TWaspAssets.Setup();
 var
   version, exeName, url, zipName: String;
@@ -48,19 +64,7 @@ begin
   end;
 
   Self.AssetsScript := ScriptPath + 'assets-downloader.simba';
-
-  if FileExists(Self.AssetsScript) then
-    if not DeleteFile(Self.AssetsScript) then
-      RaiseException('Failed to delete old assets script: ' + Self.AssetsScript);
-
-  url := 'https://raw.githubusercontent.com/Torwent/wasp-launcher/refs/heads/main/assets-downloader.simba';
-  try
-    GetHTTPPageEx(client, url, Self.AssetsScript);
-  except
-    FreeHTTPClient(client);
-    RaiseException('Failed to assets script');
-  end;
-
+  //Self.UpdateAssetsScript(client, Self.AssetsScript);
   FreeHTTPClient(client);
 end;
 
@@ -69,7 +73,7 @@ begin
   if RunCommand(Self.Simba2, [
     '--cwd=' + SIMBA_DATA_DIR,
     '--url=' + url,
-    '--open', Self.AssetsScript
+    '--run', Self.AssetsScript
   ]) then
     MessageDlg(
       'Assets Downloader',
