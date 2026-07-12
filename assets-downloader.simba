@@ -144,12 +144,13 @@ end;
 
 var
   WLAssets: TWLAssets;
-
+  url: String;
 begin
   AssetsDir := GetProcessArg('cwd') + 'Assets' + PATH_SEP;
-  WriteLn AssetsDir;
-  WriteLn GetProcessArg('url');
-  //WLAssets.Update(GetProcessArg('url'));
+  url := GetProcessArg('url');
+  if not url.EndsWith('/', False) then
+    url += '/';
+  WLAssets.Update(url);
   WriteLn('WLAssets: Finished downloading all assets!');
   WriteLn('WLAssets: If you didn''t get any errors you can proceed');
   WriteLn('WLAssets: Otherwise it''s best to clear assets and reupdating them.');
