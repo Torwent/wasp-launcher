@@ -1,0 +1,156 @@
+var
+  SimbaPath: String;
+  AssetsDir: String;
+
+type
+  TWLAssets = record
+    JSON: TJSONObject;
+    Queue: TStringArray;
+    URL: String;
+    Timeout: TCountDown;
+    Lock: TLock;
+  end;
+
+function TWLAssets.GetJSON(url: String): TJSONObject;
+var
+  parser: TJSONParser;
+  response: String;
+begin
+  Self.URL := url;
+  parser := new TJSONParser();
+
+  try
+    response := HTTPClient.Get(Self.URL + 'hashes.json');
+  except
+    WriteLn('WLAssets: ', GetExceptionMessage());
+    Exit(nil);
+  end;
+
+  if not InRange(HTTPClient.ResponseStatus.AsInteger, 200, 299) then
+  begin
+    WriteLn('WLAssets: ', response);
+    Exit(nil);
+  end;
+
+  try
+    parser.Parse(response);
+  except
+    WriteLn('WLAssets: ', GetExceptionMessage());
+    Exit(nil);
+  end;
+
+  Result := parser;
+end;
+
+function TWLAssets.LoadJSON(): TJSONObject;
+var
+  parser: TJSONParser;
+begin
+  WriteLn('WLAssets: ', 'Couldn''t get assets information. WaspLib will attempt to run with whatever it has available.');
+  parser := new TJSONParser();
+
+  try
+    parser.Load(AssetsDir + 'hashes.json');
+  except
+    WriteLn('WLAssets: ', GetExceptionMessage());
+    Exit;
+  end;
+
+  Result := parser;
+end;
+
+
+procedure TWLAssets.DownloadFinished(constref result: TASyncHTTPResult);
+var
+  idx: Integer;
+begin
+  if not InRange(result.Response.AsInteger, 200, 299) then
+  begin
+    WriteLn('WLAssets: ', result.Exception);
+    raise 'WLAssets: ' + 'If you keep having issues please delete your Assets and Cache folders.';
+  end;
+
+  Self.Lock.Enter();
+  idx := Self.Queue.IndexOf(result.Data);
+  if idx = -1 then
+    raise 'WLAssets: ' + 'Can''t find ' + result.Data + ' in the download queue.';
+  Delete(Self.Queue, idx, 1);
+  Self.Timeout.Extend(-18000);
+  Self.Lock.Leave();
+end;
+
+procedure TWLAssets.Update(const url: String);
+var
+  i: Integer;
+  timer: TCountDown;
+  key, path: String;
+begin
+  Self.JSON := Self.GetJSON(url);
+
+  if Self.JSON = nil then
+  begin
+    Self.JSON := Self.LoadJSON();
+    Exit;
+  end;
+
+  FileDelete(AssetsDir + 'hashes.json');
+  TJSONParser(Self.JSON).Save(AssetsDir + 'hashes.json');
+
+  Self.Lock := TLock.Create();
+
+  try
+    Self.Timeout.Start(1);
+    for i := 0 to Self.JSON.Count-1 do
+    begin
+      key := Self.JSON.Key[i];
+      path := AssetsDir + key;
+      if HashFile(EHashAlgo.CRC32, path) <> Self.JSON.Item[i].AsString then
+      begin
+        key := key.Replace('\', '/');
+        WriteLn('WLAssets: ', 'Updating ' + key);
+        FileDelete(path);
+        DirCreate(PathExtractDir(path));
+        Self.Queue += path;
+        Self.Timeout.Extend(20000);
+        Async.HTTPGetFile(Self.URL + key, path, @Self.DownloadFinished);
+      end;
+    end;
+
+    timer.Start(8000);
+    while Self.Queue <> [] do
+    begin
+      Sleep(100);
+
+      if timer.IsFinished then
+      begin
+        WriteLn('WLAssets: ', 'Downloading files. ' + ToStr(Length(Self.Queue)) + ' files left, please wait.');
+        WriteLn('WLAssets: ', 'Files left: ' + ToStr(Self.Queue).Replace(AssetsDir, ''));
+        timer.Restart();
+      end;
+
+      if Self.Timeout.IsFinished then
+      begin
+        if Self.Queue = [] then
+          Exit;
+        for i := 0 to High(Self.Queue) do
+          FileDelete(Self.Queue[i]);
+        raise 'WLAssets: ' + 'Timed out downloading assets: ' + ToStr(Self.Queue);
+      end;
+    end;
+  finally
+    Self.Lock.Free();
+  end;
+end;
+
+var
+  WLAssets: TWLAssets;
+
+begin
+  AssetsDir := GetProcessArg('cwd') + 'Assets' + PATH_SEP;
+  WriteLn AssetsDir;
+  WriteLn GetProcessArg('url');
+  //WLAssets.Update(GetProcessArg('url'));
+  WriteLn('WLAssets: Finished downloading all assets!');
+  WriteLn('WLAssets: If you didn''t get any errors you can proceed');
+  WriteLn('WLAssets: Otherwise it''s best to clear assets and reupdating them.');
+end;

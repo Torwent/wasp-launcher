@@ -1,0 +1,85 @@
+{$DEFINE WS_ASSETS_INCLUDED}
+{$IFNDEF WS_LAUNCHER}
+  {$I core.simba}
+{$ENDIF}
+
+type
+  TWaspAssets = record
+    Version: String;
+    Simba2, AssetsScript: String;
+  end;
+
+procedure TWaspAssets.Setup();
+var
+  version, exeName, url, zipName: String;
+  params: TStringArray;
+  client: Int32;
+begin
+  version := '96ab06c971';
+  exeName := 'Simba-Win64_' + version + '.exe';
+  Self.Simba2 := ScriptPath + exeName;
+
+  client := InitializeHTTPClient(True);
+
+  if not FileExists(Self.Simba2) then
+  begin
+    zipName := ScriptPath + 'simba_' + version + '.zip';
+    if FileExists(zipName) then
+      if not DeleteFile(zipName) then
+        RaiseException('Failed to delete old simba 2.0 zip file from: ' + zipName);
+
+    if FileExists(ScriptPath + 'Simba-Win64.exe') then
+      if not DeleteFile(ScriptPath + 'Simba-Win64.exe') then
+        RaiseException('Failed to delete old simba 2.0 file: ' + ScriptPath + 'Simba-Win64.exe');
+
+    url := 'https://db.waspscripts.dev/storage/v1/object/public/simba/' + version + '/win64.zip';
+    try
+      GetHTTPPageEx(client, url, ScriptPath + 'simba_' + version + '.zip');
+    except
+      FreeHTTPClient(client);
+      RaiseException('Failed to download Simba 2.0');
+    end;
+
+    if not UnZipOneFile(zipName, 'Simba-Win64.exe', ScriptPath) then
+      RaiseException('Failed to unzip: ' + zipName + ' to: ' + ScriptPath + 'Simba-Win64.exe');
+
+    if not RenameFile(ScriptPath + 'Simba-Win64.exe', Self.Simba2) then
+      RaiseException('Failed to rename: ' + ScriptPath + 'Simba-Win64.exe to: ' + Self.Simba2);
+  end;
+
+  Self.AssetsScript := ScriptPath + 'assets-downloader.simba';
+
+  if FileExists(Self.AssetsScript) then
+    if not DeleteFile(Self.AssetsScript) then
+      RaiseException('Failed to delete old assets script: ' + Self.AssetsScript);
+
+  url := 'https://raw.githubusercontent.com/Torwent/wasp-launcher/refs/heads/main/assets-downloader.simba';
+  try
+    GetHTTPPageEx(client, url, Self.AssetsScript);
+  except
+    FreeHTTPClient(client);
+    RaiseException('Failed to assets script');
+  end;
+
+  FreeHTTPClient(client);
+end;
+
+procedure TWaspAssets.Update(const url: String);
+begin
+  if RunCommand(Self.Simba2, [
+    '--cwd=' + SIMBA_DATA_DIR,
+    '--url=' + url,
+    '--open', Self.AssetsScript
+  ]) then
+    MessageDlg(
+      'Assets Downloader',
+      'Downloading assets takes a while and you should wait until it''s done or you risk corrupting files.' +
+      LineEnding +
+      'If something goes wrong clear the assets and cache before trying again please.' + LineEnding +
+      'You should get a message on Simba ouput box when it''s finished downloading them.',
+      TMsgDlgType.mtWarning, [mbOk]
+    );
+end;
+
+var
+  WaspAssets: TWaspAssets;
