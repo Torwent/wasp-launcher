@@ -44,9 +44,3 @@ jobs:
           git config --global user.email 'wasp@waspscripts.com'
           git commit -am "chore: github action"
           git push
-      
-      - name: Discord notification
-        uses: rguillaume/discord-action-embed@v1.0.4
-        with:
-          webhook: ${{ secrets.UPDATES_WEBHOOK }}
-          embed: '{"title": "Update: ${{ github.event.repository.name }}", "description": ${{ toJSON(github.event.head_commit.message) }}, "url": "${{ github.event.head_commit.url }}", "footer": {"text": "Committer: ${{ github.event.head_commit.author.username }}"}, "color": "49151"}'

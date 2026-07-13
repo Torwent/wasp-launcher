@@ -1327,14 +1327,15 @@ begin
   info.SetCaption(
     'For everything to work you need to get several games assets:' + LineEnding +
     'Maps, Images, Sprites, ...' + LineEnding + LineEnding +
-    'Because these are the game''s intelectual property you''ll need to provide them yourself.' + LineEnding +
-    'If you provide a link to these above wasp-launcher can download and unzip them for you.'
+    'Because these are the game''s intelectual property you''ll need to provide them yourself' + LineEnding +
+    'and you only LEGALLY have them if you dump them yourself.'+ LineEnding + LineEnding +
+    'If you provide a link to your game assets above wasp-launcher can download and unzip them for you.'
     + LineEnding + LineEnding +
     'Keep in mind that downloading and unzipping assets can take a few minutes, don''t close this window.'
 
   );
   info.SetFontSize(60);
-  info.setWidth(w*3);
+  info.setWidth(w*4);
   info.setTop(assetsButton.getTop() + TControl.AdjustToDPI(80));
   info.setLeft((panel.getWidth() div 2) - (info.getWidth() div 2));
 
