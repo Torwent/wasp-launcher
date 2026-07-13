@@ -1,26 +1,24 @@
 var
-  SimbaPath: String;
+  URL: String;
   AssetsDir: String;
 
 type
   TWLAssets = record
     JSON: TJSONObject;
     Queue: TStringArray;
-    URL: String;
     Timeout: TCountDown;
     Lock: TLock;
   end;
 
-function TWLAssets.GetJSON(url: String): TJSONObject;
+function TWLAssets.GetJSON(): TJSONObject;
 var
   parser: TJSONParser;
   response: String;
 begin
-  Self.URL := url;
   parser := new TJSONParser();
 
   try
-    response := HTTPClient.Get(Self.URL + 'hashes.json');
+    response := HTTPClient.Get(URL + 'hashes1400.json');
   except
     WriteLn('WLAssets: ', GetExceptionMessage());
     Exit(nil);
@@ -46,11 +44,10 @@ function TWLAssets.LoadJSON(): TJSONObject;
 var
   parser: TJSONParser;
 begin
-  WriteLn('WLAssets: ', 'Couldn''t get assets information. WaspLib will attempt to run with whatever it has available.');
   parser := new TJSONParser();
 
   try
-    parser.Load(AssetsDir + 'hashes.json');
+    parser.Load(AssetsDir + 'hashes1400.json');
   except
     WriteLn('WLAssets: ', GetExceptionMessage());
     Exit;
@@ -79,13 +76,13 @@ begin
   Self.Lock.Leave();
 end;
 
-procedure TWLAssets.Update(const url: String);
+procedure TWLAssets.Update();
 var
   i: Integer;
   timer: TCountDown;
   key, path: String;
 begin
-  Self.JSON := Self.GetJSON(url);
+  Self.JSON := Self.GetJSON();
 
   if Self.JSON = nil then
   begin
@@ -93,8 +90,8 @@ begin
     Exit;
   end;
 
-  FileDelete(AssetsDir + 'hashes.json');
-  TJSONParser(Self.JSON).Save(AssetsDir + 'hashes.json');
+  FileDelete(AssetsDir + 'hashes1400.json');
+  TJSONParser(Self.JSON).Save(AssetsDir + 'hashes1400.json');
 
   Self.Lock := TLock.Create();
 
@@ -112,7 +109,7 @@ begin
         DirCreate(PathExtractDir(path));
         Self.Queue += path;
         Self.Timeout.Extend(20000);
-        Async.HTTPGetFile(Self.URL + key, path, @Self.DownloadFinished);
+        Async.HTTPGetFile(URL + key, path, @Self.DownloadFinished);
       end;
     end;
 
@@ -144,14 +141,21 @@ end;
 
 var
   WLAssets: TWLAssets;
-  url: String;
 begin
-  AssetsDir := GetProcessArg('cwd') + 'Assets' + PATH_SEP;
-  url := GetProcessArg('url');
-  if not url.EndsWith('/', False) then
-    url += '/';
-  WLAssets.Update(url);
+  AssetsDir := GetProcessArg('cwd');
+  if not AssetsDir.EndsWith(PATH_SEP, False) then
+    AssetsDir += PATH_SEP;
+  AssetsDir += 'Assets' + PATH_SEP;
+
+  if not DirCreate(AssetsDir) then
+    raise 'WLAssets: Failed to create path: ' + AssetsDir;
+
+  URL := GetProcessArg('url');
+  if not URL.EndsWith('/', False) then
+    URL += '/';
+
+  WLAssets.Update();
   WriteLn('WLAssets: Finished downloading all assets!');
-  WriteLn('WLAssets: If you didn''t get any errors you can proceed');
+  WriteLn('WLAssets: If you didn''t get any errors you can proceed.');
   WriteLn('WLAssets: Otherwise it''s best to clear assets and reupdating them.');
 end;

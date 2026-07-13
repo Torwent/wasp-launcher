@@ -12,5 +12,6 @@ begin
   WaspClient.Setup();
   WaspUpdater.Setup();
   GitHubClient.Setup();
+  WaspAssets.Setup();
   WaspForm.Run();
 end;

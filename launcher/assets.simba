@@ -70,19 +70,20 @@ end;
 
 procedure TWaspAssets.Update(const url: String);
 begin
-  if RunCommand(Self.Simba2, [
+  RunCommand(Self.Simba2, [
     '--cwd=' + SIMBA_DATA_DIR,
     '--url=' + url,
     '--run', Self.AssetsScript
-  ]) then
-    MessageDlg(
-      'Assets Downloader',
-      'Downloading assets takes a while and you should wait until it''s done or you risk corrupting files.' +
-      LineEnding +
-      'If something goes wrong clear the assets and cache before trying again please.' + LineEnding +
-      'You should get a message on Simba ouput box when it''s finished downloading them.',
-      TMsgDlgType.mtWarning, [mbOk]
-    );
+  ]);
+
+  MessageDlg(
+    'Assets Downloader',
+    'Downloading assets takes a while and you should wait until it''s done or you risk corrupting files.' +
+    LineEnding +
+    'If something goes wrong clear the assets and cache before trying again please.' + LineEnding +
+    'You should get a message on Simba ouput box when it''s finished downloading them.',
+    TMsgDlgType.mtWarning, [mbOk]
+  );
 end;
 
 var

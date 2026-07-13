@@ -1114,7 +1114,6 @@ begin
   scripts := parent.GetChild('scripts_panel');
   extra := parent.GetChild('extra_panel');
 
-
   scripts.setVisible(not scripts.getVisible());
   scripts.setEnabled(not scripts.getEnabled());
   extra.setEnabled(not extra.getEnabled());
@@ -1128,6 +1127,23 @@ begin
   RMDir(SIMBA_DATA_DIR + 'wasp-launcher' + DirectorySeparator + 'assets');
   RMDir(SIMBA_DATA_DIR + 'wasp-launcher' + DirectorySeparator + 'downloads');
 end;
+
+procedure TWaspForm._OnUpdateAssets(sender: TObject);
+var
+  parent: TPanel;
+  edit: TEdit;
+  url: String;
+begin
+  parent := TButton(sender).getParent();
+  edit := parent.GetChild('assets_url_edit');
+  url := edit.getText();
+  if not url.IsURL() then
+    Exit;
+  LauncherConfig.Put('assets_url', url);
+  WaspAssets.Update(url);
+end;
+
+
 
 procedure TWaspForm.SetupScriptsPanel(parent: TPanel);
   type TWaspForm = TWaspForm;
@@ -1251,8 +1267,11 @@ end;
 procedure TWaspForm.SetupExtraPanel(parent: TPanel);
 var
   panel: TPanel;
-  button: TButton;
+  updateButton, clearButton, buttonC, panelButton, logButton, assetsButton: TButton;
   info: TLabel;
+  assetsLink: TLabeledEdit;
+  w, h, offset: Integer;
+  url: String;
 begin
   panel.Create(parent);
   panel.setName('extra_panel');
@@ -1261,52 +1280,81 @@ begin
   panel.setHeight(Self.Size.Y);
   panel.setBevelWidth(0);
 
+  w := TControl.AdjustToDPI(150);
+  h := TControl.AdjustToDPI(30);
+  offset := TControl.AdjustToDPI(70);
+
+  updateButton.Create(panel);
+  updateButton.setName('all_autoupdate_button');
+  updateButton.setCaption('Update All Scripts');
+  updateButton.SetTop(offset);
+  updateButton.setWidth(w);
+  updateButton.setHeight(h);
+  updateButton.setLeft((panel.getWidth() div 2) - updateButton.getWidth() - TControl.AdjustToDPI(10));
+  updateButton.setOnClick(@Self._UpdateScripts);
+
+  clearButton.Create(panel);
+  clearButton.setName('clear_cache_button');
+  clearButton.setCaption('Clear cache');
+  clearButton.SetTop(offset);
+  clearButton.setWidth(w);
+  clearButton.setHeight(h);
+  clearButton.setLeft(updateButton.getLeft() + w + TControl.AdjustToDPI(20));
+  clearButton.setOnClick(@Self._ClearCache);
+
+  assetsLink.Create(panel);
+  assetsLink.setName('assets_url');
+  assetsLink.setCaption('Game assets link:');
+  assetsLink.SetControlColor($303030);
+  assetsLink.setControlFontColor($F0F0F0);
+  assetsLink.SetTop(updateButton.GetTop() + h + TControl.AdjustToDPI(30));
+  assetsLink.setWidth(w*3);
+  assetsLink.setLeft((panel.getWidth() div 2) - Round(w*1.5));
+  url := LauncherConfig.GetString('assets_url');
+  if url.IsURL() then
+    assetsLink.SetText(url);
+
+  assetsButton.Create(panel);
+  assetsButton.setName('assets_button');
+  assetsButton.setCaption('Update assets');
+  assetsButton.SetTop(assetsLink.GetTop() + TControl.AdjustToDPI(60));
+  assetsButton.setLeft((panel.getWidth() div 2) - (w div 2));
+  assetsButton.setWidth(w);
+  assetsButton.setHeight(h);
+  assetsButton.setOnClick(@Self._OnUpdateAssets);
+
   info.Create(panel);
   info.SetCaption(
-    '       Work in progress!' + LineEnding + LineEnding +
-    'More stuff will be added here in the future!' + LineEnding +
-    'Thank you for using WaspScripts :)' + LineEnding + LineEnding +
-    'Sorry if things have been bumpy for a few days!'
+    'For everything to work you need to get several games assets:' + LineEnding +
+    'Maps, Images, Sprites, ...' + LineEnding + LineEnding +
+    'Because these are the game''s intelectual property you''ll need to provide them yourself.' + LineEnding +
+    'If you provide a link to these above wasp-launcher can download and unzip them for you.'
+    + LineEnding + LineEnding +
+    'Keep in mind that downloading and unzipping assets can take a few minutes, don''t close this window.'
+
   );
   info.SetFontSize(60);
-  info.setTop(Self.Size.Y div 3);
-  info.setLeft(Self.Size.X div 3);
+  info.setWidth(w*3);
+  info.setTop(assetsButton.getTop() + TControl.AdjustToDPI(80));
+  info.setLeft((panel.getWidth() div 2) - (info.getWidth() div 2));
 
-  button.Create(panel);
-  button.setName('all_autoupdate_button');
-  button.setCaption('Update All Scripts');
-  button.SetTop(TControl.AdjustToDPI(70));
-  button.setLeft(TControl.AdjustToDPI(10));
-  button.setWidth(TControl.AdjustToDPI(150));
-  button.setHeight(TControl.AdjustToDPI(30));
-  button.setOnClick(@Self._UpdateScripts);
+  panelButton.Create(panel);
+  panelButton.setName('scripts_button');
+  panelButton.setCaption('Scripts');
+  panelButton.SetTop(panel.getHeight() - offset);
+  panelButton.setLeft(TControl.AdjustToDPI(10));
+  panelButton.setWidth(w);
+  panelButton.setHeight(h);
+  panelButton.setOnClick(@Self._PanelSwapClick);
 
-  button.Create(panel);
-  button.setName('clear_cache_button');
-  button.setCaption('Clear cache');
-  button.SetTop(TControl.AdjustToDPI(70));
-  button.setLeft(TControl.AdjustToDPI(200));
-  button.setWidth(TControl.AdjustToDPI(150));
-  button.setHeight(TControl.AdjustToDPI(30));
-  button.setOnClick(@Self._ClearCache);
-
-  button.Create(panel);
-  button.setName('extra_button');
-  button.setCaption('Scripts');
-  button.SetTop(panel.getHeight() - TControl.AdjustToDPI(70));
-  button.setLeft(TControl.AdjustToDPI(10));
-  button.setWidth(TControl.AdjustToDPI(150));
-  button.setHeight(TControl.AdjustToDPI(30));
-  button.setOnClick(@Self._PanelSwapClick);
-
-  button.Create(panel);
-  button.setName('logout_button');
-  button.SetCaption('Logout');
-  button.setOnClick(@Self._LogoutButton);
-  button.SetLeft(TControl.AdjustToDPI(10));
-  button.SetTop(panel.getHeight() - TControl.AdjustToDPI(35));
-  button.setWidth(TControl.AdjustToDPI(150));
-  button.setHeight(TControl.AdjustToDPI(30));
+  logButton.Create(panel);
+  logButton.setName('logout_button');
+  logButton.SetCaption('Logout');
+  logButton.setOnClick(@Self._LogoutButton);
+  logButton.SetLeft(TControl.AdjustToDPI(10));
+  logButton.SetTop(panel.getHeight() - TControl.AdjustToDPI(35));
+  logButton.setWidth(w);
+  logButton.setHeight(h);
 
   panel.setVisible(False);
   panel.setEnabled(False);
