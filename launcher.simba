@@ -1,5 +1,5 @@
 {$DEFINE SCRIPT_ID := 'd563990c-4d31-4aba-b214-18e69171ed5e'}
-{$DEFINE SCRIPT_REVISION := '52'}
+{$DEFINE SCRIPT_REVISION := '53'}
 
 {.$DEFINE DEVELOPER_MODE}
 
@@ -6556,6 +6556,7 @@ begin
   RunCommand(Self.Simba2, [
     '--cwd=' + SIMBA_DATA_DIR,
     '--url=' + url,
+    '--extractopenssl',
     '--run', Self.AssetsScript
   ]);
 
